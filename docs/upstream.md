@@ -16,7 +16,7 @@ PRs upstream (owner's decision, 2026-10-15); "known, not reported" marks upstrea
 
 | Gap | Where | Status | Fixture |
 |---|---|---|---|
-| Explicit `<td>/<th>` widths get the cell padding added even under `box-sizing: border-box` (`layout/table.rs:175`, TODO in source): Tailwind tables get wider fixed columns and a narrower auto column | Blitz | **patch ready, fork pending** — F5, `docs/plans/2026-10-15-f5-table-column-widths.md` | 02 (4 pages instead of 3), 03 |
+| Explicit `<td>/<th>` widths get the cell padding added even under `box-sizing: border-box` (`layout/table.rs:175`, TODO in source): Tailwind tables get wider fixed columns and a narrower auto column | Blitz | **carried** (`subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`) — F5 | 02 (4 pages instead of 3), 03 |
 | `text-transform` not applied: text nodes are pushed to the line builder as written (`layout/construct.rs:944`) | Blitz | **carried** (`subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`) — F4 | 02–05 (`uppercase` headings) |
 | `rewrite_marker_content_url` panics (slice `block_start..i-1` with `i-1 < block_start`) when a block is opened at the very end of a stylesheet (`a{`); also scans `<style>` inside HTML comments, `<script>`, `<textarea>`, `<title>` and attribute values, and treats an escaped `\{` as a block | fulgur (`blitz_adapter.rs:3371`) | **known, not reported** — F10; `htmltopdf` closes open blocks and catches engine panics | — |
 | `border-collapse: collapse` ignored, shared borders painted twice | Blitz — [#386](https://github.com/DioxusLabs/blitz/issues/386) | open | 03 |
@@ -40,7 +40,7 @@ PRs upstream (owner's decision, 2026-10-15); "known, not reported" marks upstrea
 | Crate | Fork branch | Base | Fix | Upstream status |
 |---|---|---|---|---|
 | fulgur 0.40.0 | `subapavel/fulgur` `htmltopdf/srgb-colours` | `8d81949` | `absolute_to_rgba` converts to sRGB (F1) | fixed independently on fulgur `main` (fulgur-xfzo, same call); drop the branch when a release > 0.40.0 has it |
-| blitz-dom 0.2.4 | `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` | `0a77560` | `currentColor` serialised as sRGB for usvg (F1); `text-transform` applied (F4); plus an htmltopdf-only commit taking sibling crates from crates.io | carried (F1 still present on Blitz `main`) |
+| blitz-dom 0.2.4 | `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` | `0a77560` | `currentColor` serialised as sRGB for usvg (F1); `text-transform` applied (F4); explicit cell widths respect `box-sizing` (F5); plus an htmltopdf-only commit taking sibling crates from crates.io | carried (F1 still present on Blitz `main`) |
 
 Bumping fulgur or blitz-dom means rebasing these branches onto the new release commit (or dropping them once the
 fix is released) and re-running `cargo update -p fulgur -p blitz-dom`.
