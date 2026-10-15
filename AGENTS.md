@@ -57,7 +57,7 @@ carry on. Ask the owner only when the decision is on the list above.
 | A fix belongs in fulgur / Blitz / Taffy / Parley | Fork under `subapavel/<crate>` (the owner creates a missing fork), branch `htmltopdf/<slug>` on the published release's source commit, `[patch.crates-io]` in the workspace `Cargo.toml`, record it in `docs/upstream.md`. **Do not open pull requests or issues in the upstream repositories** (owner's decision, 2026-10-15). **Never vendor upstream source into this repo.** |
 | The permission classifier denies an action | Do not work around it. Take the next option from the relevant standing decision; if none applies, write a postmortem and leave that step open. |
 | Behaviour the user did not write would make the library refuse a document (unused CSS rules, `@media screen` blocks, framework leftovers) | Warn by default; strict mode is opt-in (`strict_fonts(true)`, `--strict-fonts`). Fixtures, tests and CI run strict. |
-| A pixel-diff threshold blocks CI | The thresholds are a regression guard, not a target. Lower one in the same PR whenever the number improves. Raise one **only** in the case merge-policy item 3 already allows — growth from content that was missing and is now rendered — to the new number plus a 1-point margin, with a comment in `compare.py` naming the fixture, the cause and the finding that will bring it back down. Any other growth is a regression: fix the engine or the fixture. |
+| A pixel-diff threshold blocks CI | The thresholds are a regression guard, not a target. Lower one in the same PR whenever the number improves. Raise one **only** in the cases merge-policy item 3 already allows — growth from content that was missing and is now rendered, or a fixture in `PAGE_COUNT_MAY_DIFFER` reaching the reference page count (ADR-0003) — to the new number plus a 1-point margin, with a comment in `compare.py` naming the fixture, the cause and the finding that will bring it back down. Any other growth is a regression: fix the engine or the fixture. |
 | What to work on next | The findings queue (`docs/plans/*-findings.md`, in the order given there), then `docs/roadmap.md`. One finding per PR. |
 | Chrome references missing | They are committed under `fixtures/**/reference/`. If absent, regenerate with `scripts/reference/render.mjs` and commit them; do not silently work without them. |
 
@@ -67,7 +67,7 @@ An agent merges its own PR (squash, delete branch) when **all** hold:
 
 1. CI is green.
 2. `vrt-validator` ran on the branch and reported no high-severity finding.
-3. No fixture's pixel diff grew — except growth caused by content that was previously missing and is now rendered (text that was dropped, a border that was absent), which the PR must name with the fixture and the number. Page counts did not change except for fixtures listed in `PAGE_COUNT_MAY_DIFFER`.
+3. No fixture's pixel diff grew — except growth caused by content that was previously missing and is now rendered (text that was dropped, a border that was absent), which the PR must name with the fixture and the number, and the one-time re-baseline of ADR-0003 when a fixture reaches the reference page count. Page counts did not change except for fixtures listed in `PAGE_COUNT_MAY_DIFFER`.
 4. The diff matches the plan's scope; nothing from another finding slipped in.
 5. For anything touching the PDF writer path, fonts or metadata: `pdf-reviewer` ran and reported no defect.
 

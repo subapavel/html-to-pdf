@@ -6,23 +6,32 @@ use htmltopdf::{RenderOptions, Renderer};
 
 /// x of the left edge of the second cell's red background, in CSS px from the table's left edge.
 fn second_column_start(box_sizing: &str, a: &str) -> f32 {
+    first_red_x(
+        &format!("td {{ box-sizing: {box_sizing} }} .a {{ width: 100px; {a} }}"),
+        r#"<tr><td class="a"></td><td class="b"></td></tr>"#,
+        20,
+    )
+}
+
+/// Renders `rows` in a 400 px table whose cells have 20 px side padding and returns the x of the first red
+/// pixel on the line `y` CSS px below the table's top, in CSS px from the table's left edge.
+fn first_red_x(css: &str, rows: &str, y: usize) -> f32 {
     let css = format!(
         "@page {{ margin: 0 }} body {{ margin: 0 }} table {{ border-spacing: 0; width: 400px }}
-         td {{ box-sizing: {box_sizing}; padding: 0 20px; height: 40px }}
-         .a {{ width: 100px; {a} }} .b {{ background: rgb(255 0 0) }}"
+         td {{ padding: 0 20px; height: 40px }} .b {{ background: rgb(255 0 0) }} {css}"
     );
     let pdf = Renderer::builder()
         .css(css)
         .build()
         .render(
-            r#"<!doctype html><html><body><table><tr><td class="a"></td><td class="b"></td></tr></table></body></html>"#,
+            &format!("<!doctype html><html><body><table>{rows}</table></body></html>"),
             &RenderOptions::default(),
         )
         .expect("render");
     // 96 dpi: one device pixel per CSS px; the default page margin is 15 mm.
     let (w, rgb) = rasterise(&pdf, 96);
     let margin = (15.0 / 25.4 * 96.0_f32).round() as usize;
-    let y = margin + 20;
+    let y = margin + y;
     let red = (0..w)
         .find(|&x| {
             let i = (y * w + x) * 3;
@@ -56,6 +65,29 @@ fn content_box_width_excludes_padding_and_border() {
     assert!(
         (x - 150.0).abs() <= 1.0,
         "second column starts at {x} px, want 150"
+    );
+}
+
+#[test]
+fn later_row_content_box_width_includes_padding_and_border() {
+    // The first row leaves the column auto; the second row's width sets it.
+    let x = first_red_x(
+        "td { box-sizing: content-box } .a { width: 100px; border: 0 solid white; border-width: 0 5px }",
+        r#"<tr><td></td><td class="b"></td></tr><tr><td class="a"></td><td class="b"></td></tr>"#,
+        60,
+    );
+    assert!(
+        (x - 150.0).abs() <= 1.0,
+        "second column starts at {x} px, want 150"
+    );
+}
+
+#[test]
+fn border_box_width_never_shrinks_below_padding_and_border() {
+    let x = second_column_start("border-box", "width: 10px");
+    assert!(
+        (x - 40.0).abs() <= 1.0,
+        "second column starts at {x} px, want 40 (the padding)"
     );
 }
 
