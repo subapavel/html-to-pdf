@@ -717,12 +717,28 @@ pub(crate) fn rewrite_css_in_html<'a>(
     html: &'a str,
     rewrite: impl Fn(&str) -> Cow<'_, str>,
 ) -> Cow<'a, str> {
+    rewrite_sites(html, true, rewrite)
+}
+
+/// `html` with `rewrite` applied to the contents of every `<style>` element only.
+pub(crate) fn rewrite_style_elements<'a>(
+    html: &'a str,
+    rewrite: impl Fn(&str) -> Cow<'_, str>,
+) -> Cow<'a, str> {
+    rewrite_sites(html, false, rewrite)
+}
+
+fn rewrite_sites<'a>(
+    html: &'a str,
+    attributes: bool,
+    rewrite: impl Fn(&str) -> Cow<'_, str>,
+) -> Cow<'a, str> {
     let mut out = String::new();
     let mut last = 0;
     walk_html(html, |site| {
         let range = match site {
             CssSite::Element(r) => r,
-            CssSite::Attribute(r) if !html[r.clone()].contains('&') => r,
+            CssSite::Attribute(r) if attributes && !html[r.clone()].contains('&') => r,
             CssSite::Attribute(_) => return,
         };
         if let Cow::Owned(css) = rewrite(&html[range.clone()]) {

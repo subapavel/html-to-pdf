@@ -48,6 +48,9 @@ pub enum Error {
     /// the PDF. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
     #[error("font-family has no bundled face: {}", join_unresolved(.0))]
     UnresolvedFontFamilies(Vec<UnresolvedFamily>),
+    /// The rendering engine panicked (a bug in it, not in the document). The message is the panic's.
+    #[error("the rendering engine failed: {0}")]
+    EnginePanic(String),
     #[error("asset `{path}`: {source}")]
     Asset {
         path: PathBuf,
@@ -146,7 +149,8 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render(&self.prepare(html))?)
+        let html = self.prepare(html);
+        self.run(|| engine.render(&html))
     }
 
     /// Render and write to `path`.
@@ -159,7 +163,8 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render_file(&self.prepare(html), path)?)
+        let html = self.prepare(html);
+        self.run(|| engine.render_file(&html, path))
     }
 
     /// The document as handed to the engine: media queries evaluated for print (F7), generic font
@@ -167,9 +172,28 @@ impl Renderer {
     fn prepare<'a>(&self, html: &'a str) -> Cow<'a, str> {
         let html = media::print_media_in_html(html);
         let html = then(html, |h| fonts::map_generics_in_html(h, &self.generics));
-        then(html, |h| {
+        let html = then(html, |h| {
             fonts::rewrite_css_in_html(h, gradient::strip_gradient_interpolation)
+        });
+        then(html, |h| {
+            fonts::rewrite_style_elements(h, css_text::close_open_blocks)
         })
+    }
+
+    /// Runs the engine. A panic inside it (an engine bug, e.g. on unusual CSS) becomes
+    /// [`Error::EnginePanic`] instead of unwinding into the caller (F10). Each render builds its own
+    /// engine, so nothing it left half-done is reused.
+    fn run<T>(&self, f: impl FnOnce() -> std::result::Result<T, fulgur::Error>) -> Result<T> {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+            Ok(r) => Ok(r?),
+            Err(payload) => Err(Error::EnginePanic(
+                payload
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".into()),
+            )),
+        }
     }
 
     /// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds
@@ -267,8 +291,9 @@ impl RendererBuilder {
             .extend(fonts::scan_css(&css, Origin::Stylesheet));
         self.properties.extend(property::scan_property_rules(&css));
         let css = media::print_media(&css);
+        let css = gradient::strip_gradient_interpolation(&css);
         self.assets
-            .add_css(gradient::strip_gradient_interpolation(&css).into_owned());
+            .add_css(css_text::close_open_blocks(&css).into_owned());
         self
     }
 
