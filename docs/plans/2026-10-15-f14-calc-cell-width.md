@@ -36,4 +36,7 @@ Upstream Blitz PR #653 resolves the calc as a track instead, which does not conf
 ## 5. Not covered
 
 `<col>`/`<colgroup>` widths are ignored by Blitz altogether (F15), so the same rule for columns has nothing to apply
-to yet. Row heights with mixed calc are not touched.
+to yet. Row widths and heights with mixed calc are not touched: Blitz lets any `<tr>`/`<tbody>` width change the
+columns, calc or not (F15).
+- `vrt-validator` (PR #11): no defect from this change; 66 probes either match Chrome or equal the same document
+  without the calc width. Pre-existing gaps it found are listed under F15.
