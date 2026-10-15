@@ -51,3 +51,12 @@ Only identifiers at parenthesis depth 0 in `@media` / `@import` preludes are swa
 - `<link rel=stylesheet media=…>` (fulgur rewrites it into an `@import … media` inside a synthetic `<style>`
   after our rewrite runs) — still evaluated as screen.
 - `@custom-media`, media types inside `@supports`/`@container` conditions — not used by Tailwind.
+- `@page` (and its margin boxes) inside any `@media` block is ignored by fulgur 0.40.0's GCPM parser, before and
+  after this change — a print-only `@page` must be written at top level. Found by `vrt-validator` on PR #3.
+
+## 6. Validation
+
+`vrt-validator` on PR #3: numbers as above, byte-identical re-renders, fonts embedded with ToUnicode. It found a
+panic (a backslash before a multi-byte character in a prelude split the character), an unquoted `url(a/*b)` read
+as a comment, and unterminated strings running past the newline; all three fixed with unit tests. The tag
+scanner no longer lowercases the remaining document for every raw-text element.

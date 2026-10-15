@@ -551,15 +551,30 @@ fn walk_html<'a>(html: &'a str, mut found: impl FnMut(CssSite<'a>)) {
         }
         i = j;
         if matches!(tag.as_str(), "style" | "script" | "textarea" | "title") {
-            let close = format!("</{tag}");
-            let lower = html[i..].to_ascii_lowercase();
-            let end = lower.find(&close).unwrap_or(lower.len());
+            let end = find_end_tag(&html[i..], &tag);
             if tag == "style" {
                 found(CssSite::Element(i..i + end));
             }
             i += end;
         }
     }
+}
+
+/// Offset of the first `</tag` (ASCII case-insensitive) in `rest`, or `rest.len()`.
+fn find_end_tag(rest: &str, tag: &str) -> usize {
+    let b = rest.as_bytes();
+    let mut from = 0;
+    while let Some(off) = rest[from..].find("</") {
+        let at = from + off;
+        let name = at + 2..at + 2 + tag.len();
+        if b.get(name.clone())
+            .is_some_and(|n| n.eq_ignore_ascii_case(tag.as_bytes()))
+        {
+            return at;
+        }
+        from = at + 2;
+    }
+    rest.len()
 }
 
 fn decode_entities(s: &str) -> String {
