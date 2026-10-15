@@ -23,6 +23,7 @@ Read this file first. It is short on purpose; details live in `docs/`.
 | `fixtures/fonts/` | Inter TTFs, fetched by `scripts/fetch-fonts.sh`, git-ignored. |
 | `scripts/reference/` | Chromium reference renderer (Playwright). |
 | `scripts/compare.py` | fulgur vs Chrome pixel diff → `out/compare/`. |
+| `scripts/session-start.sh` | SessionStart hook: fonts + background release build. Cloud VM setup: `docs/cloud-environment.md`. |
 | `docs/decisions/` | ADRs. One file per irreversible decision. Read before proposing architecture. |
 | `docs/plans/` | Design doc per feature, written **before** implementation. |
 | `docs/postmortems/` | What went wrong and why. Agents append here after a failed attempt. |
