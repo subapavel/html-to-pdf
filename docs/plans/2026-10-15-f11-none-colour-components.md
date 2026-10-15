@@ -33,10 +33,20 @@ Alpha is left as stored: Stylo already keeps a `none` alpha as 0.
 - `crates/htmltopdf/tests/colour_spaces.rs::none_components_behave_as_zero`: eight `none` colours (oklch, oklab,
   lab, lch, display-p3, hsl, rgb) paint the same as the colour with 0 written, as a background and as an SVG
   `currentColor` fill. Failed before (`oklch(50% none 0)` → black).
-- Fixtures unchanged (Tailwind never emits `none`): 01 4.4, 02 10.3/11.8/9.6, 03 8.2, 04 5.7, 05 21.6 %.
+- `none` alpha, all-`none` and `hwb()` cases are in the same test (added after `vrt-validator`).
+- Fixtures unchanged (Tailwind never emits `none`): 01 4.4, 02 10.3/11.8/9.6, 03 8.2, 04 5.7, 05 21.6 %; fixture PDFs
+  byte-identical to the pre-PR build (`pdf-reviewer`).
+- `vrt-validator`: 69 `none` notations match Chrome 141 on background, text, border, text-decoration, box-shadow,
+  `currentColor` and SVG `currentColor`. `pdf-reviewer`: no NaN/out-of-range colour operands, colour spaces and
+  ExtGState unchanged, deterministic.
 
 ## 5. Risks
 
-- `color-mix()` resolves `none` during interpolation in Stylo, before it reaches us; untouched.
+- `color-mix()` and relative colours resolve `none` inside Stylo, before it reaches us; where they change colour
+  space the result still differs from Chrome (F16).
+- A `none` gradient stop now counts as 0; css-color-4 §12 would carry the neighbouring stop's component, and fulgur
+  interpolates in sRGB whatever `in <space>` says (F16). Better than the old black, not yet spec.
+- krilla-svg emits `DeviceGray` for neutral SVG paints (also before this PR); PDF/A needs an OutputIntent or
+  `DefaultGray` for that — PDF/A track, not this finding.
 - The fulgur branch now carries F1 and F11. Upstream fulgur `main` has F1 (fulgur-xfzo) but the branch can only be
   dropped on a bump once that release also handles `none`.

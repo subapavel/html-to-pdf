@@ -58,6 +58,9 @@ const NONE_AS_ZERO: &[(&str, &str)] = &[
     ),
     ("hsl(none 50% 50%)", "hsl(0 50% 50%)"),
     ("rgb(none 128 255)", "rgb(0 128 255)"),
+    ("hwb(none 20% 20%)", "hwb(0 20% 20%)"),
+    ("oklch(none none none)", "oklch(0 0 0)"),
+    ("rgb(255 0 0 / none)", "rgb(255 0 0 / 0)"),
 ];
 
 #[test]
