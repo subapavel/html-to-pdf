@@ -15,7 +15,9 @@ fn root() -> PathBuf {
 
 fn renderer() -> Renderer {
     let root = root();
+    // Fixtures are under our control, so every font-family they mention must resolve: strict.
     let mut b = Renderer::builder()
+        .strict_fonts(true)
         .css_file(root.join("fixtures/tailwind/tailwind.css"))
         .expect("tailwind.css");
     let fonts = std::fs::read_dir(root.join("fixtures/fonts"))

@@ -40,8 +40,7 @@ pub enum Error {
     #[error("render failed: {0}")]
     Render(#[from] fulgur::Error),
     /// No entry of these `font-family` lists matches a bundled face, so the text would be dropped from
-    /// the PDF. Supply the font, add a fallback that is bundled, or call
-    /// [`RendererBuilder::strict_fonts`]`(false)` to downgrade this to a warning.
+    /// the PDF. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
     #[error("font-family has no bundled face: {}", join_unresolved(.0))]
     UnresolvedFontFamilies(Vec<UnresolvedFamily>),
     #[error("asset `{path}`: {source}")]
@@ -128,7 +127,7 @@ impl Renderer {
             assets: AssetBundle::new(),
             css_scan: Scan::default(),
             registered: FamilySet::new(),
-            strict_fonts: true,
+            strict_fonts: false,
         }
     }
 
@@ -243,9 +242,13 @@ impl RendererBuilder {
         Ok(self)
     }
 
-    /// Whether a `font-family` list that matches no bundled face is an error (the default) or only
-    /// logged with `log::warn!`. The text of such a list is dropped from the PDF either way; turn
-    /// strictness off only to work around a false positive of the static check.
+    /// Whether a `font-family` list that matches no bundled face is an error, or only logged with
+    /// `log::warn!` (the default). The text of such a list is dropped from the PDF either way.
+    ///
+    /// The check is a *static* scan of every declaration in the bundled CSS and the document, not a
+    /// cascade: an unused rule (`.never-used { font-family: Georgia, serif }`) or a `@media screen`
+    /// block trips it too. That is why strict mode is opt-in — use it for fixtures, tests and CI,
+    /// where every declaration is under your control, not for arbitrary customer templates.
     pub fn strict_fonts(mut self, strict: bool) -> Self {
         self.strict_fonts = strict;
         self

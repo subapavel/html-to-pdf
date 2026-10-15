@@ -48,6 +48,10 @@ enum Cmd {
         /// Emit a tagged PDF (structure tree).
         #[arg(long)]
         tagged: bool,
+        /// Fail (exit 1) when any font-family list in the CSS or document matches no bundled font,
+        /// instead of warning. Use for templates you control; see RendererBuilder::strict_fonts.
+        #[arg(long)]
+        strict_fonts: bool,
     },
 }
 
@@ -73,11 +77,12 @@ fn main() -> Result<()> {
             title,
             lang,
             tagged,
+            strict_fonts,
         } => {
             let html = std::fs::read_to_string(&input)
                 .with_context(|| format!("reading {}", input.display()))?;
 
-            let mut b = Renderer::builder();
+            let mut b = Renderer::builder().strict_fonts(strict_fonts);
             for c in &css {
                 b = b.css_file(c)?;
             }
