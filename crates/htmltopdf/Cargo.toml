@@ -1,0 +1,16 @@
+[package]
+name = "htmltopdf"
+description = "HTML + Tailwind CSS → PDF renderer for invoices and business documents. Built on fulgur (Blitz/Stylo/Taffy/Parley + Krilla), no browser."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fulgur.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true

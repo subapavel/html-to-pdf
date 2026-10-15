@@ -1,0 +1,12 @@
+{
+  "name": "html-to-pdf-tailwind",
+  "private": true,
+  "description": "Compiles Tailwind v4 for the invoice fixtures. Output (tailwind.css) is committed so the Rust side and cloud agents never need npm.",
+  "scripts": {
+    "build": "tailwindcss -i input.css -o tailwind.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  }
+}

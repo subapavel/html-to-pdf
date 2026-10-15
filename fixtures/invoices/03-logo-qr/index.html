@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0003</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<!-- Logo (PNG) + stavový badge (inline span s pozadím) -->
+<header class="flex items-center justify-between mb-8">
+  <img src="logo.png" alt="Příkladná integrace" class="h-12 w-auto">
+  <div class="text-right">
+    <h1 class="text-2xl font-bold tracking-tight">Faktura 2026-0003</h1>
+    <p class="mt-1">
+      <span class="inline-block rounded-full bg-green-100 px-3 py-0.5 text-xs font-semibold text-green-800">Zaplaceno</span>
+      <span class="inline-block rounded-full bg-amber-100 px-3 py-0.5 text-xs font-semibold text-amber-800 ml-1">Záloha 50 %</span>
+    </p>
+  </div>
+</header>
+
+<section class="grid grid-cols-3 gap-6 mb-8 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1</p>
+    <p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Termíny</h2>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-3">
+      <dt class="text-gray-500">Vystaveno</dt><dd class="tabular-nums">15. 10. 2026</dd>
+      <dt class="text-gray-500">DUZP</dt><dd class="tabular-nums">15. 10. 2026</dd>
+      <dt class="text-gray-500">Splatnost</dt><dd class="tabular-nums font-semibold">29. 10. 2026</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- Tabulka s border-collapse (Tailwind Preflight ji nastavuje; tady explicitně) a plnými rámečky -->
+<table class="w-full border-collapse text-sm mb-6">
+  <thead>
+    <tr class="bg-gray-100">
+      <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Popis</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-20">Množství</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-28">Cena/ks</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-16">DPH</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-32">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Licence iFlowMonitor – 12 měsíců</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">30 000,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">30 000,00</td>
+    </tr>
+    <tr class="bg-gray-50">
+      <td class="border border-gray-300 px-3 py-2">Implementace a zaškolení</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">4 h</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">2 500,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">10 000,00</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="4" class="border border-gray-300 px-3 py-2 text-right text-gray-600">Základ daně</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">40 000,00</td>
+    </tr>
+    <tr>
+      <td colspan="4" class="border border-gray-300 px-3 py-2 text-right text-gray-600">DPH 21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">8 400,00</td>
+    </tr>
+    <tr class="bg-gray-900 text-white font-bold">
+      <td colspan="4" class="border border-gray-900 px-3 py-2 text-right">Celkem k úhradě</td>
+      <td class="border border-gray-900 px-3 py-2 text-right tabular-nums">48 400,00 Kč</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- QR Platba (inline SVG) + platební údaje -->
+<section class="flex items-start gap-6 rounded-lg border border-gray-200 p-4">
+  <div class="shrink-0 w-28 h-28">
+    <svg class="w-full h-full" viewBox="0 0 37 37"><path class="qrline" stroke="#111827" d="M0 0.5h7m1 0h1m3 0h3m1 0h4m2 0h1m1 0h2m4 0h7m-37 1h1m5 0h1m3 0h5m2 0h1m2 0h2m3 0h2m3 0h1m5 0h1m-37 1h1m1 0h3m1 0h1m2 0h2m2 0h3m1 0h1m1 0h2m2 0h1m3 0h1m2 0h1m1 0h3m1 0h1m-37 1h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h2m2 0h2m2 0h2m3 0h2m1 0h1m1 0h3m1 0h1m-37 1h1m1 0h3m1 0h1m1 0h1m1 0h1m10 0h3m2 0h1m3 0h1m1 0h3m1 0h1m-37 1h1m5 0h1m1 0h2m1 0h1m2 0h3m1 0h9m3 0h1m5 0h1m-37 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-29 1h3m4 0h4m3 0h1m4 0h2m-29 1h1m3 0h1m1 0h4m2 0h1m5 0h2m2 0h1m1 0h1m1 0h1m1 0h6m2 0h1m-37 1h1m1 0h2m9 0h2m1 0h1m2 0h3m3 0h1m1 0h1m1 0h2m1 0h1m-31 1h2m2 0h3m1 0h3m1 0h1m1 0h3m1 0h3m5 0h3m2 0h2m1 0h1m-37 1h3m4 0h4m2 0h2m6 0h1m2 0h1m2 0h3m1 0h2m2 0h1m-34 1h1m3 0h1m1 0h3m1 0h5m1 0h6m1 0h2m2 0h1m1 0h2m1 0h3m-37 1h2m1 0h1m1 0h1m1 0h1m3 0h1m2 0h4m1 0h2m5 0h1m2 0h1m1 0h2m2 0h2m-34 1h4m1 0h4m2 0h1m3 0h1m2 0h4m2 0h2m2 0h1m1 0h3m-34 1h3m3 0h3m1 0h5m4 0h1m1 0h1m1 0h4m3 0h3m-35 1h1m2 0h1m1 0h2m1 0h1m1 0h1m3 0h1m1 0h1m3 0h1m5 0h1m6 0h1m2 0h1m-37 1h1m4 0h1m1 0h1m4 0h1m1 0h1m3 0h2m2 0h1m1 0h5m6 0h2m-37 1h2m1 0h1m2 0h3m3 0h2m1 0h1m1 0h1m1 0h1m1 0h4m2 0h2m1 0h1m1 0h3m-33 1h2m5 0h2m1 0h5m2 0h5m5 0h1m3 0h3m-36 1h2m1 0h5m1 0h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m2 0h3m3 0h2m3 0h1m-36 1h4m2 0h2m3 0h1m1 0h2m2 0h1m1 0h3m1 0h1m1 0h1m3 0h1m1 0h2m2 0h1m-37 1h1m1 0h1m1 0h4m4 0h1m1 0h1m1 0h2m1 0h1m7 0h2m1 0h1m1 0h1m1 0h2m-32 1h1m2 0h3m1 0h1m1 0h1m3 0h2m3 0h3m2 0h6m2 0h1m-32 1h3m4 0h3m4 0h2m2 0h5m1 0h1m3 0h1m-33 1h2m1 0h1m1 0h1m2 0h2m6 0h2m1 0h2m4 0h2m3 0h1m4 0h2m-35 1h1m3 0h1m2 0h2m2 0h1m2 0h1m1 0h1m1 0h3m5 0h7m1 0h1m-34 1h3m3 0h2m7 0h1m3 0h1m1 0h1m2 0h2m2 0h4m-35 1h3m3 0h3m1 0h1m2 0h4m2 0h3m1 0h1m2 0h1m1 0h5m1 0h2m-28 1h1m1 0h2m1 0h1m1 0h3m1 0h2m1 0h1m2 0h4m3 0h1m2 0h1m-36 1h7m1 0h2m1 0h3m4 0h2m1 0h3m4 0h1m1 0h1m1 0h1m1 0h1m1 0h1m-37 1h1m5 0h1m3 0h2m2 0h2m3 0h3m1 0h2m2 0h2m3 0h5m-37 1h1m1 0h3m1 0h1m1 0h1m1 0h4m1 0h2m2 0h2m3 0h3m1 0h8m-36 1h1m1 0h3m1 0h1m2 0h1m1 0h1m5 0h3m1 0h2m1 0h3m4 0h2m1 0h1m-35 1h1m1 0h3m1 0h1m2 0h1m1 0h2m1 0h2m1 0h3m1 0h1m1 0h1m3 0h3m1 0h2m2 0h1m-36 1h1m5 0h1m2 0h1m1 0h1m2 0h11m1 0h1m4 0h1m1 0h1m1 0h2m-37 1h7m1 0h2m1 0h2m3 0h1m6 0h1m4 0h1m2 0h1m1 0h1m2 0h1"/></svg>
+  </div>
+  <div class="text-sm">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">QR Platba</h2>
+    <p>Naskenujte kód v bankovní aplikaci, nebo zadejte ručně:</p>
+    <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+      <dt class="text-gray-500">Účet</dt><dd class="font-mono">123456789/0300</dd>
+      <dt class="text-gray-500">IBAN</dt><dd class="font-mono">CZ65 0300 0000 0001 2345 6789</dd>
+      <dt class="text-gray-500">VS</dt><dd class="font-mono">20260003</dd>
+      <dt class="text-gray-500">Částka</dt><dd class="font-mono font-semibold">48 400,00 CZK</dd>
+    </dl>
+  </div>
+</section>
+
+</body>
+</html>

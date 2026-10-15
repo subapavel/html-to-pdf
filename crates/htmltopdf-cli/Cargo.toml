@@ -1,0 +1,19 @@
+[package]
+name = "htmltopdf-cli"
+description = "Command-line front end for htmltopdf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "htmltopdf"
+path = "src/main.rs"
+
+[dependencies]
+htmltopdf = { path = "../htmltopdf" }
+anyhow.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+log.workspace = true

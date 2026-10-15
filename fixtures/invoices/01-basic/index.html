@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0001</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<!-- Hlavička: flex -->
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-4 mb-8">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600 mt-1">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0001</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Datum vystavení:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Datum splatnosti:</span> 29. 10. 2026</p>
+    <p><span class="text-gray-500">DUZP:</span> 15. 10. 2026</p>
+  </div>
+</header>
+
+<!-- Dodavatel / odběratel: grid -->
+<section class="grid grid-cols-2 gap-8 mb-8 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12</p>
+    <p>541 01 Trutnov</p>
+    <p class="mt-2">IČO: 12345678</p>
+    <p>DIČ: CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5</p>
+    <p>110 00 Praha 1</p>
+    <p class="mt-2">IČO: 87654321</p>
+    <p>DIČ: CZ87654321</p>
+  </div>
+</section>
+
+<!-- Položky: tabulka -->
+<table class="w-full text-sm mb-6">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 px-2 font-semibold text-right">Cena/ks</th>
+      <th class="py-2 px-2 font-semibold text-right">DPH</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+      <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+      <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+      <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Školení – půldenní workshop pro tým zákazníka</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 px-2 text-right tabular-nums">9 900,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">9 900,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Součty -->
+<section class="flex justify-end mb-10">
+  <table class="text-sm w-72">
+    <tbody>
+      <tr>
+        <td class="py-1 text-gray-600">Základ daně</td>
+        <td class="py-1 text-right tabular-nums">82 700,00 Kč</td>
+      </tr>
+      <tr>
+        <td class="py-1 text-gray-600">DPH 21 %</td>
+        <td class="py-1 text-right tabular-nums">17 367,00 Kč</td>
+      </tr>
+      <tr class="border-t-2 border-gray-900 text-lg font-bold">
+        <td class="pt-2">Celkem k úhradě</td>
+        <td class="pt-2 text-right tabular-nums">100 067,00 Kč</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Platební údaje -->
+<section class="grid grid-cols-2 gap-8 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Platební údaje</h2>
+    <p>Bankovní účet: <span class="font-mono">123456789/0300</span></p>
+    <p>IBAN: <span class="font-mono">CZ65 0300 0000 0001 2345 6789</span></p>
+    <p>Variabilní symbol: <span class="font-mono">20260001</span></p>
+  </div>
+  <div class="text-gray-600">
+    <p>Fyzická osoba zapsaná v živnostenském rejstříku. Děkujeme za včasnou úhradu – příjemný den přeje tým Příkladné integrace.</p>
+  </div>
+</section>
+
+</body>
+</html>

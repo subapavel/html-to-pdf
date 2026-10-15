@@ -1,0 +1,6 @@
+[toolchain]
+# `stable` rather than a pinned version: the cloud environment and CI install
+# whatever rustup calls stable, and fulgur tracks recent stable closely.
+# rust-version in Cargo.toml is the floor (1.85).
+channel = "stable"
+components = ["rustfmt", "clippy"]

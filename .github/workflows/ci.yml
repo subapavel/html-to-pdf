@@ -1,0 +1,28 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "rustfmt, clippy" }
+      - uses: Swatinem/rust-cache@v2          # caches target/ incl. the slow Stylo build
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils qpdf python3-pil
+      - run: scripts/fetch-fonts.sh
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo build --release -p htmltopdf-cli
+      - run: cargo test --release --workspace
+      - run: scripts/render-fixtures.sh
+      - run: python3 scripts/compare.py --threshold-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compare
+          path: |
+            out/compare/
+            out/*/htmltopdf.pdf
+          retention-days: 14

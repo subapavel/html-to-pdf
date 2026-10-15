@@ -1,0 +1,21 @@
+/* Tailwind v4 entry for the invoice fixtures.
+ * `source(...)` scans the invoice HTML so only used utilities are emitted.
+ * Rebuild: cd fixtures/tailwind && npm install && npm run build
+ */
+@import "tailwindcss" source("../invoices");
+
+@theme {
+  /* Font stacks must name a bundled font; htmltopdf never uses system fonts.
+   * Inter is fetched by scripts/fetch-fonts.sh. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* @font-face for the Chrome reference renders (file:// relative to this CSS).
+ * htmltopdf ignores these URLs and uses the bundled font bytes instead; the
+ * family name "Inter" is read from the font's name table, so both agree. */
+@font-face { font-family: "Inter"; font-weight: 400; src: url("../fonts/Inter-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 500; src: url("../fonts/Inter-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 600; src: url("../fonts/Inter-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 700; src: url("../fonts/Inter-Bold.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 800; src: url("../fonts/Inter-ExtraBold.ttf") format("truetype"); }

@@ -1,0 +1,75 @@
+# html-to-pdf — working agreement for humans and agents
+
+HTML + Tailwind CSS → PDF **without a browser**. First product: Czech/EU invoices. Built on
+[fulgur](https://github.com/fulgur-rs/fulgur) (Blitz/Stylo/Taffy/Parley + Krilla). Rust.
+
+Read this file first. It is short on purpose; details live in `docs/`.
+
+## What we are optimising for
+
+1. **Precision** — output must match the CSS spec; Chrome is the *reference*, not the truth.
+   When fulgur and Chrome disagree, cite the spec section before changing anything.
+2. **Speed** — single-page invoice in low tens of ms, 200-page document under a second.
+3. **Determinism** — same input → byte-identical PDF. Never read host fonts or the network.
+
+## Layout of the repo
+
+| Path | What |
+|---|---|
+| `crates/htmltopdf` | Library. Thin API over fulgur; the only place that imports `fulgur`. |
+| `crates/htmltopdf-cli` | `htmltopdf render …` binary. |
+| `fixtures/invoices/NN-name/` | One invoice per directory: `index.html`, `README.md` (what it exercises), `reference/` (Chrome PDF + PNGs, committed). |
+| `fixtures/tailwind/` | Tailwind v4 source + **committed compiled** `tailwind.css`. Rebuild only when fixtures change. |
+| `fixtures/fonts/` | Inter TTFs, fetched by `scripts/fetch-fonts.sh`, git-ignored. |
+| `scripts/reference/` | Chromium reference renderer (Playwright). |
+| `scripts/compare.py` | fulgur vs Chrome pixel diff → `out/compare/`. |
+| `docs/decisions/` | ADRs. One file per irreversible decision. Read before proposing architecture. |
+| `docs/plans/` | Design doc per feature, written **before** implementation. |
+| `docs/postmortems/` | What went wrong and why. Agents append here after a failed attempt. |
+| `.claude/agents/` | Subagent roles with model/effort/tools. Expensive models never edit code. |
+
+## Invariants (break one → the PR is wrong, however green CI is)
+
+- `fulgur` is imported only in `crates/htmltopdf`. Bindings and CLI depend on `htmltopdf`.
+- Layout coordinates are CSS px; PDF coordinates are PDF pt. Conversion happens in **one** place (fulgur's `units`). Never multiply by 72/96 anywhere in our code.
+- Fonts are bundled bytes. `system_fonts(false)` stays. If a glyph is missing, bundle a font; do not enable host fonts.
+- Fixtures are the spec. A behaviour change that moves pixels needs a fixture that shows it and an updated golden, in the same PR.
+- `fixtures/tailwind/tailwind.css` is a build artefact but **committed**; the Rust side and cloud agents must never need npm.
+
+## Workflow for a change
+
+1. Issue → if non-trivial, `docs/plans/YYYY-MM-DD-<slug>.md` (problem, spec refs, acceptance fixtures, risks).
+2. Fixture + failing test first. Then implement. Then `scripts/compare.py` and look at the PNGs.
+3. PR: what changed, which fixture proves it, pixel-diff delta, links to spec/WPT/upstream issue.
+4. If the attempt failed or was abandoned: 10 lines in `docs/postmortems/` so the next agent does not repeat it.
+
+## Commands
+
+```bash
+scripts/fetch-fonts.sh                                   # once
+cargo build --release -p htmltopdf-cli                   # ~10 min cold (Stylo), seconds warm
+cargo test                                               # unit + fixture render tests
+target/release/htmltopdf render fixtures/invoices/01-basic/index.html -o out/01.pdf \
+  --css fixtures/tailwind/tailwind.css --font fixtures/fonts/Inter-Regular.ttf …   # see scripts/render-fixtures.sh
+scripts/render-fixtures.sh                               # all fixtures → out/
+python3 scripts/compare.py                               # fulgur vs Chrome → out/compare/*.png + summary
+```
+
+## Upstream
+
+We depend on a pinned `fulgur` minor. Fixes that belong in fulgur or Blitz go **upstream as PRs**;
+we carry a patch only while waiting. Track them in `docs/upstream.md`.
+Known upstream gaps that hit invoices: `border-collapse` (Blitz #386), inline-level backgrounds, nested table fragmentation.
+
+## Agents: which role for which job
+
+| Job | Role (`.claude/agents/`) | Model |
+|---|---|---|
+| "What does the spec/WPT/Chrome say about X?" | `css-spec-researcher` | expensive, read-only + web |
+| Write a plan doc with acceptance fixtures | `layout-planner` | expensive, read-only |
+| Implement against red tests | `layout-engineer` | mid, can edit |
+| Hunt regressions, run compare, break things | `vrt-validator` | mid, read + bash |
+| Review a PR's PDF output (fonts, ToUnicode, PDF/A) | `pdf-reviewer` | expensive, read-only |
+| Triage WPT failures, bumps, regenerate goldens | `triage` | cheap |
+
+Rule of thumb: the most expensive model reads and decides; it never iterates on code.

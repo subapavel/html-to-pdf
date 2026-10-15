@@ -1,0 +1,8 @@
+{
+  "name": "html-to-pdf-reference",
+  "private": true,
+  "type": "module",
+  "description": "Renders fixtures with headless Chromium as the pixel-diff reference. Not needed by the Rust side.",
+  "scripts": { "render": "node render.mjs" },
+  "devDependencies": { "playwright": "^1.56.0" }
+}

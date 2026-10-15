@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura / Invoice 2026-0004</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[10.5pt] text-gray-900 leading-snug">
+
+<header class="mb-8 border-l-4 border-indigo-600 pl-4">
+  <h1 class="text-2xl font-bold tracking-tight">Faktura <span class="text-gray-400 font-normal">/ Invoice</span> 2026-0004</h1>
+  <p class="text-sm text-gray-600">Daňový doklad <span class="text-gray-400">/ Tax document</span> · Reverse charge – § 92a ZDPH</p>
+</header>
+
+<!-- Čtyři sloupce: CZ i EN štítky, zarovnání -->
+<section class="grid grid-cols-4 gap-4 mb-8 text-sm">
+  <div class="col-span-2">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-700 mb-2">Dodavatel <span class="text-gray-400">/ Supplier</span></h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov, Česká republika</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div class="col-span-2">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-700 mb-2">Odběratel <span class="text-gray-400">/ Customer</span></h2>
+    <p class="font-semibold">Musterfirma GmbH</p>
+    <p>Hauptstraße 1, 10115 Berlin, Deutschland</p>
+    <p>USt-IdNr. DE123456789</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500">Vystaveno / Issued</p>
+    <p class="tabular-nums font-medium">15. 10. 2026</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500">DUZP / Tax point</p>
+    <p class="tabular-nums font-medium">15. 10. 2026</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500">Splatnost / Due</p>
+    <p class="tabular-nums font-medium">14. 11. 2026</p>
+  </div>
+  <div>
+    <p class="text-xs text-gray-500">Měna / Currency</p>
+    <p class="font-medium">EUR</p>
+  </div>
+</section>
+
+<table class="w-full text-sm mb-6">
+  <thead>
+    <tr class="border-b-2 border-indigo-600 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis <span class="normal-case tracking-normal text-gray-400">/ Description</span></th>
+      <th class="py-2 px-2 font-semibold text-right w-16">Množ.</th>
+      <th class="py-2 px-2 font-semibold text-right w-24">Cena</th>
+      <th class="py-2 px-2 font-semibold text-right w-14">DPH</th>
+      <th class="py-2 pl-2 font-semibold text-right w-28">Celkem</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    <tr>
+      <td class="py-2 pr-2">Integrační služby – říjen 2026<br><span class="text-gray-500 text-xs">Integration services – October 2026</span></td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">40 h</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">95,00</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">0 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums align-top">3 800,00</td>
+    </tr>
+    <tr>
+      <td class="py-2 pr-2">Odborná literatura – tištěná<br><span class="text-gray-500 text-xs">Technical books – printed</span></td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">2 ks</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">45,00</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">12 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums align-top">90,00</td>
+    </tr>
+    <tr>
+      <td class="py-2 pr-2">Cestovné – Trutnov ⇄ Berlin<br><span class="text-gray-500 text-xs">Travel expenses</span></td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">1 ks</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">180,00</td>
+      <td class="py-2 px-2 text-right tabular-nums align-top">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums align-top">180,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Rozpis DPH + součet: dvě tabulky vedle sebe v gridu -->
+<section class="grid grid-cols-5 gap-6 mb-8 text-sm">
+  <div class="col-span-3">
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Rozpis DPH <span class="normal-case tracking-normal text-gray-400">/ VAT breakdown</span></h2>
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-300 text-xs text-gray-500">
+          <th class="py-1 text-left font-medium">Sazba</th>
+          <th class="py-1 text-right font-medium">Základ</th>
+          <th class="py-1 text-right font-medium">DPH</th>
+          <th class="py-1 text-right font-medium">Celkem</th>
+        </tr>
+      </thead>
+      <tbody class="tabular-nums">
+        <tr><td class="py-1">0 % <span class="text-gray-400">reverse charge</span></td><td class="py-1 text-right">3 800,00</td><td class="py-1 text-right">0,00</td><td class="py-1 text-right">3 800,00</td></tr>
+        <tr><td class="py-1">12 %</td><td class="py-1 text-right">90,00</td><td class="py-1 text-right">10,80</td><td class="py-1 text-right">100,80</td></tr>
+        <tr><td class="py-1">21 %</td><td class="py-1 text-right">180,00</td><td class="py-1 text-right">37,80</td><td class="py-1 text-right">217,80</td></tr>
+        <tr class="border-t border-gray-300 font-medium"><td class="py-1">Σ</td><td class="py-1 text-right">4 070,00</td><td class="py-1 text-right">48,60</td><td class="py-1 text-right">4 118,60</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col-span-2 rounded-md bg-indigo-50 p-4 self-start">
+    <p class="text-xs font-semibold uppercase tracking-wider text-indigo-700">Celkem k úhradě <span class="normal-case tracking-normal text-indigo-400">/ Total due</span></p>
+    <p class="mt-1 text-3xl font-bold tabular-nums text-indigo-900">4 118,60 €</p>
+    <p class="mt-2 text-xs text-indigo-800">Kurz ČNB 15. 10. 2026: 24,850 CZK/EUR → 102 347,21 Kč</p>
+  </div>
+</section>
+
+<section class="text-xs text-gray-600 leading-relaxed">
+  <p class="mb-1"><strong class="text-gray-900">Daň odvede zákazník.</strong> Dodání služby s místem plnění v jiném členském státě podle § 9 odst. 1 ZDPH.</p>
+  <p><strong class="text-gray-900">VAT to be accounted for by the recipient.</strong> Supply of services with the place of supply in another Member State, Art. 44 and 196 of Directive 2006/112/EC.</p>
+  <p class="mt-3">IBAN <span class="font-mono text-gray-900">CZ65 0300 0000 0001 2345 6789</span> · BIC <span class="font-mono text-gray-900">CEKOCZPP</span> · VS <span class="font-mono text-gray-900">20260004</span></p>
+</section>
+
+</body>
+</html>
