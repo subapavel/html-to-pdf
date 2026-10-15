@@ -1,6 +1,7 @@
 //! A table cell's explicit width includes its padding under `box-sizing: border-box` (F5). Blitz added the
 //! padding again when building the column tracks, so every padded fixed-width Tailwind column (preflight sets
 //! `border-box` everywhere) came out too wide, the auto column too narrow, and 02 paginated to 4 pages.
+//! A `calc()` width mixing a percentage and a length panicked (F14).
 
 use htmltopdf::{RenderOptions, Renderer};
 
@@ -88,6 +89,35 @@ fn border_box_width_never_shrinks_below_padding_and_border() {
     assert!(
         (x - 40.0).abs() <= 1.0,
         "second column starts at {x} px, want 40 (the padding)"
+    );
+}
+
+#[test]
+fn calc_width_mixing_percentage_and_length_is_auto() {
+    // F14: this reached `unreachable!()` in Blitz. Chrome treats such a cell width as `auto`, so three
+    // auto columns share the 400 px equally.
+    let x = first_red_x(
+        "",
+        r#"<tr><td style="width: calc(25% + 20px)"></td><td class="b"></td><td></td></tr>"#,
+        20,
+    );
+    assert!(
+        (x - 133.0).abs() <= 1.0,
+        "second column starts at {x} px, want 133"
+    );
+}
+
+#[test]
+fn later_row_width_applies_to_a_calc_column() {
+    let x = first_red_x(
+        "td { box-sizing: border-box }",
+        r#"<tr><td style="width: calc(25% + 20px)"></td><td class="b"></td></tr>
+           <tr><td style="width: 200px"></td><td class="b"></td></tr>"#,
+        60,
+    );
+    assert!(
+        (x - 200.0).abs() <= 1.0,
+        "second column starts at {x} px, want 200"
     );
 }
 
