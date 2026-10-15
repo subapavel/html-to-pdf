@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
 mod fonts;
+mod property;
 
 use fonts::{FamilySet, GenericMap, Scan};
 pub use fonts::{GenericFamily, Origin, UnresolvedFamily};
@@ -126,6 +127,7 @@ impl Renderer {
         RendererBuilder {
             assets: AssetBundle::new(),
             css_scan: Scan::default(),
+            properties: property::Registry::default(),
             registered: FamilySet::new(),
             default_family: None,
             strict_fonts: false,
@@ -135,6 +137,7 @@ impl Renderer {
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
         self.check_fonts(html)?;
+        warn_document_property_rules(html);
         let engine = self.engine(opts);
         Ok(engine.render(html)?)
     }
@@ -147,6 +150,7 @@ impl Renderer {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         self.check_fonts(html)?;
+        warn_document_property_rules(html);
         let engine = self.engine(opts);
         Ok(engine.render_file(html, path)?)
     }
@@ -190,9 +194,23 @@ impl Renderer {
     }
 }
 
+/// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds the
+/// bundled CSS *after* the document's `<style>` elements, so a defaults layer generated for a document's
+/// own rules would be declared after the document's layers and override them.
+fn warn_document_property_rules(html: &str) {
+    if html.contains("@property") {
+        log::warn!(
+            "the document contains `@property`; initial values are applied only for stylesheets passed \
+             to `RendererBuilder::css` (CLI `--css`), so these may render without their defaults"
+        );
+    }
+}
+
 pub struct RendererBuilder {
     assets: AssetBundle,
     css_scan: Scan,
+    /// `@property` registrations of the bundled CSS, emulated by a generated defaults stylesheet.
+    properties: property::Registry,
     registered: FamilySet,
     /// Family name of the first font the caller bundled; becomes the document default.
     default_family: Option<String>,
@@ -206,6 +224,7 @@ impl RendererBuilder {
         let css = css.into();
         self.css_scan
             .extend(fonts::scan_css(&css, Origin::Stylesheet));
+        self.properties.extend(property::scan_property_rules(&css));
         self.assets.add_css(css);
         self
     }
@@ -295,6 +314,11 @@ impl RendererBuilder {
                 fonts::BUILTIN_MONO_FAMILY
             ),
         );
+        // `@property` initial values, which the engine ignores. First in the bundled CSS, so its layer is
+        // declared before any other layer there and every author rule overrides it.
+        if let Some(defaults) = self.properties.prelude() {
+            assets.css.insert(0, defaults);
+        }
         // Registered last, so faces the caller supplied take precedence over the built-in one. If the
         // caller already supplied a family of the same name, theirs is used alone.
         if registered.insert(fonts::fold(fonts::BUILTIN_MONO_FAMILY)) {

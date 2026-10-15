@@ -28,10 +28,10 @@ PIXEL_TOL = 32  # per-channel, 0..255
 # GUARD: set at the current number plus a small margin, and lowered in the same PR as the fix that
 # earns it. Never raise one to make CI green; fix the fixture or the engine instead.
 THRESHOLDS = {
-    "01-basic": 0.07,
+    "01-basic": 0.065,
     "02-long": 0.12,
     "03-logo-qr": 0.10,
-    "04-bilingual-vat": 0.12,
+    "04-bilingual-vat": 0.11,
     "05-fancy": 0.26,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the

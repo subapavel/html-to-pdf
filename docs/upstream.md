@@ -24,6 +24,8 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 | Determinism depends on host fonts for SVG `<text>` — renders with host FreeSerif even with `system_fonts(false)` | Blitz `fontdb` global | open; breaks our no-host-fonts invariant for SVG text | 03 (QR has no text, so unaffected) |
 | Media queries evaluated as `screen`; `@media print` rules ignored | fulgur / Blitz (see fulgur's Blitz PR #390) | open — F7 | 05 (`print:` variants) |
 | Generic families (`monospace`, `sans-serif`) alone cannot be mapped to a bundled face | fulgur / Parley font fallback | open — F3b | probe |
+| `@property` ignored: Stylo 0.8.0 gates the at-rule parser (`stylesheets/rule_parser.rs:752`) on `layout.css.properties-and-values.enabled`, absent from `stylo_static_prefs` 0.8.0 → false; the cascade side is compiled in for servo. Upstream stylo main has it `true`. | Stylo via Blitz | **to file** on Blitz (bump Stylo / enable pref) — F2b; we polyfill bundled CSS in `htmltopdf` (F2) | all (Tailwind borders/shadows) |
+| `linear-gradient(<dir> in oklab, …)` (colour-interpolation method) paints nothing | Stylo or Blitz paint — unverified | **to file** — F8 | 05 (Tailwind gradients) |
 | `usvg` rejects `oklch()` in inline SVG fills, falls back to black | resvg/usvg | open — part of F1 | 05 (icon) |
 
 | Font descriptors carry the SmallCap flag (ISO 32000-1 Table 123, bit 18) on every font | Krilla | open — harmless, report | all |
