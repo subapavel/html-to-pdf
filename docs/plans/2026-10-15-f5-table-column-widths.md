@@ -45,9 +45,8 @@ columns; the first row is still padded twice.
 
 ## 4. Steps once the Blitz fork exists (together with F1's blitz-dom change)
 
-1. Add the hunk above as a commit on `subapavel/blitz` `htmltopdf/svg-current-color-srgb` (one blitz-dom branch
-   carries all our blitz-dom fixes, since `[patch.crates-io]` takes one source per crate) — or rename that branch
-   to `htmltopdf/blitz-dom-0.2.4` when doing so.
+1. Add the hunk above as a commit on `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` (the one branch that carries all
+   our blitz-dom fixes, since `[patch.crates-io]` takes one source per crate).
 2. `[patch.crates-io] blitz-dom`, remove `02-long` from `PAGE_COUNT_MAY_DIFFER`; 02's threshold rises per the standing
    decision (content now in place, drift is #386) — name it in `compare.py`.
 3. Acceptance test: a two-column table, `box-sizing: border-box`, first column `width: 100px; padding: 0 20px`, the

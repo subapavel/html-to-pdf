@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fsvg-current-color-srgb#daba8ed2c91c3f69b7b8daf184ace137f901be9d"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#dfc9a3b24c73569a654161f7b35b2b7afc2c759b"
 dependencies = [
  "accesskit",
  "app_units",

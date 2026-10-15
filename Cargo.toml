@@ -45,4 +45,4 @@ opt-level = 2
 # crate's exact source commit plus our fix; versions must stay equal to the ones in Cargo.lock.
 [patch.crates-io]
 fulgur = { git = "https://github.com/subapavel/fulgur", branch = "htmltopdf/srgb-colours" }
-blitz-dom = { git = "https://github.com/subapavel/blitz", branch = "htmltopdf/svg-current-color-srgb" }
+blitz-dom = { git = "https://github.com/subapavel/blitz", branch = "htmltopdf/blitz-dom-0.2.4" }
