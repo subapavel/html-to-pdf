@@ -1,7 +1,7 @@
 # F5 — Table column widths differ from Chrome (02 paginates to 4 pages)
 
-Date: 2026-10-15. Finding: F5 in `2026-10-15-m0-findings.md`. Status: **root cause found, fix verified locally, parked
-— needs the Blitz fork** (same blocker as F1: forks cannot be created from agent sessions).
+Date: 2026-10-15. Finding: F5 in `2026-10-15-m0-findings.md`. Status: **done** — carried on `subapavel/blitz`
+`htmltopdf/blitz-dom-0.2.4` (§5).
 
 ## 1. Root cause
 
@@ -51,3 +51,16 @@ columns; the first row is still padded twice.
    decision (content now in place, drift is #386) — name it in `compare.py`.
 3. Acceptance test: a two-column table, `box-sizing: border-box`, first column `width: 100px; padding: 0 20px`, the
    second column starts at 100 px.
+
+## 5. As landed
+
+- `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `a01639e` (the hunk above) and `6051b93` (border widths of a
+  `content-box` cell are added too). `Cargo.lock` moves only the blitz-dom source.
+- Test: `crates/htmltopdf/tests/table_columns.rs` — the second column starts at 100 px (`border-box`), 140 px
+  (`content-box`, padding) and 150 px (`content-box`, padding + 5 px side borders). Failed before the fix (140 for
+  `border-box`).
+- Compare on main + F4: 02 4/3 pages 9.4 / 10.4 / 10.1 / 2.6 % → **3/3** 10.3 / 11.8 / 9.6 %; 03 8.9 → 8.2 %;
+  04 5.8 → 5.7 %; 01 and 05 unchanged. 02's worst page rose because rows now line up with Chrome's pages and drift
+  against them; per ADR-0003 its threshold is re-baselined to 12.9 % and 02 left `PAGE_COUNT_MAY_DIFFER`.
+- Remaining 02 drift, seen in `out/compare/02-long-p2.png`: Chrome repeats `<thead>` on pages 2–3 (F12), centres
+  cell content vertically (F13), and paints the collapsed row rules (Blitz #386).

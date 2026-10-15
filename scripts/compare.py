@@ -31,16 +31,20 @@ THRESHOLDS = {
     # Lowered in F1 (sRGB colour conversion): 01 5.3 → 4.4, 02 10.6 → 10.4, 03 10.1 → 8.9, 04 9.9 → 5.8,
     # 05 32.3 → 21.5 %.
     "01-basic": 0.05,
-    "02-long": 0.11,
-    "03-logo-qr": 0.095,
-    "04-bilingual-vat": 0.065,
+    # 02: re-baselined by F5 (4 → 3 pages, ADR-0003): 10.3 / 11.8 / 9.6 %. Rows drift against Chrome's because
+    #     collapsed `<tr>` borders are not painted (Blitz #386) and the table header is not repeated on pages 2-3
+    #     (F12); those findings bring it down.
+    "02-long": 0.129,
+    # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %.
+    "03-logo-qr": 0.09,
+    "04-bilingual-vat": 0.06,
     # 05: the rest is mostly the header printed inside the page margin instead of full-bleed (F6) and the
     #     totals box sitting lower than in Chrome.
     "05-fancy": 0.22,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
-PAGE_COUNT_MAY_DIFFER = {"02-long": "F5 table auto-layout widens rows → 4 pages instead of 3"}
+PAGE_COUNT_MAY_DIFFER: dict[str, str] = {}
 
 
 def pages(dir_: Path, prefix: str) -> list[Path]:
