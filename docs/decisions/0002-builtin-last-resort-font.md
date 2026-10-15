@@ -30,3 +30,6 @@ Why JetBrains Mono: the fixture CSS already names it first, it is OFL 1.1 and it
   output size is unaffected.
 - Only the Regular weight is bundled; bold mono text is Regular or synthesised.
 - OFL 1.1 requires the licence text to ship with the font; `fonts/OFL.txt` is part of the crate.
+
+
+Known limitation (pdf-reviewer, PR #1): only the Regular weight is bundled and the engine does not synthesise bold, so `font-mono font-semibold` renders Regular. Bundle JetBrains Mono Bold if a template needs it.
