@@ -40,6 +40,19 @@ fn capitalize_words_across_inline_elements() {
 }
 
 #[test]
+fn capitalize_restarts_after_br_and_ignores_marks_inside_words() {
+    let t = text(
+        ".c { text-transform: capitalize }",
+        "<p class=\"c\">hello<br>world<br>third line</p><p class=\"c\">re\u{0301}zat pre\u{00AD}fix</p>",
+    );
+    assert!(t.contains("Hello World Third Line"), "{t:?}");
+    // A decomposed accent and a soft hyphen stay inside the word: nothing after them is capitalized.
+    // (pdftotext may drop the mark and split at the soft hyphen, so only the case is asserted.)
+    assert!(t.contains("zat") && !t.contains("Zat"), "{t:?}");
+    assert!(t.contains("fix") && !t.contains("Fix"), "{t:?}");
+}
+
+#[test]
 fn tailwind_uppercase_class_from_bundled_css() {
     let t = text(
         ".uppercase { text-transform: uppercase; }",

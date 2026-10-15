@@ -20,8 +20,12 @@ recommended, not required.
 In `build_inline_layout_recursive`, a text node takes `text-transform` from its parent element's computed style and
 is pushed transformed. `capitalize` keeps its at-word-start state in a thread-local reset per inline layout, so word
 boundaries carry across inline elements (`wo<b>rd</b>` stays one word); letters and digits continue a word, an
-apostrophe only inside one (`don't`, `'Citát'`). Not done: language-specific mappings, `full-width`,
-`full-size-kana` (other `text-transform` flags).
+apostrophe only inside one (`don't`, `'Citát'`); combining marks and soft hyphens stay inside a word; `<br>` starts
+a new word.
+
+Not done (found by `vrt-validator` on PR #9, all low): `::before`/`::after` generated text is not transformed (it
+does not go through the text-node path); language-specific mappings (`lang="tr"`: `i` → `İ`); Greek final sigma
+across text nodes; `full-width` / `full-size-kana`; SVG `<text>`.
 
 All blitz-dom fixes now live on one branch, `htmltopdf/blitz-dom-0.2.4` (F1's commits + this one), because
 `[patch.crates-io]` takes one source per crate. The F1-only branch `htmltopdf/svg-current-color-srgb` is superseded.
