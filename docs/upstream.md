@@ -15,6 +15,8 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 
 | Gap | Where | Status | Fixture |
 |---|---|---|---|
+| Explicit `<td>/<th>` widths get the cell padding added even under `box-sizing: border-box` (`layout/table.rs:175`, TODO in source): Tailwind tables get wider fixed columns and a narrower auto column | Blitz | **patch ready, fork pending** — F5, `docs/plans/2026-10-15-f5-table-column-widths.md` | 02 (4 pages instead of 3), 03 |
+| `text-transform` not applied: text nodes are pushed to the line builder as written (`layout/construct.rs:944`) | Blitz | **to file** — F4 | 02–05 (`uppercase` headings) |
 | `border-collapse: collapse` ignored, shared borders painted twice | Blitz — [#386](https://github.com/DioxusLabs/blitz/issues/386) | open | 03 |
 | Inline-level boxes get no background/border/shadow | fulgur draw path | open (documented in fulgur `docs/css-support.md`) | 03 (badges) |
 | Nested tables do not fragment | fulgur / Taffy | open | — |
