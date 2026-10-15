@@ -26,7 +26,8 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 | Generic families (`monospace`, `sans-serif`) alone cannot be mapped to a bundled face | fulgur / Parley font fallback | open — F3b | probe |
 | `@property` ignored: Stylo 0.8.0 gates the at-rule parser (`stylesheets/rule_parser.rs:752`) on `layout.css.properties-and-values.enabled`, absent from `stylo_static_prefs` 0.8.0 → false; the cascade side is compiled in for servo. Upstream stylo main has it `true`. | Stylo via Blitz | **to file** on Blitz (bump Stylo / enable pref) — F2b; we polyfill bundled CSS in `htmltopdf` (F2) | all (Tailwind borders/shadows) |
 | `linear-gradient(<dir> in oklab, …)` (colour-interpolation method) paints nothing | Stylo or Blitz paint — unverified | **to file** — F8 | 05 (Tailwind gradients) |
-| `usvg` rejects `oklch()` in inline SVG fills, falls back to black | resvg/usvg | open — part of F1 | 05 (icon) |
+| Non-sRGB colours (`oklch()`, `lab()`, `color-mix()`) painted with raw components: `absolute_to_rgba` skips the sRGB conversion | fulgur | **patch ready, fork pending** — F1, `docs/plans/2026-10-15-f1-srgb-conversion.md` | all |
+| Inline SVG `currentColor` serialised as `oklch(…)`, which usvg rejects → black (`Node::write_outer_html`) | blitz-dom | **patch ready, fork pending** — F1 | 05 (icon) |
 
 | Font descriptors carry the SmallCap flag (ISO 32000-1 Table 123, bit 18) on every font | Krilla | open — harmless, report | all |
 | `Producer` says `fulgur`; set ours via `EngineBuilder::producer` | ours (htmltopdf) | todo, trivial | all |

@@ -11,7 +11,10 @@ const RED: &[(&str, &str)] = &[
     ("oklch", "oklch(62.8% 0.2577 29.23)"),
     ("oklab", "oklab(62.8% 0.2249 0.1258)"),
     ("lab", "lab(54.29% 80.82 69.91)"),
-    ("color-mix", "color-mix(in oklab, rgb(255 0 0) 40%, rgb(255 0 0))"),
+    (
+        "color-mix",
+        "color-mix(in oklab, rgb(255 0 0) 40%, rgb(255 0 0))",
+    ),
 ];
 
 /// Max per-channel distance from pure red. Conversions round-trip through f32 and get clipped to
@@ -36,7 +39,10 @@ fn inline_svg_current_colour_converts_to_srgb() {
         let px = centre_pixel(&format!(
             r#"<svg style="color:{colour}" width="200" height="200" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10"/></svg>"#
         ));
-        assert!(is_red(px), "svg currentColor {name} `{colour}` painted as {px:?}");
+        assert!(
+            is_red(px),
+            "svg currentColor {name} `{colour}` painted as {px:?}"
+        );
     }
 }
 
@@ -95,7 +101,12 @@ fn rasterise(pdf: &[u8]) -> (usize, Vec<u8>) {
         while !ppm[i].is_ascii_whitespace() {
             i += 1;
         }
-        fields.push(std::str::from_utf8(&ppm[start..i]).unwrap().parse::<usize>().unwrap());
+        fields.push(
+            std::str::from_utf8(&ppm[start..i])
+                .unwrap()
+                .parse::<usize>()
+                .unwrap(),
+        );
     }
     (fields[0], ppm[i + 1..].to_vec())
 }
