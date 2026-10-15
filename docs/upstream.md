@@ -18,7 +18,16 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 | `border-collapse: collapse` ignored, shared borders painted twice | Blitz — [#386](https://github.com/DioxusLabs/blitz/issues/386) | open | 03 |
 | Inline-level boxes get no background/border/shadow | fulgur draw path | open (documented in fulgur `docs/css-support.md`) | 03 (badges) |
 | Nested tables do not fragment | fulgur / Taffy | open | — |
-| Determinism depends on host fonts for SVG `<text>` | Blitz `fontdb` global | open | 03 (QR has no text, so unaffected) |
+| A text run whose `font-family` list resolves to no face is dropped without any warning | fulgur / Blitz / Parley | **to file** (F3); we guard with a static check in `htmltopdf` | 01-04 (before F3) |
+| With `system_fonts(false)` the fontique generic-family and fallback maps are empty, so `monospace`, `serif`, `sans-serif`, `system-ui` (and the default `serif`) match nothing; Parley should fall back to any registered face rather than drop the run | Parley / fontique | **to file** (F3) | `fixtures/probe.html` row G |
+| fulgur 0.40.0 exposes no hook for generic-family mapping (`FontContext` is built privately in `blitz_adapter::parse_inner`) | fulgur | **to file / PR** (F3 step 4, blocked, see plan) | — |
+| Determinism depends on host fonts for SVG `<text>` — renders with host FreeSerif even with `system_fonts(false)` | Blitz `fontdb` global | open; breaks our no-host-fonts invariant for SVG text | 03 (QR has no text, so unaffected) |
+| Media queries evaluated as `screen`; `@media print` rules ignored | fulgur / Blitz (see fulgur's Blitz PR #390) | open — F7 | 05 (`print:` variants) |
+| Generic families (`monospace`, `sans-serif`) alone cannot be mapped to a bundled face | fulgur / Parley font fallback | open — F3b | probe |
+| `usvg` rejects `oklch()` in inline SVG fills, falls back to black | resvg/usvg | open — part of F1 | 05 (icon) |
+
+| Font descriptors carry the SmallCap flag (ISO 32000-1 Table 123, bit 18) on every font | Krilla | open — harmless, report | all |
+| `Producer` says `fulgur`; set ours via `EngineBuilder::producer` | ours (htmltopdf) | todo, trivial | all |
 
 ## Our patches / PRs
 

@@ -28,18 +28,34 @@ use std::path::{Path, PathBuf};
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
+mod fonts;
+
+use fonts::{FamilySet, GenericMap, Scan};
+pub use fonts::{GenericFamily, Origin, UnresolvedFamily};
+
 /// Errors produced by this crate. Wraps fulgur's error so callers never
 /// depend on fulgur directly.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("render failed: {0}")]
     Render(#[from] fulgur::Error),
+    /// No entry of these `font-family` lists matches a bundled face, so the text would be dropped from
+    /// the PDF. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
+    #[error("font-family has no bundled face: {}", join_unresolved(.0))]
+    UnresolvedFontFamilies(Vec<UnresolvedFamily>),
     #[error("asset `{path}`: {source}")]
     Asset {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
+}
+
+fn join_unresolved(list: &[UnresolvedFamily]) -> String {
+    list.iter()
+        .map(|u| u.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -98,17 +114,27 @@ pub struct RenderOptions {
 /// every document. Build one per template set and keep it alive.
 pub struct Renderer {
     assets: AssetBundle,
+    /// `font-family` declarations of the bundled CSS, scanned once in `build()`.
+    css_scan: Scan,
+    registered: FamilySet,
+    generics: GenericMap,
+    strict_fonts: bool,
 }
 
 impl Renderer {
     pub fn builder() -> RendererBuilder {
         RendererBuilder {
             assets: AssetBundle::new(),
+            css_scan: Scan::default(),
+            registered: FamilySet::new(),
+            default_family: None,
+            strict_fonts: false,
         }
     }
 
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
+        self.check_fonts(html)?;
         let engine = self.engine(opts);
         Ok(engine.render(html)?)
     }
@@ -120,8 +146,27 @@ impl Renderer {
         opts: &RenderOptions,
         path: impl AsRef<Path>,
     ) -> Result<()> {
+        self.check_fonts(html)?;
         let engine = self.engine(opts);
         Ok(engine.render_file(html, path)?)
+    }
+
+    /// Static check that every `font-family` list can be satisfied by a bundled face. Without it,
+    /// text whose list matches nothing is silently dropped from the PDF.
+    fn check_fonts(&self, html: &str) -> Result<()> {
+        let document = fonts::scan_html(html);
+        let unresolved =
+            fonts::check_font_families(&self.css_scan, &document, &self.registered, &self.generics);
+        if unresolved.is_empty() {
+            return Ok(());
+        }
+        if self.strict_fonts {
+            return Err(Error::UnresolvedFontFamilies(unresolved));
+        }
+        for u in &unresolved {
+            log::warn!("font-family has no bundled face, its text will be dropped: {u}");
+        }
+        Ok(())
     }
 
     fn engine(&self, opts: &RenderOptions) -> Engine {
@@ -147,41 +192,72 @@ impl Renderer {
 
 pub struct RendererBuilder {
     assets: AssetBundle,
+    css_scan: Scan,
+    registered: FamilySet,
+    /// Family name of the first font the caller bundled; becomes the document default.
+    default_family: Option<String>,
+    strict_fonts: bool,
 }
 
 impl RendererBuilder {
     /// Add a stylesheet from a string. Applied in insertion order, before any
     /// `<style>` in the document itself.
     pub fn css(mut self, css: impl Into<String>) -> Self {
+        let css = css.into();
+        self.css_scan
+            .extend(fonts::scan_css(&css, Origin::Stylesheet));
         self.assets.add_css(css);
         self
     }
 
-    pub fn css_file(mut self, path: impl AsRef<Path>) -> Result<Self> {
+    pub fn css_file(self, path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let css = std::fs::read_to_string(path).map_err(|source| Error::Asset {
             path: path.into(),
             source,
         })?;
-        self.assets.add_css(css);
-        Ok(self)
+        Ok(self.css(css))
     }
 
     /// Bundle a font (TTF / OTF / TTC / WOFF2). The family name comes from the
     /// font's own name table and is what `font-family` in CSS must match.
-    pub fn font_file(mut self, path: impl AsRef<Path>) -> Result<Self> {
+    pub fn font_file(self, path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let bytes = std::fs::read(path).map_err(|source| Error::Asset {
             path: path.into(),
             source,
         })?;
+        self.add_font(bytes)
+    }
+
+    pub fn font_bytes(self, bytes: Vec<u8>) -> Result<Self> {
+        self.add_font(bytes)
+    }
+
+    fn add_font(mut self, bytes: Vec<u8>) -> Result<Self> {
         self.assets.add_font_bytes(bytes)?;
+        // fulgur may have decoded the bytes (WOFF2); read the family names from what it kept.
+        if let Some(stored) = self.assets.fonts.last() {
+            for name in fonts::family_names(stored) {
+                if self.default_family.is_none() {
+                    self.default_family = Some(name.clone());
+                }
+                self.registered.insert(fonts::fold(&name));
+            }
+        }
         Ok(self)
     }
 
-    pub fn font_bytes(mut self, bytes: Vec<u8>) -> Result<Self> {
-        self.assets.add_font_bytes(bytes)?;
-        Ok(self)
+    /// Whether a `font-family` list that matches no bundled face is an error, or only logged with
+    /// `log::warn!` (the default). The text of such a list is dropped from the PDF either way.
+    ///
+    /// The check is a *static* scan of every declaration in the bundled CSS and the document, not a
+    /// cascade: an unused rule (`.never-used { font-family: Georgia, serif }`) or a `@media screen`
+    /// block trips it too. That is why strict mode is opt-in — use it for fixtures, tests and CI,
+    /// where every declaration is under your control, not for arbitrary customer templates.
+    pub fn strict_fonts(mut self, strict: bool) -> Self {
+        self.strict_fonts = strict;
+        self
     }
 
     /// Register an image under `name`, referenced from HTML as `<img src="name">`.
@@ -201,8 +277,37 @@ impl RendererBuilder {
     }
 
     pub fn build(self) -> Renderer {
+        let mut assets = self.assets;
+        let mut registered = self.registered;
+        // The engine has no user-agent default `font-family`: text in an element with no family
+        // anywhere in its ancestry is dropped. Give the document one — the first bundled font, then
+        // the built-in mono face — at the lowest possible priority (an `html` rule in the first
+        // stylesheet; any author declaration on html/body/… overrides it through the cascade).
+        let default_family = self
+            .default_family
+            .as_deref()
+            .unwrap_or(fonts::BUILTIN_MONO_FAMILY);
+        assets.css.insert(
+            0,
+            format!(
+                "html {{ font-family: \"{}\", \"{}\"; }}\n",
+                default_family.replace('"', ""),
+                fonts::BUILTIN_MONO_FAMILY
+            ),
+        );
+        // Registered last, so faces the caller supplied take precedence over the built-in one. If the
+        // caller already supplied a family of the same name, theirs is used alone.
+        if registered.insert(fonts::fold(fonts::BUILTIN_MONO_FAMILY)) {
+            assets
+                .add_font_bytes(fonts::BUILTIN_MONO.to_vec())
+                .expect("built-in font is a valid TTF");
+        }
         Renderer {
-            assets: self.assets,
+            assets,
+            css_scan: self.css_scan,
+            registered,
+            generics: GenericMap::new(),
+            strict_fonts: self.strict_fonts,
         }
     }
 }
