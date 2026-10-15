@@ -88,10 +88,10 @@ cssparser path; not used by any fixture.
 
 ## 5. Steps once the forks exist
 
-1. Push the two branches above with the diffs from §3; open the upstream PRs (fulgur-rs/fulgur, DioxusLabs/blitz).
+1. Push the two branches above with the diffs from §3.
 2. Add `[patch.crates-io]`, `cargo update -p fulgur -p blitz-dom`, remove the `#[ignore]`s, lower thresholds.
 3. `vrt-validator` and `pdf-reviewer` (colour operators in the content stream are the PDF writer path).
-4. Record forks and upstream PRs in `docs/upstream.md` under "Our patches / PRs".
+4. Record the fork branches in `docs/upstream.md` under "Our patches / PRs".
 
 ## 6. Risks
 

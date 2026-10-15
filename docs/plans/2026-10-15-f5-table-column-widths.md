@@ -33,7 +33,7 @@ columns; the first row is still padded twice.
                      }
 ```
 
-(Border widths under `content-box` are still ignored — the upstream PR should add them too.)
+(Border widths under `content-box` are still ignored — add them in the same commit.)
 
 ## 3. Measured with the patch applied locally (`cargo --config 'patch.crates-io.blitz-dom.path=…'`)
 
@@ -45,8 +45,9 @@ columns; the first row is still padded twice.
 
 ## 4. Steps once the Blitz fork exists (together with F1's blitz-dom change)
 
-1. Branch `htmltopdf/table-border-box` on `subapavel/blitz` at `0a77560e` with the hunk above; upstream PR to
-   DioxusLabs/blitz.
+1. Add the hunk above as a commit on `subapavel/blitz` `htmltopdf/svg-current-color-srgb` (one blitz-dom branch
+   carries all our blitz-dom fixes, since `[patch.crates-io]` takes one source per crate) — or rename that branch
+   to `htmltopdf/blitz-dom-0.2.4` when doing so.
 2. `[patch.crates-io] blitz-dom`, remove `02-long` from `PAGE_COUNT_MAY_DIFFER`; 02's threshold rises per the standing
    decision (content now in place, drift is #386) — name it in `compare.py`.
 3. Acceptance test: a two-column table, `box-sizing: border-box`, first column `width: 100px; padding: 0 20px`, the
