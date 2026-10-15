@@ -1,0 +1,6 @@
+# One shared target dir for every checkout/worktree of this repo on this machine, so a PR review
+# in a worktree reuses the main build instead of recompiling Stylo (see docs/postmortems/2026-10-15-*).
+# Relative paths are resolved against this file's parent, so each clone still gets its own dir;
+# override with CARGO_TARGET_DIR when you want to share across clones.
+[build]
+target-dir = "target"
