@@ -155,6 +155,16 @@ fn next_block(p: &mut Parser<'_, '_>) -> Option<bool> {
     }
 }
 
+/// Whether `html` contains `@<keyword>` followed by optional whitespace and a character accepted by
+/// `next` (`@property --x`, `@layer x`). A text heuristic for warnings, not a parse.
+pub(crate) fn mentions_at_rule(html: &str, keyword: &str, next: impl Fn(char) -> bool) -> bool {
+    let needle = format!("@{keyword}");
+    html.match_indices(&needle).any(|(i, _)| {
+        let rest = &html[i + needle.len()..];
+        rest.starts_with(char::is_whitespace) && rest.trim_start().chars().next().is_some_and(&next)
+    })
+}
+
 #[derive(Default)]
 struct Descriptors {
     syntax: Option<String>,
@@ -175,32 +185,38 @@ fn parse_descriptors(p: &mut Parser<'_, '_>) -> Descriptors {
         if p.try_parse(|p| p.expect_colon()).is_err() {
             continue;
         }
+        // Tokens of the value (comments and whitespace skipped) and its raw text.
         let start = p.position();
-        while p.next().is_ok_and(|t| !matches!(t, Token::Semicolon)) {}
+        let mut tokens = Vec::new();
+        loop {
+            match p.next() {
+                Ok(Token::Semicolon) | Err(_) => break,
+                Ok(t) => tokens.push(t.clone()),
+            }
+        }
+        // Up to and including the terminator; nested blocks (`rgb(…)`) are consumed by then.
         let raw = p.slice_from(start).trim().trim_end_matches(';').trim();
-        match name.as_str() {
-            "syntax" => match unquote(raw) {
-                Some(s) => d.syntax = Some(s.trim().to_string()),
-                None => d.invalid = true,
-            },
-            "inherits" => match raw.to_ascii_lowercase().as_str() {
-                "true" => d.inherits = Some(true),
-                "false" => d.inherits = Some(false),
-                _ => d.invalid = true,
-            },
-            "initial-value" => d.initial = Some(raw.to_string()),
+        // `!important` is not part of any descriptor grammar; keeping it would make the default outrank
+        // every author declaration.
+        if tokens.iter().any(|t| matches!(t, Token::Delim('!'))) {
+            d.invalid = true;
+            continue;
+        }
+        match (name.as_str(), tokens.as_slice()) {
+            ("syntax", [Token::QuotedString(s)]) => d.syntax = Some(s.trim().to_string()),
+            ("inherits", [Token::Ident(v)]) if v.eq_ignore_ascii_case("true") => {
+                d.inherits = Some(true)
+            }
+            ("inherits", [Token::Ident(v)]) if v.eq_ignore_ascii_case("false") => {
+                d.inherits = Some(false)
+            }
+            ("syntax" | "inherits", _) => d.invalid = true,
+            ("initial-value", _) => {
+                d.initial = Some(raw.to_string());
+            }
             _ => {}
         }
     }
-}
-
-/// `syntax` is a `<string>`.
-fn unquote(raw: &str) -> Option<&str> {
-    let q = raw.chars().next()?;
-    if !matches!(q, '"' | '\'') || raw.len() < 2 || !raw.ends_with(q) {
-        return None;
-    }
-    Some(&raw[1..raw.len() - 1])
 }
 
 /// css-properties-values-api-1 §2: `syntax` and `inherits` are required; `initial-value` is required unless
@@ -286,6 +302,24 @@ mod tests {
     }
 
     #[test]
+    fn comments_inside_descriptors_are_ignored() {
+        let r = scan_property_rules(
+            r#"@property --c { syntax: /*a*/ "*" /*b*/; inherits: /*c*/ false; initial-value: /*d*/ solid /*e*/ }"#,
+        );
+        assert_eq!(r.len(), 1);
+        assert!(!r[0].inherits);
+        assert_eq!(r[0].syntax, "*");
+        assert!(r[0].initial.as_deref().unwrap().contains("solid"));
+    }
+
+    #[test]
+    fn important_makes_the_rule_invalid() {
+        let css = r#"@property --k { syntax: "*"; inherits: false; initial-value: solid !important }
+                     @property --i { syntax: "*"; inherits: false !important }"#;
+        assert!(names(css).is_empty());
+    }
+
+    #[test]
     fn found_at_top_level_and_in_layers_not_in_conditional_rules() {
         let css = r#"
             @layer a, b;
@@ -331,6 +365,17 @@ mod tests {
              *,::before,::after{--style:solid;--leading:initial;--w:0px;--pos:0%;}\
              :root{--ink:#111;}}\n"
         );
+    }
+
+    #[test]
+    fn at_rule_mentions() {
+        let prop = |h: &str| mentions_at_rule(h, "property", |c| c == '-');
+        assert!(prop("<style>@property --x { }</style>"));
+        assert!(!prop("<p>Use @property to register…</p>"));
+        assert!(!prop("<p>@propertyless</p>"));
+        let layer = |h: &str| mentions_at_rule(h, "layer", |c| !c.is_whitespace());
+        assert!(layer("<style>@layer a, b;</style>"));
+        assert!(!layer("<p>the @layer</p>"));
     }
 
     #[test]

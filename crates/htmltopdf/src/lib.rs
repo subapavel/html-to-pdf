@@ -120,6 +120,8 @@ pub struct Renderer {
     registered: FamilySet,
     generics: GenericMap,
     strict_fonts: bool,
+    /// Whether a generated `@property` defaults layer was added to the bundled CSS.
+    property_defaults: bool,
 }
 
 impl Renderer {
@@ -137,7 +139,7 @@ impl Renderer {
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
         self.check_fonts(html)?;
-        warn_document_property_rules(html);
+        self.warn_property_limits(html);
         let engine = self.engine(opts);
         Ok(engine.render(html)?)
     }
@@ -150,9 +152,31 @@ impl Renderer {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         self.check_fonts(html)?;
-        warn_document_property_rules(html);
+        self.warn_property_limits(html);
         let engine = self.engine(opts);
         Ok(engine.render_file(html, path)?)
+    }
+
+    /// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds
+    /// the bundled CSS *after* the document's `<style>` elements, so (1) a defaults layer for the
+    /// document's own rules would outrank the document's layers, and (2) layers the document declares
+    /// rank below our defaults layer (layer order is first appearance). Both are logged, not fixed.
+    fn warn_property_limits(&self, html: &str) {
+        if property::mentions_at_rule(html, "property", |c| c == '-') {
+            log::warn!(
+                "the document's <style> contains `@property`; initial values are applied only for \
+                 stylesheets passed to `RendererBuilder::css` (CLI `--css`), so these may render without \
+                 their defaults"
+            );
+        }
+        if self.property_defaults
+            && property::mentions_at_rule(html, "layer", |c| !c.is_whitespace())
+        {
+            log::warn!(
+                "the document's <style> declares `@layer`; its layers rank below the bundled `@property` \
+                 defaults, so its custom-property declarations inside layers may lose to those defaults"
+            );
+        }
     }
 
     /// Static check that every `font-family` list can be satisfied by a bundled face. Without it,
@@ -191,18 +215,6 @@ impl Renderer {
             b = b.lang(l.clone());
         }
         b.build()
-    }
-}
-
-/// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds the
-/// bundled CSS *after* the document's `<style>` elements, so a defaults layer generated for a document's
-/// own rules would be declared after the document's layers and override them.
-fn warn_document_property_rules(html: &str) {
-    if html.contains("@property") {
-        log::warn!(
-            "the document contains `@property`; initial values are applied only for stylesheets passed \
-             to `RendererBuilder::css` (CLI `--css`), so these may render without their defaults"
-        );
     }
 }
 
@@ -316,7 +328,9 @@ impl RendererBuilder {
         );
         // `@property` initial values, which the engine ignores. First in the bundled CSS, so its layer is
         // declared before any other layer there and every author rule overrides it.
-        if let Some(defaults) = self.properties.prelude() {
+        let defaults = self.properties.prelude();
+        let property_defaults = defaults.is_some();
+        if let Some(defaults) = defaults {
             assets.css.insert(0, defaults);
         }
         // Registered last, so faces the caller supplied take precedence over the built-in one. If the
@@ -332,6 +346,7 @@ impl RendererBuilder {
             registered,
             generics: GenericMap::new(),
             strict_fonts: self.strict_fonts,
+            property_defaults,
         }
     }
 }

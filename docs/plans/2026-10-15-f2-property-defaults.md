@@ -14,8 +14,8 @@ in any fixture**. The same mechanism removes gradients (`--tw-gradient-from/to/�
 (`--tw-shadow`, `--tw-ring-offset-width`, …), and breaks the non-inheritance of `--tw-leading`, `--tw-font-weight`,
 `--tw-tracking` (a child inherits its parent's `--tw-leading` instead of falling back to its own `text-*` line height).
 
-Visible today in every fixture: 01's table header rule and totals rule, 02's row dividers, 05's card border, gradient
-header and shadow.
+Visible today: 01's header rule, 03's cell and card borders, 04's `border-l-4` bar, 05's card borders and shadows.
+(Borders on `<tr>` — 01's and 02's row rules — paint only in the collapsing border model, Blitz #386; not F2.)
 
 ## 2. Spec
 
@@ -75,8 +75,8 @@ static pref `layout.css.properties-and-values.enabled`, which `stylo_static_pref
   6. Invalid rules (missing `inherits`; non-universal syntax without `initial-value`) → ignored.
   Unit tests in `property.rs` for parsing, validity, last-wins and prelude text.
 - **A2 fixtures**: `cargo test --release --workspace` green, render deterministic, page counts unchanged (02 stays in
-  `PAGE_COUNT_MAY_DIFFER`). In `out/compare/*.png` the Tailwind borders/dividers appear in 01–04, and 05 shows its
-  gradient header, card border and shadow. Colours stay wrong until F1 (oklch), so per-fixture diffs may *grow* where a
+  `PAGE_COUNT_MAY_DIFFER`). In `out/compare/*.png` the Tailwind borders on block and cell elements appear in 01–04,
+  and 05 shows its card borders and shadows (its gradients: see Outcome / F8). Colours stay wrong until F1 (oklch), so per-fixture diffs may *grow* where a
   previously missing border/gradient now renders in a wrong colour — allowed by merge policy rule 3; the PR names each
   fixture and number. Thresholds are lowered where the number improves.
 - **A3** `scripts/compare.py` numbers before/after in the PR.
@@ -99,6 +99,12 @@ static pref `layout.css.properties-and-values.enabled`, which `stylo_static_pref
 - 03-logo-qr grows past its threshold (every cell's newly visible border is painted in F1's wrong colour and doubled
   by Blitz #386). With the palette converted to sRGB (measurement only) 03 is 8.9 % — under the threshold — so
   this PR waits for F1 instead of raising the threshold.
+- vrt-validator: no PDF defects, determinism holds, page counts unchanged. A 215-page table renders in 0.87 s with
+  the Tailwind defaults vs 0.77 s without (34 custom properties on every element) — inside the 1 s budget, watch it.
+  05's PDF grows 52 → 170 KB: the now-visible blurred shadows are emitted as shading patterns + soft masks.
+  Fixed from its findings: comments inside descriptors, `!important` in a descriptor (now invalid), and the
+  document warning now matches `@property --x` only; a second warning fires when the document declares `@layer`
+  while defaults are active (its layers rank below ours — see Risks).
 - Not polyfilled (non-goals confirmed by research): `@property` inside `@media`/`@supports`; `unset`/`initial`/
   wrong-type author values on a registered property (real registration → initial value, emulation → inherit /
   guaranteed-invalid / kept); `::backdrop`/`::marker` (irrelevant to print).
