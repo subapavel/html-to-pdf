@@ -88,8 +88,13 @@ pub(crate) fn close_open_blocks(css: &str) -> std::borrow::Cow<'_, str> {
             },
             q @ (b'"' | b'\'') => {
                 let mut j = i + 1;
-                while j < b.len() && b[j] != q && b[j] != b'\n' {
-                    j += if b[j] == b'\\' { 2 } else { 1 };
+                // CSS turns CR LF, CR and FF into LF before tokenizing; a raw newline ends a string.
+                while j < b.len() && b[j] != q && !matches!(b[j], b'\n' | b'\r' | b'\x0c') {
+                    j += match (b[j], b.get(j + 1), b.get(j + 2)) {
+                        (b'\\', Some(b'\r'), Some(b'\n')) => 3,
+                        (b'\\', _, _) => 2,
+                        _ => 1,
+                    };
                 }
                 if j >= b.len() {
                     tail.push(q as char);
@@ -125,12 +130,23 @@ pub(crate) fn close_open_blocks(css: &str) -> std::borrow::Cow<'_, str> {
             _ => i += 1,
         }
     }
+    // A backslash at the very end would escape the first closer; a newline after it keeps its
+    // end-of-input meaning (ignored in a string, a lone `\` delimiter elsewhere).
+    let trailing_backslashes = b.iter().rev().take_while(|&&c| c == b'\\').count();
+    if trailing_backslashes % 2 == 1 && !tail.starts_with("*/") {
+        tail.insert(0, '\n');
+    }
     for c in open.iter().rev() {
         tail.push(match c {
             b'{' => '}',
             b'(' => ')',
             _ => ']',
         });
+    }
+    // fulgur's `::marker` pre-pass treats every `{` as a block, escaped or not (`a\{`): one at the very
+    // end must not be the last character.
+    if tail.is_empty() && css.ends_with('{') {
+        tail.push(' ');
     }
     if tail.is_empty() {
         std::borrow::Cow::Borrowed(css)
@@ -154,6 +170,20 @@ mod tests {
         assert_eq!(c("a{b:url(x.png"), "a{b:url(x.png)}");
         assert_eq!(c("a{b:'}'"), "a{b:'}'}");
         assert_eq!(c("a{b:(})"), "a{b:(})}");
+        assert_eq!(c("a\\{"), "a\\{ ");
+        assert_eq!(c("a{b:c\\"), "a{b:c\\\n}");
+        assert_eq!(c("a{content:'x\\"), "a{content:'x\\\n'}");
+    }
+
+    #[test]
+    fn crlf_inside_strings_is_a_line_continuation_or_an_end() {
+        // `\` CR LF continues the string; the rule after it is complete.
+        assert_eq!(
+            close_open_blocks("a{content:\"x\\\r\ny\"}b{c:d}"),
+            "a{content:\"x\\\r\ny\"}b{c:d}"
+        );
+        // A bare CR ends an unterminated string, like LF.
+        assert_eq!(close_open_blocks("a{content:'x\r}"), "a{content:'x\r}");
     }
 
     #[test]

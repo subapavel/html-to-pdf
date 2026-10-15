@@ -21,6 +21,8 @@ fn a_block_opened_at_the_end_of_a_style_element_renders() {
         "<style>a::marker{color:red</style><p>x</p>",
         "<style>a{content:'x</style><p>x</p>",
         "<style>a{/* x</style><p>x</p>",
+        // An escaped brace is not a block for CSS, but fulgur's pre-pass still sees a final `{`.
+        "<style>a\\{</style><p>x</p>",
     ] {
         let pdf = render("", html).unwrap_or_else(|e| panic!("{html}: {e}"));
         assert!(pdf.starts_with(b"%PDF-"), "{html}");
