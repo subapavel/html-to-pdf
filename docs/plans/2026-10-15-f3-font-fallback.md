@@ -139,6 +139,7 @@ pub(crate) fn check_font_families(css_lists: &[FamilyList], html: &str,
 
 - Landed: Steps 1, 2, 3 and 5. The identifiers of fixtures 01-04 are in the PDF text; `font-family` lists that nothing
   can satisfy are an error.
+- **Update (F3b):** Step 4 landed without an engine change — see `2026-10-15-f3b-generic-families.md`.
 - **Step 4 (generic mapping) did not land.** The engine has no hook (a), and the carried-patch route needs a copy of
   fulgur 0.40.0 (about 4 MB) vendored into the repo as a `[patch.crates-io]` path (or a fork branch). That was not done
   without a decision on where the patch lives. Until it lands, generics count as *unresolved* in the check, so
