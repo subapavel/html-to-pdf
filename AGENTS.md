@@ -82,6 +82,13 @@ what changed *for the product* (e.g. "IBAN and VS are back in the PDF"), the sid
 shows it, the compare number before/after, what is next. Technical detail belongs in the PR and in
 `docs/`, where the next agent will read it.
 
+### Pacing: one item, then ask
+
+Token budget is the owner's call, so a queue run goes one item at a time. After an item is merged
+(or parked per the merge policy), send the report and end with exactly one line:
+`Next: <id> — <one-line description>. Continue? (yes / stop)` — then wait. Anything other than a
+clear yes means stop. Never start the next item unasked, and never ask mid-item.
+
 ## Workflow for a change
 
 1. Issue → if non-trivial, `docs/plans/YYYY-MM-DD-<slug>.md` (problem, spec refs, acceptance fixtures, risks).
