@@ -37,6 +37,51 @@ Read this file first. It is short on purpose; details live in `docs/`.
 - Fixtures are the spec. A behaviour change that moves pixels needs a fixture that shows it and an updated golden, in the same PR.
 - `fixtures/tailwind/tailwind.css` is a build artefact but **committed**; the Rust side and cloud agents must never need npm.
 
+## Who decides what
+
+The owner is **not** a layout engineer and does not want to approve PRs or pick next steps.
+Agents decide, act and record. The owner decides only:
+
+- product scope (which documents and CSS features we support, in `docs/roadmap.md`),
+- money and licences (paid services, any licence that is not MIT/Apache/OFL-style permissive),
+- publishing (crates.io, npm, PyPI releases) and anything legal.
+
+Everything else is yours. If you find yourself writing "tell me whether to…", stop: look for the
+standing decision below, then in `docs/decisions/`; if it is truly new, decide, write an ADR, and
+carry on. Ask the owner only when the decision is on the list above.
+
+### Standing decisions (do not ask again)
+
+| Situation | Decision |
+|---|---|
+| A fix belongs in fulgur / Blitz / Taffy / Parley | Fork under `subapavel/<crate>`, branch `htmltopdf/<slug>`, `[patch.crates-io]` in the workspace `Cargo.toml`, open the upstream PR, record both in `docs/upstream.md`. **Never vendor upstream source into this repo.** |
+| The permission classifier denies an action | Do not work around it. Take the next option from the relevant standing decision; if none applies, write a postmortem and leave that step open. |
+| Behaviour the user did not write would make the library refuse a document (unused CSS rules, `@media screen` blocks, framework leftovers) | Warn by default; strict mode is opt-in (`strict_fonts(true)`, `--strict-fonts`). Fixtures, tests and CI run strict. |
+| A pixel-diff threshold blocks CI | Never raise a threshold to pass. Fix the engine, or fix the fixture if the fixture is wrong, and lower the threshold in the same PR when the number improves. |
+| What to work on next | The findings queue (`docs/plans/*-findings.md`, in the order given there), then `docs/roadmap.md`. One finding per PR. |
+| Chrome references missing | They are committed under `fixtures/**/reference/`. If absent, regenerate with `scripts/reference/render.mjs` and commit them; do not silently work without them. |
+
+### Merge policy
+
+An agent merges its own PR (squash, delete branch) when **all** hold:
+
+1. CI is green.
+2. `vrt-validator` ran on the branch and reported no high-severity finding.
+3. No fixture's pixel diff grew, and page counts did not change except for fixtures listed in `PAGE_COUNT_MAY_DIFFER`.
+4. The diff matches the plan's scope; nothing from another finding slipped in.
+5. For anything touching the PDF writer path, fonts or metadata: `pdf-reviewer` ran and reported no defect.
+
+If one fails, fix it on the branch. Leave a PR open only when the blocker is on the owner's list
+above; then write exactly one question, two or three options, your recommendation, and the default
+you will take if there is no answer within a day.
+
+### Reporting to the owner
+
+Eight lines or fewer, in the owner's language, no command output:
+what changed *for the product* (e.g. "IBAN and VS are back in the PDF"), the side-by-side PNG that
+shows it, the compare number before/after, what is next. Technical detail belongs in the PR and in
+`docs/`, where the next agent will read it.
+
 ## Workflow for a change
 
 1. Issue → if non-trivial, `docs/plans/YYYY-MM-DD-<slug>.md` (problem, spec refs, acceptance fixtures, risks).
