@@ -448,8 +448,38 @@ fn parse_font_shorthand(p: &mut Parser<'_, '_>) -> Option<Vec<Entry>> {
 /// order. This is a deliberately small tag scanner, not an HTML parser; it understands comments,
 /// quoted/unquoted attribute values and raw-text elements, which is what the scan needs.
 pub(crate) fn scan_html(html: &str) -> Scan {
-    let bytes = html.as_bytes();
     let mut scan = Scan::default();
+    walk_html(html, |site| match site {
+        CssSite::Attribute(value) => {
+            scan.extend(scan_css(&decode_entities(value), Origin::StyleAttribute))
+        }
+        CssSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
+    });
+    scan
+}
+
+/// Byte ranges of the contents of every `<style>` element, in document order.
+pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    walk_html(html, |site| {
+        if let CssSite::Element(range) = site {
+            ranges.push(range);
+        }
+    });
+    ranges
+}
+
+/// Where [`walk_html`] found CSS.
+enum CssSite<'a> {
+    /// The raw (entity-encoded) value of a `style=""` attribute.
+    Attribute(&'a str),
+    /// The byte range of a `<style>` element's contents.
+    Element(std::ops::Range<usize>),
+}
+
+/// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order.
+fn walk_html<'a>(html: &'a str, mut found: impl FnMut(CssSite<'a>)) {
+    let bytes = html.as_bytes();
     let mut i = 0;
     while let Some(off) = html[i..].find('<') {
         i += off;
@@ -516,7 +546,7 @@ pub(crate) fn scan_html(html: &str) -> Scan {
                 }
             }
             if name == "style" {
-                scan.extend(scan_css(&decode_entities(value), Origin::StyleAttribute));
+                found(CssSite::Attribute(value));
             }
         }
         i = j;
@@ -525,12 +555,11 @@ pub(crate) fn scan_html(html: &str) -> Scan {
             let lower = html[i..].to_ascii_lowercase();
             let end = lower.find(&close).unwrap_or(lower.len());
             if tag == "style" {
-                scan.extend(scan_css(&html[i..i + end], Origin::StyleElement));
+                found(CssSite::Element(i..i + end));
             }
             i += end;
         }
     }
-    scan
 }
 
 fn decode_entities(s: &str) -> String {
