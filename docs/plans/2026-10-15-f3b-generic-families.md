@@ -47,5 +47,13 @@ The check uses the same map, so generic-only lists now pass strict mode when the
 
 - In custom properties `math`, `emoji`, `fangsong` are not mapped (`--x: math` may feed `display`). A font stack
   stored in a custom property that is only `math` etc. still drops its text, while the check counts it as mapped.
-- `style=""` values containing a character reference are not rewritten (the check still reports them).
+- `style=""` values containing a character reference are not rewritten; the check treats their generic keywords as
+  plain names, so they are reported (error in strict mode) instead of being dropped silently.
+- A custom property holding a whole `font` shorthand (`--f: 12px monospace; font: var(--f)`) is not rewritten and
+  not checked.
+- `@font-face { font-family: monospace }` (invalid CSS) is rewritten like any other declaration; harmless.
+- Inline SVG `<text>` does not see the mapping and still uses host fonts (Blitz `fontdb`, already in
+  `docs/upstream.md`).
+- Found by `vrt-validator` on PR #4 and fixed: the entity-attribute case above (previously counted as mapped), and a
+  rule whose selector starts like a declaration (`font:hover { … }`) hiding every later rule from the scan.
 - `<link>` stylesheets and `@import`ed sheets are not seen (as for F7).

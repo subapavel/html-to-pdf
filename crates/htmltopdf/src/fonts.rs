@@ -202,6 +202,29 @@ pub(crate) struct Scan {
 }
 
 impl Scan {
+    /// The same scan with every generic keyword turned into a family name of that spelling, for CSS whose
+    /// keywords are not rewritten to bundled families.
+    fn with_generics_unmapped(mut self) -> Scan {
+        fn unmap(entries: &mut [Entry]) {
+            for e in entries {
+                match e {
+                    Entry::Generic(g) => *e = Entry::Name(g.keyword().to_string()),
+                    Entry::Var { fallback, .. } => unmap(fallback),
+                    _ => {}
+                }
+            }
+        }
+        for d in &mut self.decls {
+            unmap(&mut d.entries);
+        }
+        for lists in self.vars.values_mut() {
+            for list in lists {
+                unmap(list);
+            }
+        }
+        self
+    }
+
     pub(crate) fn extend(&mut self, other: Scan) {
         self.decls.extend(other.decls);
         for (k, v) in other.vars {
@@ -293,7 +316,7 @@ fn scan_block(
                 spans.extend(found);
                 // `parse_list` stops before `;` / `!important` / the end of the block.
                 let raw = p.slice_from(start).trim().to_string();
-                skip_to_statement_end(p);
+                skip_to_statement_end(p, scan, origin, spans);
                 at_statement_start = true;
                 let Some(entries) = entries else { continue };
                 match kind {
@@ -317,10 +340,24 @@ enum Prop {
     Custom,
 }
 
-fn skip_to_statement_end(p: &mut Parser<'_, '_>) {
+/// Skips the rest of a declaration. A `{}` block means it was a qualified rule whose selector merely
+/// starts like a declaration (`font:hover { … }`): its block is scanned as rules and the statement ends.
+fn skip_to_statement_end(
+    p: &mut Parser<'_, '_>,
+    scan: &mut Scan,
+    origin: Origin,
+    spans: &mut Vec<GenericSpan>,
+) {
     loop {
         match p.next() {
             Ok(Token::Semicolon) | Err(_) => return,
+            Ok(Token::CurlyBracketBlock) => {
+                let _ = p.parse_nested_block(|p| -> Result<(), ParseError<'_, ()>> {
+                    scan_block(p, scan, origin, spans);
+                    Ok(())
+                });
+                return;
+            }
             Ok(_) => {}
         }
     }
@@ -502,10 +539,19 @@ fn parse_font_shorthand(
 pub(crate) fn scan_html(html: &str) -> Scan {
     let mut scan = Scan::default();
     walk_html(html, |site| match site {
-        CssSite::Attribute(range) => scan.extend(scan_css(
-            &decode_entities(&html[range]),
-            Origin::StyleAttribute,
-        )),
+        CssSite::Attribute(range) => {
+            let attr = scan_css(
+                &decode_entities(&html[range.clone()]),
+                Origin::StyleAttribute,
+            );
+            // `map_generics_in_html` leaves attributes with character references alone, so their
+            // generic keywords still resolve to nothing: check them as plain names.
+            scan.extend(if html[range].contains('&') {
+                attr.with_generics_unmapped()
+            } else {
+                attr
+            })
+        }
         CssSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
     });
     scan
@@ -857,6 +903,33 @@ mod tests {
         assert_eq!(
             m("@media print{p{font-family:cursive}}"),
             "@media print{p{font-family:Inter}}"
+        );
+    }
+
+    #[test]
+    fn a_rule_whose_selector_looks_like_a_declaration_does_not_hide_later_rules() {
+        assert_eq!(
+            map_generics("font:hover{color:red}.x{font-family:monospace}", &map()),
+            "font:hover{color:red}.x{font-family:JetBrains\\000020Mono}"
+        );
+    }
+
+    #[test]
+    fn generics_in_attributes_left_unmapped_are_checked_as_names() {
+        // The rewrite skips attributes with character references, so the check must not count the
+        // keyword as mapped (text would be dropped silently).
+        let check = |html: &str| {
+            check_font_families(
+                &Scan::default(),
+                &scan_html(html),
+                &registered(&["Inter", BUILTIN_MONO_FAMILY]),
+                &map(),
+            )
+        };
+        assert!(check(r#"<p style="font-family:monospace">x</p>"#).is_empty());
+        assert_eq!(
+            check(r#"<p style="font-family:monospace;content:&#39;x&#39;">x</p>"#).len(),
+            1
         );
     }
 
