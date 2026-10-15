@@ -28,6 +28,8 @@ use std::path::{Path, PathBuf};
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
+mod fonts;
+
 /// Errors produced by this crate. Wraps fulgur's error so callers never
 /// depend on fulgur directly.
 #[derive(Debug, thiserror::Error)]
@@ -201,9 +203,12 @@ impl RendererBuilder {
     }
 
     pub fn build(self) -> Renderer {
-        Renderer {
-            assets: self.assets,
-        }
+        let mut assets = self.assets;
+        // Registered last, so faces the caller supplied take precedence over the built-in one.
+        assets
+            .add_font_bytes(fonts::BUILTIN_MONO.to_vec())
+            .expect("built-in font is a valid TTF");
+        Renderer { assets }
     }
 }
 
