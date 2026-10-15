@@ -77,8 +77,8 @@ fn interpolation_spans(css: &str) -> Vec<Range<usize>> {
     let b = css.as_bytes();
     let mut out = Vec::new();
     let mut stack: Vec<Frame> = Vec::new();
-    // Inside the value of a custom property (`--x: …`), at parenthesis depth 0.
-    let mut custom_value = false;
+    // Inside the value of a custom property (`--x: …`), at parenthesis depth 0: where the value starts.
+    let mut custom_value: Option<usize> = None;
     let mut i = 0;
     while i < b.len() {
         match b[i] {
@@ -101,7 +101,7 @@ fn interpolation_spans(css: &str) -> Vec<Range<usize>> {
                 i += 1;
             }
             b';' | b'{' | b'}' if stack.is_empty() => {
-                custom_value = false;
+                custom_value = None;
                 i += 1;
             }
             c if is_ident_start(c) => {
@@ -120,7 +120,8 @@ fn interpolation_spans(css: &str) -> Vec<Range<usize>> {
                     continue;
                 }
                 if stack.is_empty() && word.starts_with("--") {
-                    custom_value = b.get(skip_ws(b, end)) == Some(&b':');
+                    let colon = skip_ws(b, end);
+                    custom_value = (b.get(colon) == Some(&b':')).then_some(colon + 1);
                 } else if word.eq_ignore_ascii_case("in") {
                     let gradient_open = match stack.last() {
                         Some(Frame::Gradient {
@@ -129,7 +130,11 @@ fn interpolation_spans(css: &str) -> Vec<Range<usize>> {
                         }) => Some(*open),
                         _ => None,
                     };
-                    if (gradient_open.is_some() || (stack.is_empty() && custom_value))
+                    // In a custom property only after a direction, angle or shape (`to right in oklab`):
+                    // a value that is just `in srgb` may feed `color-mix(var(--m), …)`, where it is valid.
+                    let in_position = stack.is_empty()
+                        && custom_value.is_some_and(|start| !css[start..i].trim().is_empty());
+                    if (gradient_open.is_some() || in_position)
                         && let Some(method_end) = method_end(css, end)
                     {
                         out.push(cut(b, i, method_end, gradient_open));
@@ -185,12 +190,24 @@ fn cut(b: &[u8], in_start: usize, method_end: usize, gradient_open: Option<usize
 
 fn next_ident(css: &str, i: usize) -> Option<(&str, usize)> {
     let b = css.as_bytes();
-    let start = skip_ws(b, i);
+    let start = skip_ws_and_comments(css, i);
     if start == i || start >= b.len() || !is_ident_start(b[start]) {
         return None;
     }
     let end = ident_end(b, start);
     Some((&css[start..end], end))
+}
+
+fn skip_ws_and_comments(css: &str, mut i: usize) -> usize {
+    let b = css.as_bytes();
+    loop {
+        let next = skip_ws(b, i);
+        if b.get(next) == Some(&b'/') && b.get(next + 1) == Some(&b'*') {
+            i = skip_comment(css, next);
+        } else {
+            return next;
+        }
+    }
 }
 
 fn skip_ws(b: &[u8], mut i: usize) -> usize {
@@ -240,7 +257,18 @@ mod tests {
             s(".a{--tw-gradient-position:to right in oklab;color:red}"),
             ".a{--tw-gradient-position:to right;color:red}"
         );
-        assert_eq!(s(".a{--p: in oklab}"), ".a{--p:}");
+        assert_eq!(
+            s(".a{--p:45deg /* c */ in /* d */ oklab}"),
+            ".a{--p:45deg /* c */}"
+        );
+    }
+
+    #[test]
+    fn comments_may_separate_the_method_tokens() {
+        assert_eq!(
+            s("a{b:linear-gradient(to right in/**/oklab,red,blue)}"),
+            "a{b:linear-gradient(to right,red,blue)}"
+        );
     }
 
     #[test]
@@ -256,6 +284,8 @@ mod tests {
             "a{background:linear-gradient(in foo, red, blue)}",
             "@supports (color:color-mix(in lab, red, red)){a{b:c}}",
             "a{margin:0 in}",
+            // Only the method: may feed `color-mix(var(--m), …)`.
+            ".a{--m: in srgb} .b{background:color-mix(var(--m), red, blue)}",
         ] {
             assert_eq!(strip_gradient_interpolation(css), css, "{css}");
         }

@@ -48,6 +48,8 @@ of not at all.
 
 ## 5. Limits
 
-- Tailwind's `bg-radial` / `bg-conic` set `--tw-gradient-position: in oklab` alone; it becomes empty, which leaves
-  `radial-gradient(, …)` invalid — no worse than before.
+- In a custom property the method is removed only after a direction, angle or shape (`to right in oklab`): a value
+  that is only `in srgb` may feed `color-mix(var(--m), …)`, where it is valid (found by `vrt-validator` on PR #5).
+  So Tailwind's `bg-radial` / `bg-conic` (`--tw-gradient-position: in oklab` alone) still render nothing — as before.
+- `style=""` values with a character reference are not rewritten (as for F3b).
 - Gradients in `<link>`ed or `@import`ed sheets are not seen (as for F7, F3b).
