@@ -104,3 +104,29 @@ fn builtin_mono_is_always_available_by_name() {
     render(&r, "<p style=\"font-family:'JetBrains Mono'\">x</p>").expect("render");
     render(&r, "<p style=\"font-family:'jetbrains mono'\">x</p>").expect("case-insensitive");
 }
+
+#[test]
+fn text_without_any_font_family_uses_the_first_bundled_font() {
+    // No font-family anywhere: the engine alone would drop the text. The builder's `html` prelude
+    // maps it to the first bundled face (Inter here), so the run is laid out and the font embedded.
+    let r = Renderer::builder()
+        .font_bytes(inter())
+        .unwrap()
+        .strict_fonts(true)
+        .build();
+    let pdf = render(&r, "<p>Bez písma</p>").expect("render");
+    assert!(
+        pdf.windows(5).any(|w| w == b"Inter"),
+        "Inter was not embedded, text probably dropped"
+    );
+}
+
+#[test]
+fn text_without_any_font_family_and_no_bundled_font_uses_builtin_mono() {
+    let r = Renderer::builder().strict_fonts(true).build();
+    let pdf = render(&r, "<p>Bez písma</p>").expect("render");
+    assert!(
+        pdf.windows(13).any(|w| w == b"JetBrainsMono"),
+        "built-in mono was not embedded"
+    );
+}

@@ -63,7 +63,8 @@ fn parse_image(s: &str) -> std::result::Result<(String, PathBuf), String> {
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
+    // Warnings (dropped text, unresolved fonts) must be visible without RUST_LOG.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Render {

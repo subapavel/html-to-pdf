@@ -150,3 +150,14 @@ pub(crate) fn check_font_families(css_lists: &[FamilyList], html: &str,
   `RendererBuilder::build()` and adds the `generic_family()` override from section 3.
 - Measured (01-04 vs a blank reference, see the caveat in section 6): 01 3.1 % before, 3.3 % after (+0.2 pp of ink from
   the three mono values). These are not Chrome diffs.
+
+
+## Post-review: what the static scan does and does not catch (vrt-validator, PR #1)
+
+Catches: a named family no bundled font satisfies, in bundled CSS, `<style>` and `style=""`.
+Does not catch (text still dropped, no warning): `font-family: var(--x)` with `--x` undefined or defined
+differently in several places; an empty list. False positives in strict mode: unused rules, overridden rules,
+`@font-face` with no use, numeric HTML entities in names. The scan is a safety net, not a cascade; the real
+fix for the dropped-text class of bugs is upstream fallback behaviour (F3b).
+Fixed in review: default is warn, not error; the CLI shows warnings without `RUST_LOG`; elements with no
+`font-family` anywhere get the first bundled font through an `html {}` prelude.

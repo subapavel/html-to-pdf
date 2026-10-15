@@ -67,7 +67,7 @@ An agent merges its own PR (squash, delete branch) when **all** hold:
 
 1. CI is green.
 2. `vrt-validator` ran on the branch and reported no high-severity finding.
-3. No fixture's pixel diff grew, and page counts did not change except for fixtures listed in `PAGE_COUNT_MAY_DIFFER`.
+3. No fixture's pixel diff grew — except growth caused by content that was previously missing and is now rendered (text that was dropped, a border that was absent), which the PR must name with the fixture and the number. Page counts did not change except for fixtures listed in `PAGE_COUNT_MAY_DIFFER`.
 4. The diff matches the plan's scope; nothing from another finding slipped in.
 5. For anything touching the PDF writer path, fonts or metadata: `pdf-reviewer` ran and reported no defect.
 

@@ -127,6 +127,7 @@ impl Renderer {
             assets: AssetBundle::new(),
             css_scan: Scan::default(),
             registered: FamilySet::new(),
+            default_family: None,
             strict_fonts: false,
         }
     }
@@ -193,6 +194,8 @@ pub struct RendererBuilder {
     assets: AssetBundle,
     css_scan: Scan,
     registered: FamilySet,
+    /// Family name of the first font the caller bundled; becomes the document default.
+    default_family: Option<String>,
     strict_fonts: bool,
 }
 
@@ -236,6 +239,9 @@ impl RendererBuilder {
         // fulgur may have decoded the bytes (WOFF2); read the family names from what it kept.
         if let Some(stored) = self.assets.fonts.last() {
             for name in fonts::family_names(stored) {
+                if self.default_family.is_none() {
+                    self.default_family = Some(name.clone());
+                }
                 self.registered.insert(fonts::fold(&name));
             }
         }
@@ -273,6 +279,22 @@ impl RendererBuilder {
     pub fn build(self) -> Renderer {
         let mut assets = self.assets;
         let mut registered = self.registered;
+        // The engine has no user-agent default `font-family`: text in an element with no family
+        // anywhere in its ancestry is dropped. Give the document one — the first bundled font, then
+        // the built-in mono face — at the lowest possible priority (an `html` rule in the first
+        // stylesheet; any author declaration on html/body/… overrides it through the cascade).
+        let default_family = self
+            .default_family
+            .as_deref()
+            .unwrap_or(fonts::BUILTIN_MONO_FAMILY);
+        assets.css.insert(
+            0,
+            format!(
+                "html {{ font-family: \"{}\", \"{}\"; }}\n",
+                default_family.replace('"', ""),
+                fonts::BUILTIN_MONO_FAMILY
+            ),
+        );
         // Registered last, so faces the caller supplied take precedence over the built-in one. If the
         // caller already supplied a family of the same name, theirs is used alone.
         if registered.insert(fonts::fold(fonts::BUILTIN_MONO_FAMILY)) {
