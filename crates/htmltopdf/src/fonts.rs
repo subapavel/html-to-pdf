@@ -704,23 +704,38 @@ pub(crate) fn map_generics<'a>(css: &'a str, map: &GenericMap) -> Cow<'a, str> {
     replace_spans(css, generic_spans(css).into_iter(), map)
 }
 
-/// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes. An attribute
-/// that contains a character reference is left alone (its positions differ from the decoded CSS).
+/// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes (see
+/// [`rewrite_css_in_html`] for which attributes).
 pub(crate) fn map_generics_in_html<'a>(html: &'a str, map: &GenericMap) -> Cow<'a, str> {
-    let mut spans: Vec<GenericSpan> = Vec::new();
+    rewrite_css_in_html(html, |css| map_generics(css, map))
+}
+
+/// `html` with `rewrite` applied to the contents of every `<style>` element and every `style=""` value.
+/// An attribute that contains a character reference is left alone: its text is not the CSS the engine
+/// reads, and a rewrite could change what the reference decodes to.
+pub(crate) fn rewrite_css_in_html<'a>(
+    html: &'a str,
+    rewrite: impl Fn(&str) -> Cow<'_, str>,
+) -> Cow<'a, str> {
+    let mut out = String::new();
+    let mut last = 0;
     walk_html(html, |site| {
         let range = match site {
             CssSite::Element(r) => r,
             CssSite::Attribute(r) if !html[r.clone()].contains('&') => r,
             CssSite::Attribute(_) => return,
         };
-        spans.extend(
-            generic_spans(&html[range.clone()])
-                .into_iter()
-                .map(|(r, g)| (range.start + r.start..range.start + r.end, g)),
-        );
+        if let Cow::Owned(css) = rewrite(&html[range.clone()]) {
+            out.push_str(&html[last..range.start]);
+            out.push_str(&css);
+            last = range.end;
+        }
     });
-    replace_spans(html, spans.into_iter(), map)
+    if last == 0 {
+        return Cow::Borrowed(html);
+    }
+    out.push_str(&html[last..]);
+    Cow::Owned(out)
 }
 
 fn replace_spans<'a>(
