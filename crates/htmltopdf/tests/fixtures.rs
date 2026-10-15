@@ -134,3 +134,15 @@ fn mono_identifiers_survive_into_pdf_text() {
         }
     }
 }
+
+#[test]
+fn every_invoice_fixture_passes_the_font_check() {
+    // Guards against false positives of the static `font-family` check on the real Tailwind output.
+    let r = renderer();
+    for dir in fixtures() {
+        let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+        if let Err(e) = r.render(&html, &RenderOptions::default()) {
+            panic!("{}: {e}", dir.display());
+        }
+    }
+}

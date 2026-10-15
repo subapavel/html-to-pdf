@@ -11,6 +11,8 @@ repository.workspace = true
 fulgur.workspace = true
 thiserror.workspace = true
 log.workspace = true
+cssparser.workspace = true
+ttf-parser.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

@@ -1129,9 +1129,11 @@ name = "htmltopdf"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cssparser 0.35.0",
  "fulgur",
  "log",
  "thiserror 2.0.21",
+ "ttf-parser",
 ]
 
 [[package]]
