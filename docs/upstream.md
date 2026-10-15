@@ -30,11 +30,16 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 | Generic families (`monospace`, `sans-serif`) alone cannot be mapped to a bundled face | fulgur / Parley font fallback | **to file**; mapped in `htmltopdf` by rewriting the keywords (F3b) | probe |
 | `@property` ignored: Stylo 0.8.0 gates the at-rule parser (`stylesheets/rule_parser.rs:752`) on `layout.css.properties-and-values.enabled`, absent from `stylo_static_prefs` 0.8.0 → false; the cascade side is compiled in for servo. Upstream stylo main has it `true`. | Stylo via Blitz | **to file** on Blitz (bump Stylo / enable pref) — F2b; we polyfill bundled CSS in `htmltopdf` (F2) | all (Tailwind borders/shadows) |
 | `linear-gradient(<dir> in oklab, …)` (colour-interpolation method) paints nothing: Stylo 0.8.0 gates it on `layout.css.gradient-color-interpolation-method.enabled` (`values/specified/image.rs:37`), absent from `stylo_static_prefs` 0.8.0 → false | Stylo via Blitz | **to file** with F2b; polyfilled in `htmltopdf` (F8, `gradient.rs` removes the method) | 05 (Tailwind gradients) |
-| `usvg` rejects `oklch()` in inline SVG fills, falls back to black | resvg/usvg | open — part of F1 | 05 (icon) |
 
 | Font descriptors carry the SmallCap flag (ISO 32000-1 Table 123, bit 18) on every font | Krilla | open — harmless, report | all |
 | `Producer` says `fulgur`; set ours via `EngineBuilder::producer` | ours (htmltopdf) | todo, trivial | all |
 
 ## Our patches / PRs
 
-_(none yet)_
+| Crate | Fork branch | Base | Fix | Upstream PR |
+|---|---|---|---|---|
+| fulgur 0.40.0 | `subapavel/fulgur` `htmltopdf/srgb-colours` | `8d81949` | `absolute_to_rgba` converts to sRGB (F1) | to open |
+| blitz-dom 0.2.4 | `subapavel/blitz` `htmltopdf/svg-current-color-srgb` | `0a77560` | `currentColor` serialised as sRGB for usvg (F1); plus an htmltopdf-only commit taking sibling crates from crates.io | to open |
+
+Bumping fulgur or blitz-dom means rebasing these branches onto the new release commit (or dropping them once the
+fix is released) and re-running `cargo update -p fulgur -p blitz-dom`.
