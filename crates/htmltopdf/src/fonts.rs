@@ -12,7 +12,9 @@
 //! shorthand, CSS-wide keywords) counts as resolved, so it never rejects a document it does not
 //! understand. It is a safety net, not a cascade implementation.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 
 use cssparser::{ParseError, Parser, ParserInput, Token};
 
@@ -215,11 +217,33 @@ pub(crate) fn scan_css(css: &str, origin: Origin) -> Scan {
     let mut scan = Scan::default();
     let mut input = ParserInput::new(css);
     let mut parser = Parser::new(&mut input);
-    scan_block(&mut parser, &mut scan, origin);
+    scan_block(&mut parser, &mut scan, origin, &mut Vec::new());
     scan
 }
 
-fn scan_block(p: &mut Parser<'_, '_>, scan: &mut Scan, origin: Origin) {
+/// A generic keyword in a `font-family` list: its byte range in the scanned text, and which one it is.
+type GenericSpan = (Range<usize>, GenericFamily);
+
+/// Where the generic keywords are in `css` (a stylesheet or a declaration list), in source order.
+fn generic_spans(css: &str) -> Vec<GenericSpan> {
+    let mut spans = Vec::new();
+    let mut input = ParserInput::new(css);
+    let mut parser = Parser::new(&mut input);
+    scan_block(
+        &mut parser,
+        &mut Scan::default(),
+        Origin::Stylesheet,
+        &mut spans,
+    );
+    spans
+}
+
+fn scan_block(
+    p: &mut Parser<'_, '_>,
+    scan: &mut Scan,
+    origin: Origin,
+    spans: &mut Vec<GenericSpan>,
+) {
     let mut at_statement_start = true;
     loop {
         let tok = match p.next() {
@@ -230,7 +254,7 @@ fn scan_block(p: &mut Parser<'_, '_>, scan: &mut Scan, origin: Origin) {
             Token::Semicolon => at_statement_start = true,
             Token::CurlyBracketBlock => {
                 let _ = p.parse_nested_block(|p| -> Result<(), ParseError<'_, ()>> {
-                    scan_block(p, scan, origin);
+                    scan_block(p, scan, origin, spans);
                     Ok(())
                 });
                 at_statement_start = true;
@@ -251,10 +275,22 @@ fn scan_block(p: &mut Parser<'_, '_>, scan: &mut Scan, origin: Origin) {
                     continue;
                 }
                 let start = p.position();
+                let mut found = Vec::new();
                 let entries = match kind {
-                    Prop::Shorthand => parse_font_shorthand(p),
-                    _ => Some(parse_list(p)),
+                    Prop::Shorthand => parse_font_shorthand(p, &mut found),
+                    _ => Some(parse_list(p, &mut found)),
                 };
+                // A custom property is only known to be a font list where it is used. `math`, `emoji` and
+                // `fangsong` are also values of other properties (`display: math`), so there they stay.
+                if matches!(kind, Prop::Custom) {
+                    found.retain(|(_, g)| {
+                        !matches!(
+                            g,
+                            GenericFamily::Math | GenericFamily::Emoji | GenericFamily::FangSong
+                        )
+                    });
+                }
+                spans.extend(found);
                 // `parse_list` stops before `;` / `!important` / the end of the block.
                 let raw = p.slice_from(start).trim().to_string();
                 skip_to_statement_end(p);
@@ -291,15 +327,18 @@ fn skip_to_statement_end(p: &mut Parser<'_, '_>) {
 }
 
 /// Parses a comma-separated `font-family` list up to (not including) `;`, `!` or the end of the block.
-fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
+/// Records the source range of every entry that is a bare generic keyword in `spans`.
+fn parse_list(p: &mut Parser<'_, '_>, spans: &mut Vec<GenericSpan>) -> Vec<Entry> {
     #[derive(Default)]
     struct Cur {
         idents: Vec<String>,
+        /// Source range of the first identifier, for a one-identifier entry.
+        span: Option<Range<usize>>,
         single: Option<Entry>,
         other: bool,
     }
     impl Cur {
-        fn flush(&mut self, out: &mut Vec<Entry>) {
+        fn flush(&mut self, out: &mut Vec<Entry>, spans: &mut Vec<GenericSpan>) {
             let c = std::mem::take(self);
             let entry = if c.other || (c.single.is_some() && !c.idents.is_empty()) {
                 Entry::Other
@@ -310,6 +349,9 @@ fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
                 if CSS_WIDE.iter().any(|k| k.eq_ignore_ascii_case(id)) {
                     Entry::CssWide
                 } else if let Some(g) = GenericFamily::from_keyword(id) {
+                    if let Some(span) = c.span {
+                        spans.push((span, g));
+                    }
                     Entry::Generic(g)
                 } else {
                     Entry::Name(id.clone())
@@ -327,6 +369,8 @@ fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
     let mut out = Vec::new();
     let mut cur = Cur::default();
     loop {
+        // So that the state below is where the next token starts.
+        p.skip_whitespace();
         let state = p.state();
         let tok = match p.next() {
             Ok(t) => t.clone(),
@@ -341,8 +385,13 @@ fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
                 p.reset(&state);
                 break;
             }
-            Token::Comma => cur.flush(&mut out),
-            Token::Ident(id) => cur.idents.push(id.to_string()),
+            Token::Comma => cur.flush(&mut out, spans),
+            Token::Ident(id) => {
+                if cur.idents.is_empty() {
+                    cur.span = Some(state.position().byte_index()..p.position().byte_index());
+                }
+                cur.idents.push(id.to_string());
+            }
             Token::QuotedString(s) => {
                 if cur.single.is_some() || !cur.idents.is_empty() {
                     cur.other = true;
@@ -353,7 +402,7 @@ fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
                 let parsed = p.parse_nested_block(|p| -> Result<Entry, ParseError<'_, ()>> {
                     let name = p.expect_ident()?.to_string();
                     let fallback = if p.try_parse(|p| p.expect_comma()).is_ok() {
-                        parse_list(p)
+                        parse_list(p, spans)
                     } else {
                         Vec::new()
                     };
@@ -367,14 +416,17 @@ fn parse_list(p: &mut Parser<'_, '_>) -> Vec<Entry> {
             _ => cur.other = true,
         }
     }
-    cur.flush(&mut out);
+    cur.flush(&mut out, spans);
     out
 }
 
 /// `font: [style || variant || weight || stretch]? size[/line-height]? family-list`.
 /// Returns `None` when the shorthand cannot be interpreted (system font keywords, `var()` before the
 /// family list, CSS-wide keyword): such a declaration is ignored.
-fn parse_font_shorthand(p: &mut Parser<'_, '_>) -> Option<Vec<Entry>> {
+fn parse_font_shorthand(
+    p: &mut Parser<'_, '_>,
+    spans: &mut Vec<GenericSpan>,
+) -> Option<Vec<Entry>> {
     const PREFIX: [&str; 13] = [
         "normal",
         "italic",
@@ -441,7 +493,7 @@ fn parse_font_shorthand(p: &mut Parser<'_, '_>) -> Option<Vec<Entry>> {
             _ => return None,
         }
     }
-    Some(parse_list(p))
+    Some(parse_list(p, spans))
 }
 
 /// Scans the CSS inside an HTML document: `<style>` elements and `style=""` attributes, in document
@@ -450,9 +502,10 @@ fn parse_font_shorthand(p: &mut Parser<'_, '_>) -> Option<Vec<Entry>> {
 pub(crate) fn scan_html(html: &str) -> Scan {
     let mut scan = Scan::default();
     walk_html(html, |site| match site {
-        CssSite::Attribute(value) => {
-            scan.extend(scan_css(&decode_entities(value), Origin::StyleAttribute))
-        }
+        CssSite::Attribute(range) => scan.extend(scan_css(
+            &decode_entities(&html[range]),
+            Origin::StyleAttribute,
+        )),
         CssSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
     });
     scan
@@ -470,15 +523,15 @@ pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
 }
 
 /// Where [`walk_html`] found CSS.
-enum CssSite<'a> {
-    /// The raw (entity-encoded) value of a `style=""` attribute.
-    Attribute(&'a str),
+enum CssSite {
+    /// The byte range of a `style=""` attribute's raw (entity-encoded) value.
+    Attribute(std::ops::Range<usize>),
     /// The byte range of a `<style>` element's contents.
     Element(std::ops::Range<usize>),
 }
 
 /// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order.
-fn walk_html<'a>(html: &'a str, mut found: impl FnMut(CssSite<'a>)) {
+fn walk_html(html: &str, mut found: impl FnMut(CssSite)) {
     let bytes = html.as_bytes();
     let mut i = 0;
     while let Some(off) = html[i..].find('<') {
@@ -522,7 +575,7 @@ fn walk_html<'a>(html: &'a str, mut found: impl FnMut(CssSite<'a>)) {
             while j < bytes.len() && bytes[j].is_ascii_whitespace() {
                 j += 1;
             }
-            let mut value = "";
+            let mut value = j..j;
             if j < bytes.len() && bytes[j] == b'=' {
                 j += 1;
                 while j < bytes.len() && bytes[j].is_ascii_whitespace() {
@@ -535,14 +588,14 @@ fn walk_html<'a>(html: &'a str, mut found: impl FnMut(CssSite<'a>)) {
                     while j < bytes.len() && bytes[j] != q {
                         j += 1;
                     }
-                    value = &html[vs..j.min(bytes.len())];
+                    value = vs..j.min(bytes.len());
                     j = (j + 1).min(bytes.len());
                 } else {
                     let vs = j;
                     while j < bytes.len() && !bytes[j].is_ascii_whitespace() && bytes[j] != b'>' {
                         j += 1;
                     }
-                    value = &html[vs..j];
+                    value = vs..j;
                 }
             }
             if name == "style" {
@@ -575,6 +628,92 @@ fn find_end_tag(rest: &str, tag: &str) -> usize {
         from = at + 2;
     }
     rest.len()
+}
+
+// ---------------------------------------------------------------------------------------------
+// Generic-family mapping
+// ---------------------------------------------------------------------------------------------
+
+/// The default generic map (F3b): `monospace` and `ui-monospace` go to the built-in face, every other
+/// generic to `default_family` (the first bundled font, or the built-in face), then `overrides` apply.
+pub(crate) fn generic_map(default_family: &str, overrides: &GenericMap) -> GenericMap {
+    let mut map: GenericMap = GenericFamily::ALL
+        .into_iter()
+        .map(|g| {
+            let family = match g {
+                GenericFamily::Monospace | GenericFamily::UiMonospace => BUILTIN_MONO_FAMILY,
+                _ => default_family,
+            };
+            (g, family.to_string())
+        })
+        .collect();
+    map.extend(overrides.iter().map(|(g, f)| (*g, f.clone())));
+    map
+}
+
+/// `css` (a stylesheet) with every generic keyword in a `font-family` list replaced by the family it
+/// maps to. The engine runs without host fonts, so a generic keyword alone resolves to nothing and its
+/// text is dropped; a bundled family name does resolve. Quoted names are names, not keywords, and stay.
+pub(crate) fn map_generics<'a>(css: &'a str, map: &GenericMap) -> Cow<'a, str> {
+    replace_spans(css, generic_spans(css).into_iter(), map)
+}
+
+/// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes. An attribute
+/// that contains a character reference is left alone (its positions differ from the decoded CSS).
+pub(crate) fn map_generics_in_html<'a>(html: &'a str, map: &GenericMap) -> Cow<'a, str> {
+    let mut spans: Vec<GenericSpan> = Vec::new();
+    walk_html(html, |site| {
+        let range = match site {
+            CssSite::Element(r) => r,
+            CssSite::Attribute(r) if !html[r.clone()].contains('&') => r,
+            CssSite::Attribute(_) => return,
+        };
+        spans.extend(
+            generic_spans(&html[range.clone()])
+                .into_iter()
+                .map(|(r, g)| (range.start + r.start..range.start + r.end, g)),
+        );
+    });
+    replace_spans(html, spans.into_iter(), map)
+}
+
+fn replace_spans<'a>(
+    text: &'a str,
+    spans: impl Iterator<Item = GenericSpan>,
+    map: &GenericMap,
+) -> Cow<'a, str> {
+    let mut out = String::new();
+    let mut last = 0;
+    for (r, g) in spans {
+        let Some(family) = map.get(&g) else { continue };
+        out.push_str(&text[last..r.start]);
+        out.push_str(&css_ident(family));
+        last = r.end;
+    }
+    if last == 0 {
+        return Cow::Borrowed(text);
+    }
+    out.push_str(&text[last..]);
+    Cow::Owned(out)
+}
+
+/// `name` as a single CSS identifier, which `font-family` reads as that family name (CSS Fonts 4 §4.2).
+/// Every character outside `[A-Za-z0-9_-]` and non-ASCII, and a leading digit or hyphen, is written as a
+/// six-digit hex escape: no spaces, quotes or `&`, so the result is safe in CSS and in an HTML attribute.
+fn css_ident(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for (i, c) in name.chars().enumerate() {
+        let plain = c.is_ascii_alphabetic()
+            || c == '_'
+            || !c.is_ascii()
+            || (i > 0 && (c.is_ascii_digit() || c == '-'));
+        if plain {
+            out.push(c);
+        } else {
+            out.push_str(&format!("\\{:06x}", c as u32));
+        }
+    }
+    out
 }
 
 fn decode_entities(s: &str) -> String {
@@ -690,6 +829,66 @@ mod tests {
         .into_iter()
         .map(|u| u.font_family)
         .collect()
+    }
+
+    fn map() -> GenericMap {
+        generic_map("Inter", &GenericMap::new())
+    }
+
+    #[test]
+    fn generic_keywords_are_replaced_by_bundled_families() {
+        let m = |css: &str| map_generics(css, &map()).into_owned();
+        assert_eq!(
+            m("p{font-family:monospace}"),
+            "p{font-family:JetBrains\\000020Mono}"
+        );
+        assert_eq!(
+            m("p { font-family: 'Nope', Sans-Serif !important }"),
+            "p { font-family: 'Nope', Inter !important }"
+        );
+        assert_eq!(
+            m("p{font:italic 12px/1.5 serif}"),
+            "p{font:italic 12px/1.5 Inter}"
+        );
+        assert_eq!(
+            m(":root{--f:ui-monospace, monospace} p{font-family:var(--x, system-ui)}"),
+            ":root{--f:JetBrains\\000020Mono, JetBrains\\000020Mono} p{font-family:var(--x, Inter)}"
+        );
+        assert_eq!(
+            m("@media print{p{font-family:cursive}}"),
+            "@media print{p{font-family:Inter}}"
+        );
+    }
+
+    #[test]
+    fn non_generic_uses_stay() {
+        for css in [
+            "p{font-family:'monospace', \"serif\"}",
+            "p{font-family:Serif Pro}",
+            "p{font-weight:bold} .monospace{color:red}",
+            "p{content:'font-family: serif'}",
+            ":root{--d:math; --e:emoji}",
+            "p{display:math}",
+        ] {
+            assert_eq!(map_generics(css, &map()), css, "{css}");
+        }
+    }
+
+    #[test]
+    fn html_style_elements_and_attributes_are_mapped() {
+        let html = r#"<style>p{font-family:serif}</style><p style="font-family: monospace">monospace</p><p style="font-family:&quot;X&quot;, serif">x</p>"#;
+        assert_eq!(
+            map_generics_in_html(html, &map()),
+            r#"<style>p{font-family:Inter}</style><p style="font-family: JetBrains\000020Mono">monospace</p><p style="font-family:&quot;X&quot;, serif">x</p>"#
+        );
+    }
+
+    #[test]
+    fn css_ident_escapes_what_an_identifier_cannot_hold() {
+        assert_eq!(css_ident("Inter"), "Inter");
+        assert_eq!(css_ident("Noto Sans 2"), "Noto\\000020Sans\\0000202");
+        assert_eq!(css_ident("1Font"), "\\000031Font");
+        assert_eq!(css_ident("Šrift \"x\""), "Šrift\\000020\\000022x\\000022");
     }
 
     #[test]

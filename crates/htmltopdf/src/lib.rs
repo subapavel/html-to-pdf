@@ -24,6 +24,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
@@ -133,6 +134,7 @@ impl Renderer {
             properties: property::Registry::default(),
             registered: FamilySet::new(),
             default_family: None,
+            generic_overrides: GenericMap::new(),
             strict_fonts: false,
         }
     }
@@ -142,7 +144,7 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render(&media::print_media_in_html(html))?)
+        Ok(engine.render(&self.prepare(html))?)
     }
 
     /// Render and write to `path`.
@@ -155,7 +157,18 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render_file(&media::print_media_in_html(html), path)?)
+        Ok(engine.render_file(&self.prepare(html), path)?)
+    }
+
+    /// The document as handed to the engine: media queries evaluated for print (F7) and generic font
+    /// families mapped to bundled faces (F3b).
+    fn prepare<'a>(&self, html: &'a str) -> Cow<'a, str> {
+        match media::print_media_in_html(html) {
+            Cow::Borrowed(h) => fonts::map_generics_in_html(h, &self.generics),
+            Cow::Owned(h) => {
+                Cow::Owned(fonts::map_generics_in_html(&h, &self.generics).into_owned())
+            }
+        }
     }
 
     /// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds
@@ -227,6 +240,8 @@ pub struct RendererBuilder {
     registered: FamilySet,
     /// Family name of the first font the caller bundled; becomes the document default.
     default_family: Option<String>,
+    /// Generic families the caller mapped explicitly (`generic_family`).
+    generic_overrides: GenericMap,
     strict_fonts: bool,
 }
 
@@ -292,6 +307,14 @@ impl RendererBuilder {
         self
     }
 
+    /// Map a generic `font-family` keyword (`monospace`, `serif`, …) to a bundled family. Without this,
+    /// `monospace` and `ui-monospace` map to the built-in mono face and every other generic to the first
+    /// bundled font. Fonts are never read from the host, so a generic keyword has no face of its own.
+    pub fn generic_family(mut self, generic: GenericFamily, family: impl Into<String>) -> Self {
+        self.generic_overrides.insert(generic, family.into());
+        self
+    }
+
     /// Register an image under `name`, referenced from HTML as `<img src="name">`.
     pub fn image(mut self, name: impl Into<String>, bytes: Vec<u8>) -> Self {
         self.assets.add_image(name, bytes);
@@ -319,6 +342,14 @@ impl RendererBuilder {
             .default_family
             .as_deref()
             .unwrap_or(fonts::BUILTIN_MONO_FAMILY);
+        // Generic keywords resolve to nothing without host fonts; name the bundled family instead (F3b).
+        // Done before the preludes below are added: they contain no generic keywords.
+        let generics = fonts::generic_map(default_family, &self.generic_overrides);
+        for css in assets.css.iter_mut() {
+            if let Cow::Owned(mapped) = fonts::map_generics(css, &generics) {
+                *css = mapped;
+            }
+        }
         assets.css.insert(
             0,
             format!(
@@ -345,7 +376,7 @@ impl RendererBuilder {
             assets,
             css_scan: self.css_scan,
             registered,
-            generics: GenericMap::new(),
+            generics,
             strict_fonts: self.strict_fonts,
             property_defaults,
         }
