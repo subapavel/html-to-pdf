@@ -190,8 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c81d0f520bad6798a54cc4360bcabd245dc0aba2ce5917217d1d82ac5ee6bfed"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fsvg-current-color-srgb#daba8ed2c91c3f69b7b8daf184ace137f901be9d"
 dependencies = [
  "accesskit",
  "app_units",
@@ -958,8 +957,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21d820bfeaa98576ce1d52f4e4c9efd4f18700a5409d42aa325b7d83894499fa"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#ecd9a56a96cea06f61cf1d91bda3deb884bdefa3"
 dependencies = [
  "blitz-dom",
  "blitz-html",

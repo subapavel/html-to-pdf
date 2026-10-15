@@ -28,17 +28,15 @@ PIXEL_TOL = 32  # per-channel, 0..255
 # GUARD: set at the current number plus a small margin, and lowered in the same PR as the fix that
 # earns it. Never raise one to make CI green; fix the fixture or the engine instead.
 THRESHOLDS = {
-    "01-basic": 0.065,
-    "02-long": 0.12,
-    # 03: 9.1 → 10.1 % in F2 (PR #2) because restored borders are drawn in F1's wrong colours;
-    #     back to ~8.9 % once F1 lands — lower to 0.10 then.
-    "03-logo-qr": 0.11,
-    "04-bilingual-vat": 0.11,
-    # 05: 25.4 → 29.8 % in F7 because the restored `print:bg-slate-900` header background is painted in F1's
-    #     wrong colour and inside the page margin (Chrome prints it full-bleed, `@page { margin: 0 }`, F6).
-    #     29.8 → 32.3 % in F8: the header and totals-box gradients are painted, again in F1's colours.
-    #     With F1 applied it measures 21.5 %; lower again when F1 and F6 land.
-    "05-fancy": 0.333,
+    # Lowered in F1 (sRGB colour conversion): 01 5.3 → 4.4, 02 10.6 → 10.4, 03 10.1 → 8.9, 04 9.9 → 5.8,
+    # 05 32.3 → 21.5 %.
+    "01-basic": 0.05,
+    "02-long": 0.11,
+    "03-logo-qr": 0.095,
+    "04-bilingual-vat": 0.065,
+    # 05: the rest is mostly the header printed inside the page margin instead of full-bleed (F6) and the
+    #     totals box sitting lower than in Chrome.
+    "05-fancy": 0.22,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

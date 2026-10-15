@@ -40,3 +40,9 @@ strip = true
 # optimised dependencies even in `dev` so `cargo test` stays usable.
 [profile.dev.package."*"]
 opt-level = 2
+
+# Fixes carried until they are released upstream (docs/upstream.md). Each fork branch is the published
+# crate's exact source commit plus our fix; versions must stay equal to the ones in Cargo.lock.
+[patch.crates-io]
+fulgur = { git = "https://github.com/subapavel/fulgur", branch = "htmltopdf/srgb-colours" }
+blitz-dom = { git = "https://github.com/subapavel/blitz", branch = "htmltopdf/svg-current-color-srgb" }
