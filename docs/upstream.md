@@ -26,7 +26,7 @@ What we depend on, what we have reported or patched, and what blocks invoices.
 | `<style media="…">` attribute ignored: the sheet applies whatever the media | Blitz | **to file** — not polyfilled (F7 plan §5) | — |
 | Generic families (`monospace`, `sans-serif`) alone cannot be mapped to a bundled face | fulgur / Parley font fallback | **to file**; mapped in `htmltopdf` by rewriting the keywords (F3b) | probe |
 | `@property` ignored: Stylo 0.8.0 gates the at-rule parser (`stylesheets/rule_parser.rs:752`) on `layout.css.properties-and-values.enabled`, absent from `stylo_static_prefs` 0.8.0 → false; the cascade side is compiled in for servo. Upstream stylo main has it `true`. | Stylo via Blitz | **to file** on Blitz (bump Stylo / enable pref) — F2b; we polyfill bundled CSS in `htmltopdf` (F2) | all (Tailwind borders/shadows) |
-| `linear-gradient(<dir> in oklab, …)` (colour-interpolation method) paints nothing | Stylo or Blitz paint — unverified | **to file** — F8 | 05 (Tailwind gradients) |
+| `linear-gradient(<dir> in oklab, …)` (colour-interpolation method) paints nothing: Stylo 0.8.0 gates it on `layout.css.gradient-color-interpolation-method.enabled` (`values/specified/image.rs:37`), absent from `stylo_static_prefs` 0.8.0 → false | Stylo via Blitz | **to file** with F2b; polyfilled in `htmltopdf` (F8, `gradient.rs` removes the method) | 05 (Tailwind gradients) |
 | `usvg` rejects `oklch()` in inline SVG fills, falls back to black | resvg/usvg | open — part of F1 | 05 (icon) |
 
 | Font descriptors carry the SmallCap flag (ISO 32000-1 Table 123, bit 18) on every font | Krilla | open — harmless, report | all |

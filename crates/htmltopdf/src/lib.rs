@@ -29,7 +29,9 @@ use std::path::{Path, PathBuf};
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
+mod css_text;
 mod fonts;
+mod gradient;
 mod media;
 mod property;
 
@@ -160,15 +162,14 @@ impl Renderer {
         Ok(engine.render_file(&self.prepare(html), path)?)
     }
 
-    /// The document as handed to the engine: media queries evaluated for print (F7) and generic font
-    /// families mapped to bundled faces (F3b).
+    /// The document as handed to the engine: media queries evaluated for print (F7), generic font
+    /// families mapped to bundled faces (F3b), gradient interpolation methods removed (F8).
     fn prepare<'a>(&self, html: &'a str) -> Cow<'a, str> {
-        match media::print_media_in_html(html) {
-            Cow::Borrowed(h) => fonts::map_generics_in_html(h, &self.generics),
-            Cow::Owned(h) => {
-                Cow::Owned(fonts::map_generics_in_html(&h, &self.generics).into_owned())
-            }
-        }
+        let html = media::print_media_in_html(html);
+        let html = then(html, |h| fonts::map_generics_in_html(h, &self.generics));
+        then(html, |h| {
+            fonts::rewrite_css_in_html(h, gradient::strip_gradient_interpolation)
+        })
     }
 
     /// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds
@@ -232,6 +233,18 @@ impl Renderer {
     }
 }
 
+/// Applies a borrowing rewrite to text that may already be owned, keeping it borrowed while nothing
+/// changed.
+fn then<'a>(text: Cow<'a, str>, rewrite: impl Fn(&str) -> Cow<'_, str>) -> Cow<'a, str> {
+    match text {
+        Cow::Borrowed(t) => rewrite(t),
+        Cow::Owned(t) => match rewrite(&t) {
+            Cow::Borrowed(_) => Cow::Owned(t),
+            Cow::Owned(r) => Cow::Owned(r),
+        },
+    }
+}
+
 pub struct RendererBuilder {
     assets: AssetBundle,
     css_scan: Scan,
@@ -253,7 +266,9 @@ impl RendererBuilder {
         self.css_scan
             .extend(fonts::scan_css(&css, Origin::Stylesheet));
         self.properties.extend(property::scan_property_rules(&css));
-        self.assets.add_css(media::print_media(&css).into_owned());
+        let css = media::print_media(&css);
+        self.assets
+            .add_css(gradient::strip_gradient_interpolation(&css).into_owned());
         self
     }
 

@@ -15,6 +15,11 @@
 use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::css_text::{
+    ident_end, is_ident_start, is_unquoted_url, skip_comment, skip_escape, skip_string,
+    skip_unquoted_url,
+};
+
 /// `css` with the `print` and `screen` media types swapped in every `@media` / `@import` prelude.
 pub(crate) fn print_media(css: &str) -> Cow<'_, str> {
     swap(css, &media_type_spans(css, 0))
@@ -108,72 +113,6 @@ fn scan_prelude(css: &str, mut i: usize, offset: usize, out: &mut Vec<Range<usiz
         }
     }
     i
-}
-
-fn is_ident_start(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'_' || c == b'-' || c >= 0x80
-}
-
-fn ident_end(b: &[u8], mut i: usize) -> usize {
-    while i < b.len()
-        && (b[i].is_ascii_alphanumeric() || matches!(b[i], b'_' | b'-') || b[i] >= 0x80)
-    {
-        i += 1;
-    }
-    i
-}
-
-fn skip_comment(css: &str, i: usize) -> usize {
-    css[i + 2..].find("*/").map_or(css.len(), |e| i + 2 + e + 2)
-}
-
-/// Past a string token. Like the CSS tokenizer, an unescaped newline ends an unterminated string.
-fn skip_string(b: &[u8], i: usize) -> usize {
-    let q = b[i];
-    let mut j = i + 1;
-    while j < b.len() && b[j] != q {
-        if b[j] == b'\n' {
-            return j;
-        }
-        if b[j] == b'\\' {
-            j += 1;
-        }
-        j += 1;
-    }
-    (j + 1).min(b.len())
-}
-
-/// Past a backslash and the whole character it escapes (which may be multi-byte).
-fn skip_escape(css: &str, i: usize) -> usize {
-    i + 1 + css[i + 1..].chars().next().map_or(0, char::len_utf8)
-}
-
-/// `url(` not preceded by an identifier character and not followed by a quote: its contents are one
-/// unquoted-url token, which may contain `/*`, quotes or `@`. A quoted `url("…")` is scanned normally.
-fn is_unquoted_url(b: &[u8], i: usize) -> bool {
-    let after = i + 4;
-    b.len() > after
-        && b[i..after].eq_ignore_ascii_case(b"url(")
-        && (i == 0
-            || !(b[i - 1].is_ascii_alphanumeric()
-                || matches!(b[i - 1], b'_' | b'-' | b'\\')
-                || b[i - 1] >= 0x80))
-        && !matches!(
-            b[after..].iter().find(|c| !c.is_ascii_whitespace()),
-            Some(b'"' | b'\'')
-        )
-}
-
-/// Past the `)` closing an unquoted `url(`.
-fn skip_unquoted_url(b: &[u8], i: usize) -> usize {
-    let mut j = i + 4;
-    while j < b.len() && b[j] != b')' {
-        if b[j] == b'\\' {
-            j += 1;
-        }
-        j += 1;
-    }
-    (j + 1).min(b.len())
 }
 
 #[cfg(test)]
