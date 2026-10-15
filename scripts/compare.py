@@ -34,7 +34,10 @@ THRESHOLDS = {
     #     back to ~8.9 % once F1 lands — lower to 0.10 then.
     "03-logo-qr": 0.11,
     "04-bilingual-vat": 0.11,
-    "05-fancy": 0.26,
+    # 05: 25.4 → 29.8 % in F7 because the restored `print:bg-slate-900` header background is painted in F1's
+    #     wrong colour and inside the page margin (Chrome prints it full-bleed, `@page { margin: 0 }`, F6).
+    #     With F1 applied it measures 24.9 %; lower again when F1 and F6 land.
+    "05-fancy": 0.308,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

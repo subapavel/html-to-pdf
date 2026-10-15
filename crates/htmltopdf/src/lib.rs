@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
 mod fonts;
+mod media;
 mod property;
 
 use fonts::{FamilySet, GenericMap, Scan};
@@ -141,7 +142,7 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render(html)?)
+        Ok(engine.render(&media::print_media_in_html(html))?)
     }
 
     /// Render and write to `path`.
@@ -154,7 +155,7 @@ impl Renderer {
         self.check_fonts(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        Ok(engine.render_file(html, path)?)
+        Ok(engine.render_file(&media::print_media_in_html(html), path)?)
     }
 
     /// `@property` initial values are applied only for bundled stylesheets (see `property`). fulgur adds
@@ -237,7 +238,7 @@ impl RendererBuilder {
         self.css_scan
             .extend(fonts::scan_css(&css, Origin::Stylesheet));
         self.properties.extend(property::scan_property_rules(&css));
-        self.assets.add_css(css);
+        self.assets.add_css(media::print_media(&css).into_owned());
         self
     }
 
