@@ -117,3 +117,36 @@ pub(crate) fn check_font_families(css_lists: &[FamilyList], html: &str,
 - Per-glyph coverage fallback for scripts Inter lacks, and runtime detection of `.notdef` glyphs (upstream issue).
 - Serif, CJK or emoji faces; SVG `<text>` host-font use; CLI flags for generic mapping; changing compare thresholds.
 - Adding an `@font-face` to `input.css`, rebuilding `tailwind.css` or regenerating Chrome references (needs node; dropped from this plan).
+
+## 7. Verified API (Step 1 spike, 2026-10-15, fulgur 0.40.0 / blitz-dom 0.2.4 / fontique 0.6.0 / stylo 0.8.0)
+
+- **(a) Generic-family mapping: not exposed.** `AssetBundle` only has `add_css*`, `add_font_file/bytes`, `add_image*`,
+  `set_base_url`; `fonts` is a public `Vec<Arc<Vec<u8>>>`. `blitz_adapter::parse_inner` builds the
+  `parley::FontContext` privately and only calls `collection.register_fonts(blob, None)`. fontique does have
+  `Collection::set_generic_families` / `append_generic_families`, but nothing hands us the collection, and
+  `CollectionOptions::shared` only shares between clones of one collection (not global), so it is no back door.
+  Consequence: Step 4 needs an engine change (upstream PR carried via `[patch.crates-io]`). See "Step 4 status".
+- **(b) Family name rule.** fontique `register_fonts` uses name ID 16 (typographic family), else ID 1; the US-English
+  name if present, else the first. `fonts::family_names` implements the same rule via `ttf-parser`.
+- **(c) `ui-*` keywords.** Stylo in servo mode parses only `serif`, `sans-serif`, `monospace` (alias `-moz-fixed`),
+  `cursive`, `fantasy` and `system-ui` (pref `layout.css.system-ui.enabled` is `true`) as generics. `ui-serif`,
+  `ui-sans-serif`, `ui-monospace`, `ui-rounded`, `math`, `emoji` and `fangsong` are plain `FamilyName`s, so a mapping
+  would have to register aliases under those names, not set a generic.
+- **(d) Unused registered faces are not embedded.** Verified with `pdffonts`: with Inter and the built-in face
+  registered, a document using only Inter embeds only Inter. The built-in face costs binary size, not PDF size.
+
+## 8. Implementation status (what landed, what did not)
+
+- Landed: Steps 1, 2, 3 and 5. The identifiers of fixtures 01-04 are in the PDF text; `font-family` lists that nothing
+  can satisfy are an error.
+- **Step 4 (generic mapping) did not land.** The engine has no hook (a), and the carried-patch route needs a copy of
+  fulgur 0.40.0 (about 4 MB) vendored into the repo as a `[patch.crates-io]` path (or a fork branch). That was not done
+  without a decision on where the patch lives. Until it lands, generics count as *unresolved* in the check, so
+  `font-family: monospace` alone fails loudly instead of rendering. A2 is therefore not met; A3 is.
+- Sketch of the patch (for the upstream PR): `AssetBundle::set_generic_family(GenericFamily, family)` and
+  `add_font_alias(alias, family)` (for the `ui-*` names), applied in `parse_inner` after the `register_fonts` loop via
+  `Collection::set_generic_families`; the mapping has to be threaded through `parse_inner`'s callers in `engine.rs`
+  and `render.rs` (about 15 sites, all taking `fonts()` today). `htmltopdf` then fills `GenericMap` in
+  `RendererBuilder::build()` and adds the `generic_family()` override from section 3.
+- Measured (01-04 vs a blank reference, see the caveat in section 6): 01 3.1 % before, 3.3 % after (+0.2 pp of ink from
+  the three mono values). These are not Chrome diffs.

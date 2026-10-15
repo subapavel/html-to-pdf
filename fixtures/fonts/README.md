@@ -13,3 +13,10 @@ Not committed (size + licence hygiene). Run `scripts/fetch-fonts.sh` once; it dr
 htmltopdf never uses system fonts (`system_fonts(false)`), so every weight a fixture uses must be bundled,
 otherwise the engine synthesises or falls back and the pixel diff against Chrome is meaningless.
 Inter is licensed under the SIL Open Font License 1.1.
+
+## Monospace is built in
+
+`font-mono` (`"JetBrains Mono", ui-monospace, monospace`) needs no file here: JetBrains Mono Regular (SIL OFL 1.1) is
+compiled into `crates/htmltopdf` and registered after the caller's fonts (ADR-0002). Only the Regular weight is
+bundled, so `font-mono font-semibold` renders Regular. A `font-family` list that matches no registered face now makes
+`render()` fail with `Error::UnresolvedFontFamilies` instead of silently dropping the text.
