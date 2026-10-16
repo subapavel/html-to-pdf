@@ -44,6 +44,48 @@ fn inline_svg_current_colour_converts_to_srgb() {
     }
 }
 
+/// `none` components written in a colour and the same colour with that component written as 0. Outside
+/// interpolation `none` behaves as 0 (css-color-4 §4.4); before F11 these painted black or lost their chroma.
+const NONE_AS_ZERO: &[(&str, &str)] = &[
+    ("oklch(50% none 0)", "oklch(50% 0 0)"),
+    ("oklch(70% 0.1 none)", "oklch(70% 0.1 0)"),
+    ("oklab(50% 0.1 none)", "oklab(50% 0.1 0)"),
+    ("lab(50% none 40)", "lab(50% 0 40)"),
+    ("lch(50% 40 none)", "lch(50% 40 0)"),
+    (
+        "color(display-p3 none 0.5 0.5)",
+        "color(display-p3 0 0.5 0.5)",
+    ),
+    ("hsl(none 50% 50%)", "hsl(0 50% 50%)"),
+    ("rgb(none 128 255)", "rgb(0 128 255)"),
+    ("hwb(none 20% 20%)", "hwb(0 20% 20%)"),
+    ("oklch(none none none)", "oklch(0 0 0)"),
+    ("rgb(255 0 0 / none)", "rgb(255 0 0 / 0)"),
+];
+
+#[test]
+fn none_components_behave_as_zero() {
+    for (none, zero) in NONE_AS_ZERO {
+        for (what, html) in [
+            (
+                "background",
+                r#"<div style="width:200px;height:200px;background:COLOUR"></div>"#,
+            ),
+            (
+                "svg currentColor",
+                r#"<svg style="color:COLOUR" width="200" height="200" viewBox="0 0 10 10" fill="currentColor"><rect width="10" height="10"/></svg>"#,
+            ),
+        ] {
+            let got = centre_pixel(&html.replace("COLOUR", none));
+            let want = centre_pixel(&html.replace("COLOUR", zero));
+            assert!(
+                got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= TOL),
+                "{what} `{none}` painted as {got:?}, `{zero}` as {want:?}"
+            );
+        }
+    }
+}
+
 fn is_red([r, g, b]: [u8; 3]) -> bool {
     r >= 255 - TOL && g <= TOL && b <= TOL
 }
