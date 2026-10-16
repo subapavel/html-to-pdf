@@ -96,3 +96,13 @@ F30f inline-block wrappers, F30g abspos.
   continues below the frame; table cells and `display: table` parents are excluded (F30b); the list-marker rule applies
   to every split list item. Continuation pages draw the box's top border again (`box-decoration-break: slice` is a
   non-goal). F30c (paragraphs shorter than a page still move whole) open.
+- After `vrt-validator` and `pdf-reviewer` (PR #18), fork `099f2a7`: page 0 is treated as shorter by the body's own
+  offset (body margin / margin collapsed through `<body>`), so a split no longer pushes lines past the content box or
+  below the MediaBox; every ancestor frame between the split paragraph and the root ends at the content bottom on the
+  pages it leaves (`.box > div > p`, `.box > ul > li` drew their page-1 frame to the paper edge); a split `<td><p>`
+  repeats the F12 header on its continuation pages and a row with such a cell starts in place (d1: 5 → 4 pages like
+  Chrome, header on all); the last strip leaves room for the boxes' bottom padding/border. Fixture 06 text renumbered
+  (1–27) and its Chrome reference regenerated. 5 more tests (18 + 1 ignored).
+- Known, recorded: sibling cells of a split cell are not sliced per page (their background/text on page 1 only, F35);
+  body-level paragraphs still ignore the body offset (F29); no warning for `display:table` / inline-block wrappers
+  that lose a split paragraph (F30e/F30f).

@@ -21,8 +21,13 @@ const CSS: &str = "body { margin: 0 } p { margin: 0; line-height: 20px } li { li
     .box { border: 1px solid #333; border-radius: 8px; padding: 16px } ul { margin: 0 }";
 
 fn render(body: &str) -> Vec<u8> {
+    render_with("", body)
+}
+
+/// `extra_css` is appended after the base CSS, so it wins.
+fn render_with(extra_css: &str, body: &str) -> Vec<u8> {
     Renderer::builder()
-        .css(CSS)
+        .css(format!("{CSS} {extra_css}"))
         .build()
         .render(
             &format!("<!doctype html><html><body>{body}</body></html>"),
@@ -294,6 +299,180 @@ fn inline_blocks_in_a_split_paragraph_follow_their_line() {
         .map(|(p, _, w)| (*p, w.as_str()))
         .collect();
     assert_eq!(boxes, vec![(1, "BOX5"), (2, "BOX70"), (3, "BOX130")]);
+}
+
+#[test]
+fn the_body_margin_is_not_extra_room_on_the_first_page() {
+    // The renderer shifts page 0 down by the body's own offset, so the first page holds less.
+    for margin in ["8px", "40px", "80px"] {
+        let pdf = render_with(
+            &format!("body {{ margin: {margin} }}"),
+            &format!("<div class=\"box\"><p>{}</p></div>", lines(1..=300)),
+        );
+        assert_paginated(&pdf, &expected(1..=300));
+    }
+}
+
+#[test]
+fn a_margin_collapsed_through_the_body_is_not_extra_room_either() {
+    for margin in [40, 80, 120] {
+        let pdf = render(&format!(
+            "<div style=\"margin-top:{margin}px;height:10px\"></div><div class=\"box\"><p>{}</p></div>",
+            lines(1..=300)
+        ));
+        assert_paginated(&pdf, &expected(1..=300));
+        let pdf = render(&format!(
+            "<div style=\"margin-top:{margin}px\"><p>{}</p></div>",
+            lines(1..=300)
+        ));
+        assert_paginated(&pdf, &expected(1..=300));
+    }
+}
+
+/// A page rasterised at 72 dpi (1 px = 1 pt) as `(width, height, RGB bytes)`.
+fn page_rgb(pdf: &[u8], page: usize) -> (usize, usize, Vec<u8>) {
+    let path = temp(pdf);
+    let prefix = path.with_extension("");
+    let status = std::process::Command::new("pdftoppm")
+        .args([
+            "-r",
+            "72",
+            "-f",
+            &page.to_string(),
+            "-l",
+            &page.to_string(),
+            "-singlefile",
+        ])
+        .arg(&path)
+        .arg(&prefix)
+        .status()
+        .expect("pdftoppm (poppler-utils) is required for this test and was not found in PATH");
+    assert!(status.success(), "pdftoppm failed");
+    let ppm = prefix.with_extension("ppm");
+    let bytes = std::fs::read(&ppm).expect("ppm");
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&ppm);
+    // "P6\n<w> <h>\n255\n" followed by the raw pixels.
+    let mut fields = Vec::new();
+    let mut at = 0;
+    while fields.len() < 4 {
+        while bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let start = at;
+        while !bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        fields.push(String::from_utf8_lossy(&bytes[start..at]).into_owned());
+    }
+    (
+        fields[1].parse().unwrap(),
+        fields[2].parse().unwrap(),
+        bytes[at + 1..].to_vec(),
+    )
+}
+
+/// Lowest pixel row on `page` holding the box's red border (#c00) or its fill (#ffe9a8).
+fn lowest_box_row(pdf: &[u8], page: usize) -> usize {
+    let (w, h, rgb) = page_rgb(pdf, page);
+    let near = |p: &[u8], c: [u8; 3]| (0..3).all(|i| p[i].abs_diff(c[i]) < 12);
+    (0..h)
+        .rev()
+        .find(|&y| {
+            (0..w).any(|x| {
+                let p = &rgb[(y * w + x) * 3..(y * w + x) * 3 + 3];
+                near(p, [0xcc, 0, 0]) || near(p, [0xff, 0xe9, 0xa8])
+            })
+        })
+        .expect("no box on the page")
+}
+
+const FRAME_CSS: &str =
+    ".box { border: 2px solid #c00; border-radius: 12px; padding: 16px; background: #ffe9a8 }";
+
+#[test]
+fn the_frame_of_a_box_around_wrappers_ends_at_the_content_bottom_on_every_page() {
+    // `.box > div > p` and `.box > ul > li`: the paragraph is two levels below the box, whose frame on
+    // the pages it leaves must end at the content bottom (799 pt), not run on to the page edge.
+    let content_bottom = (PAGE_H_PT - MARGIN_PT).round() as usize;
+    for body in [
+        format!(
+            "<div class=\"box\"><div><p>{}</p></div></div><p>After</p>",
+            lines(1..=200)
+        ),
+        format!(
+            "<div class=\"box\"><ul><li>{}</li></ul></div><p>After</p>",
+            lines(1..=200)
+        ),
+        format!(
+            "<div class=\"box\"><h3>Title</h3><div><p>{}</p></div></div>",
+            lines(1..=200)
+        ),
+        format!(
+            "<section><article><div class=\"box\"><div><p>{}</p></div></div></article></section>",
+            lines(1..=200)
+        ),
+    ] {
+        let pdf = render_with(FRAME_CSS, &body);
+        let pages = assert_paginated(&pdf, &expected(1..=200));
+        assert!(pages >= 4, "{pages}");
+        for page in 1..pages {
+            let bottom = lowest_box_row(&pdf, page);
+            assert!(
+                bottom <= content_bottom + 1 && bottom + 8 >= content_bottom,
+                "page {page}: the frame ends at row {bottom}, the content bottom is {content_bottom}: {body}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_last_frame_stays_inside_the_content_box() {
+    // However many lines the last page gets, the bottom padding and border of the box fit on it.
+    let content_bottom = (PAGE_H_PT - MARGIN_PT).round() as usize;
+    for n in 140..=160 {
+        let pdf = render_with(
+            FRAME_CSS,
+            &format!("<div class=\"box\"><p>{}</p></div>", lines(1..=n)),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=n));
+        let bottom = lowest_box_row(&pdf, pages);
+        assert!(
+            bottom <= content_bottom + 1,
+            "{n} lines: the box ends at row {bottom} on page {pages}, the content bottom is {content_bottom}"
+        );
+    }
+}
+
+#[test]
+fn a_paragraph_in_a_cell_repeats_the_table_header_on_every_page() {
+    let rows = format!(
+        "<table style=\"width:100%\"><thead><tr><th>HEADERA</th><th>HEADERB</th></tr></thead>\
+         <tbody><tr><td>Left</td><td><p>{}</p></td></tr><tr><td>Row2</td><td>After</td></tr></tbody></table>",
+        lines(1..=150)
+    );
+    let pdf = render(&rows);
+    let pages = assert_paginated(&pdf, &expected(1..=150));
+    // 150 lines of 20 px below a one-line header: 3 pages and a bit.
+    assert_eq!(pages, 4, "the row starts on page 1 instead of moving whole");
+    for page in 1..=pages {
+        let path = temp(&pdf);
+        let out = std::process::Command::new("pdftotext")
+            .args(["-f", &page.to_string(), "-l", &page.to_string()])
+            .arg(&path)
+            .arg("-")
+            .output()
+            .expect("pdftotext");
+        let _ = std::fs::remove_file(&path);
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert_eq!(text.matches("HEADERA").count(), 1, "page {page}: {text:?}");
+    }
+    let found = words(&pdf);
+    assert!(
+        lines_on(&found, 1) >= 45,
+        "page 1 is filled: {}",
+        lines_on(&found, 1)
+    );
 }
 
 #[test]
