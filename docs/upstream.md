@@ -39,7 +39,7 @@ PRs upstream (owner's decision, 2026-10-15); "known, not reported" marks upstrea
 
 | Crate | Fork branch | Base | Fix | Upstream status |
 |---|---|---|---|---|
-| fulgur 0.40.0 | `subapavel/fulgur` `htmltopdf/srgb-colours` | `8d81949` | `absolute_to_rgba` converts to sRGB (F1); `none` components count as 0 before converting (F11) | F1 fixed independently on fulgur `main` (fulgur-xfzo, same call); drop the branch only when a release > 0.40.0 has both |
+| fulgur 0.40.0 | `subapavel/fulgur` `htmltopdf/srgb-colours` | `8d81949` | `absolute_to_rgba` converts to sRGB (F1); `none` components count as 0 before converting (F11); repeated `thead` on continuation pages (F12, `pagination_layout.rs` `HeaderRepeat`, `render.rs` `paint_repeated_table_headers`; touches `fragment_block_subtree`, expect rebase conflicts) | F1 fixed independently on fulgur `main` (fulgur-xfzo, same call); drop the branch only when a release > 0.40.0 has both |
 | blitz-dom 0.2.4 | `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` | `0a77560` | `currentColor` serialised as sRGB for usvg (F1); `text-transform` applied (F4); explicit cell widths respect `box-sizing` (F5); SVG `currentColor` treats `none` components as 0 (F11); a mixed `calc()` cell width is `auto` instead of a panic (F14; upstream PR #653 resolves it as a track instead, not per css-values-4); plus an htmltopdf-only commit taking sibling crates from crates.io | carried (F1 still present on Blitz `main`) |
 
 Bumping fulgur or blitz-dom means rebasing these branches onto the new release commit (or dropping them once the

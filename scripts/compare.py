@@ -31,10 +31,10 @@ THRESHOLDS = {
     # Lowered in F1 (sRGB colour conversion): 01 5.3 → 4.4, 02 10.6 → 10.4, 03 10.1 → 8.9, 04 9.9 → 5.8,
     # 05 32.3 → 21.5 %.
     "01-basic": 0.05,
-    # 02: re-baselined by F5 (4 → 3 pages, ADR-0003): 10.3 / 11.8 / 9.6 %. Rows drift against Chrome's because
-    #     collapsed `<tr>` borders are not painted (Blitz #386) and the table header is not repeated on pages 2-3
-    #     (F12); those findings bring it down.
-    "02-long": 0.129,
+    # 02: re-baselined by F5 (4 → 3 pages, ADR-0003); F12 (repeated thead) 10.3 / 11.8 / 9.6 → 10.3 / 11.5 / 9.9 %
+    #     (p3 grew 0.3: the header band is content that was missing). Rows still drift against Chrome's because
+    #     collapsed `<tr>` borders are not painted (Blitz #386) and cells are not vertically centred (F13).
+    "02-long": 0.125,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %.
     "03-logo-qr": 0.09,
     "04-bilingual-vat": 0.06,

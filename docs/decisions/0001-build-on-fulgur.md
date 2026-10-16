@@ -36,3 +36,6 @@ via `[patch.crates-io]` pointing at our fork branch. A hard fork is explicitly *
 
 Revisit if: (a) upstream goes quiet for > 6 months, (b) a required invoice feature needs layout-time
 fragmentation, or (c) a Blitz change breaks pagination in a way fulgur cannot absorb.
+
+Correction (2026-10-16): "repeated `thead`" above was wrong for fulgur 0.40.0 — its v2 render path had the repeat
+deferred. It is implemented in our fork (F12, `docs/plans/2026-10-16-f12-repeat-thead.md`).
