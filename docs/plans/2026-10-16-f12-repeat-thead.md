@@ -119,3 +119,12 @@ No links in the copy. Everything keyed by `BTreeMap`.
   on the first body row does not create a header-only page.
 - Fixtures: 01, 03, 04, 05 byte-identical. 02 3/3 pages, 10.3 / 11.8 / 9.6 → 10.3 / 11.5 / 9.9 %; page 3 grew 0.3
   because the header band is content that was missing (merge-policy item 3). Threshold 0.129 → 0.125.
+- After `vrt-validator` (PR #13), fork `84e58df` narrows the repeat: (1) a row that fits a page but not
+  page − header gets the whole page, no band there (it was split); (2) only `<table>` elements repeat (a
+  `display: table` div got a blank band, since convert records header drawables only for `<table>`); (3) a header
+  left alone at the bottom of its page is not repeated (it showed twice). Repros `out/scratch/{tallrow990,divtable,
+  near1000}.html`: divtable and near1000 byte-identical to pre-F12, tallrow990 keeps the tall row whole and repeats
+  the header on the next page. Fork 1898 lib + 213 smoke tests, clippy clean, table-header golden unchanged.
+- Known, not fixed (low): the band can cover a wrapper div's continuation border (cosmetic); repeat silently
+  skipped inside `overflow: hidden` / transform / opacity wrappers (Tailwind `overflow-hidden rounded-lg` around a
+  table is common — worth a warning later); a page that only carries a split cell's tail shows a bare header band.
