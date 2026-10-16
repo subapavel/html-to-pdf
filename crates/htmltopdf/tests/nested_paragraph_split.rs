@@ -77,7 +77,7 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
                 || word.starts_with("CLine")
                 || matches!(
                     word,
-                    "1." | "right" | "AFTER" | "Item" | "NEXTROW" | "short"
+                    "1." | "right" | "AFTER" | "Item" | "NEXTROW" | "short" | "tail"
                 ))
         {
             let y_max = attrs
