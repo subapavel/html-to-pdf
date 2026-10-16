@@ -56,7 +56,7 @@ THRESHOLDS = {
     "07-heading-margin": 0.082,
     # 08: new in F30b (a paragraph taller than a page that is a grid item, `grid gap-4` card, and a flex-row footer).
     #     13.2 / 12.1 %: same cause as 06, one dense paragraph whose line wrapping drifts against Chrome's over ~100
-    #     lines; the page break matches (2 pages like Chrome, the tail used to be lost: 1 page). Ours also draws the
+    #     lines; the page break matches (2 pages like Chrome, main printed 3 pages and cut the paragraph after clause 21). Ours also draws the
     #     card's top border again on page 2 (box-decoration-break is not implemented). Worst page + 1 point.
     "08-terms-grid": 0.142,
 }

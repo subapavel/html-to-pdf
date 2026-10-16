@@ -105,7 +105,7 @@ Fixtures: 01–07 byte-identical; fork example goldens and `fulgur-vrt` byte-ide
 `<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">` and one
 `<p class="leading-relaxed text-gray-600">` of Czech terms ≈ 1.4 pages, then 05's `flex items-start gap-4` footer
 (svg `size-5 shrink-0` + short `<p>`). Every class is in the compiled `tailwind.css` (`flex-col`, `grid-cols-1` are
-not, hence `grid gap-4`; Tailwind is not rebuilt). Today 1 page with the tail lost; expected 2/2 like Chrome. Commit
+not, hence `grid gap-4`; Tailwind is not rebuilt). Today (main) 3 pages with the tail cut after clause 21; expected 2/2 like Chrome. Commit
 the Chrome reference and a `compare.py` threshold of the worst page plus 1 point, as for 06.
 
 ## 5. Steps
@@ -142,7 +142,7 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
   grid items and cells of a `display: table` box; `first_break_h` is 0 for a line-split item that is not first in its
   row; `table_row_mate_can_split` → `row_mate_can_split` accepts a direct-text mate; row state restart on a cut; 6 new
   unit tests, 1 inverted, 1 moved to an `overflow:hidden` parent), `ce302a6` (`paint_table_row_backgrounds` through
-  `frame_fragment`, warning text, 1 `render_smoke` test). Fork: 1982 lib (1975 before), 236 render_smoke, every other
+  `frame_fragment`, warning text, 1 `render_smoke` test). Fork: 1982 lib (1975 before; 1983 after the row-end fix), 236 render_smoke, every other
   test binary green (2211 tests over lib + 40 integration binaries, 0 failed), fulgur-vrt green, `examples_determinism`
   only `committed_svg_matches_rendered` fails (environment, as before), example goldens and VRT goldens byte-identical,
   clippy and fmt clean.
@@ -150,7 +150,7 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
   F35: fails with "Item not printed"); 10 of the 11 new tests were red before (the 11th is the ignored one). Whole
   workspace `cargo test --release --locked`: 193 passed, 0 failed, 2 ignored.
 - Fixtures 01–07 byte-identical (`cmp` of `out/<name>/htmltopdf.pdf` before and after). Fixture `08-terms-grid`: Chrome
-  reference generated, 2 / 2 pages like Chrome, 13.2 / 12.1 %, threshold 0.142 (before the fix: 1 page, tail lost).
+  reference generated, 2 / 2 pages like Chrome, 13.2 / 12.1 %, threshold 0.142 (main: 3 pages, the paragraph cut after clause 21).
 - Probes (120 or 300 lines of 20 px, Chrome vs ours before → after; `out/scratch/f30b/`):
   - `flexcol_p`, `grid1_p` (300 lines): Chrome 7 pages, 50 lines each; ours 2 pages with 53 lines → 7 pages, 50 per page, Footer on 7.
   - `flexcol`, `grid1` (header, bordered `.box > p`, footer) and `flexrow`, `grid2`: already like Chrome, unchanged (7, 7, 6, 6 pages).
@@ -181,3 +181,19 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
 - Not verified: `vrt-validator` (run by the caller); row backgrounds with gradients / images on a split direct-text
   cell (colour fill only is tested); `column-reverse` and out-of-DOM-order grid placement (non-goals); the
   `examples_determinism` committed-SVG test (fails before and after for environment reasons).
+- After `vrt-validator` (PR #21), fork `ed2d4f4` (test cleanup `468198f`, now pinned): cells of one table row that all continue on later pages each wrote
+  the row's end cursor, so the cell processed last overwrote it; a direct-text cell ends at its last line (a `<td><p>`
+  cell is a stretched frame ending with the row), so with `<td>A×120</td><td>B×80</td>` what followed the row
+  (`AFTER`, the next `<tr>`) was drawn over A's tail on page 2 and page 3 held only A's tail. A cell now keeps the end of
+  an earlier cell of the same row that reaches further. Tests: `a_row_of_two_tall_direct_text_cells_ends_with_the_taller_one`
+  (two, three and taller-last cells), `the_row_after_a_row_of_two_tall_direct_text_cells_starts_below_the_taller_one`,
+  `a_flex_or_grid_row_of_two_tall_paragraphs_ends_with_the_taller_one` (first item taller, both split, `<p>` and
+  `<div><p>` items; green before the fix, flex and grid rows use `RowState`'s max), and fork unit test
+  `what_follows_a_row_of_two_split_cells_starts_below_the_taller_one`. The first two were red before the fix. The
+  probes `td_two_tall`, `td_three`, `next_row_two` now match Chrome page for page (A 50/50/20, B 50/30, AFTER on page 3).
+- Correction: main renders fixture 08 as 3 pages with the paragraph cut after clause 21, not 1 page.
+- `tr` background over a tall direct-text cell (`trbg.html`): checked against main; the sibling-column fill that runs
+  past the page bottom and the gap on later pages are the F35 shape of `<td><p>` (byte-identical main vs F30b), so not
+  introduced here and not fixed here. `<td><p>` B cells still end 2 lines on page 3 and put `AFTER` low (pre-existing).
+- Left to F30h: `align-items: center | flex-end | baseline` rows and `grid-row: span 2` with a tall `<p>` lose lines
+  silently (pre-existing, same with `div > p`); F30b covers stretch / start-aligned rows only.

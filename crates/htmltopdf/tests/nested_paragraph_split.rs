@@ -73,7 +73,11 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
             && let Some(word) = word.strip_suffix("</word>")
             && (word.starts_with("Line")
                 || word.starts_with("BOX")
-                || matches!(word, "1." | "right" | "AFTER" | "Item"))
+                || word.starts_with("BLine")
+                || matches!(
+                    word,
+                    "1." | "right" | "AFTER" | "Item" | "NEXTROW" | "short"
+                ))
         {
             let y_max = attrs
                 .split_whitespace()
@@ -785,6 +789,107 @@ fn a_short_cell_beside_a_split_cell_stays_on_the_first_page_when_centred() {
         (item_y - first_y).abs() <= 1.0,
         "Item {item_y} vs Line0001 {first_y}"
     );
+}
+
+/// `BLine0001<br>…`: the second tall item of a row.
+fn b_lines(range: std::ops::RangeInclusive<usize>) -> String {
+    range
+        .map(|i| format!("BLine{i:04}"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+/// `BLine…` words of `found` as `(page, y_max, text)`.
+fn b_words(found: &[(usize, f32, String)]) -> Vec<&(usize, f32, String)> {
+    found
+        .iter()
+        .filter(|(_, _, w)| w.starts_with("BLine"))
+        .collect()
+}
+
+/// Two (or three) tall siblings in one row, the first taller than the others: every line of both once and
+/// in order, the row ends where its tallest item ends and what follows starts below it (Chrome: A on pages
+/// 1-3, B on pages 1-2, AFTER on page 3).
+fn assert_row_of_two_tall(pdf: &[u8], what: &str) {
+    let pages = assert_paginated(pdf, &expected(1..=120));
+    assert_eq!(pages, 3, "{what}");
+    let found = words(pdf);
+    let b: Vec<&str> = b_words(&found).iter().map(|(_, _, w)| w.as_str()).collect();
+    let want: Vec<String> = (1..=80).map(|i| format!("BLine{i:04}")).collect();
+    assert_eq!(
+        b,
+        want.iter().map(String::as_str).collect::<Vec<_>>(),
+        "{what}: B lines"
+    );
+    let last_b = b_words(&found).last().map(|(p, _, _)| *p).unwrap();
+    assert_eq!(last_b, 2, "{what}: B ends on page 2");
+    assert_eq!(lines_on(&found, 1), 50, "{what}");
+    assert_below(&found, "AFTER", "Line0120");
+}
+
+#[test]
+fn a_row_of_two_tall_direct_text_cells_ends_with_the_taller_one() {
+    for (what, cells) in [
+        (
+            "two cells",
+            format!("<td>{}</td><td>{}</td>", lines(1..=120), b_lines(1..=80)),
+        ),
+        (
+            "three cells",
+            format!(
+                "<td>{}</td><td>{}</td><td>short</td>",
+                lines(1..=120),
+                b_lines(1..=80)
+            ),
+        ),
+        (
+            "taller last",
+            format!("<td>{}</td><td>{}</td>", b_lines(1..=80), lines(1..=120)),
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr>{cells}</tr></table><p>AFTER</p>"),
+        );
+        assert_row_of_two_tall(&pdf, what);
+    }
+}
+
+#[test]
+fn the_row_after_a_row_of_two_tall_direct_text_cells_starts_below_the_taller_one() {
+    let pdf = render_with(
+        "td { vertical-align: top }",
+        &format!(
+            "<table style=\"width:100%\"><tr><td>{}</td><td>{}</td></tr><tr><td>NEXTROW</td><td>x</td></tr></table>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ),
+    );
+    let pages = assert_paginated(&pdf, &expected(1..=120));
+    assert_eq!(pages, 3);
+    assert_below(&words(&pdf), "NEXTROW", "Line0120");
+}
+
+#[test]
+fn a_flex_or_grid_row_of_two_tall_paragraphs_ends_with_the_taller_one() {
+    // The first item is the taller one and both split: what follows the row starts below the taller item.
+    for row in [
+        "display:flex;align-items:flex-start;gap:16px",
+        "display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:16px",
+    ] {
+        let pdf = render(&format!(
+            "<div style=\"{row}\"><p>{}</p><p>{}</p></div><p>AFTER</p>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ));
+        assert_row_of_two_tall(&pdf, row);
+        let pdf = render(&format!(
+            "<div style=\"{row}\"><div><p>{}</p></div><div><p>{}</p></div></div><p>AFTER</p>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ));
+        assert_row_of_two_tall(&pdf, row);
+    }
 }
 
 fn temp(pdf: &[u8]) -> std::path::PathBuf {
