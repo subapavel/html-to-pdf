@@ -152,3 +152,32 @@ row positions. Commit the Chrome reference and a `compare.py` threshold of the w
   `min-height` on a cell stays a row minimum where Chrome ignores it (P5); the legacy `<td height="60">` attribute is **not mapped to a
   CSS height** by Blitz (probe `p7`: one line, `height="60"`, NEXT 68 px below in Chrome, 28 px in ours, before and after F48), a
   separate gap, left open.
+
+### Follow-up after `vrt-validator` on PR #22
+
+- Fork `subapavel/blitz`: `312a7ee`. Tests: `fixed_height_cells.rs` 19 (8 new, 6 red before: border-box, content-box, collapsed
+  border, `display: table` div, flex / grid item, `display: table` div as a flex item; 2 guards green before and
+  after), 2 Blitz unit tests (`grid_container_min_height`).
+- F-A (regression): `height_as_table_minimum` made the table grid's `min_size.height` the table's `height`, but Taffy 0.9.2
+  (`compute/grid/mod.rs`) stretches the auto rows to a container `min-height` as if it were the content box and adds
+  padding and border afterwards (`content-box`: once more, it adds them to the minimum first). So a table with a frame was
+  too tall by padding + border (border-box) or twice that (content-box). Chrome 141 (72 probes `out/scratch/f48/cx/`, 500 px
+  wide tables, 3 lines, separate and collapsed borders): the total is `height` under `border-box` and `height` + padding +
+  border under `content-box`, for `height` and `min-height` alike. The minimum handed to Taffy is now `height - padding -
+  border` in both modes (`grid_container_min_height`; a percentage padding counts as 0). Spec: CSS 2.1 §17.5.3 only says a
+  table's non-`auto` `height` is a minimum; the box-sizing behaviour is Chrome's (css-tables-3 wording not checked).
+  Matrix: 72 probes 28 differing from Chrome before, 2 after (`border-collapse: collapse` + `content-box` + 6 px border: Chrome
+  106 px, ours 112; Chrome counts half the collapsed border). The 36 `mx_*` probes (`width: 100%`): 15 differing before, 7
+  after, all `content-box` with padding or a border: Chrome shrinks those pages to fit the 100 % + frame width when printing
+  (fractional AFTER positions), so they are not comparable; the same shapes at a fixed width are in the 72.
+- F-B: the table root's own node style gets the same rule (`flush_styles_to_layout`), so a table that is a flex row, flex
+  column or grid item is no longer clamped to `height: 30px` (AFTER 104 px below line 1 in Chrome and now ours, before
+  26); a `display: table` div as a flex item: Chrome 100, ours before 30, now 100; border-box / content-box tables with a larger
+  `height` as flex items unchanged (180 / 212, as Chrome).
+- Chrome and ours, `display: table` div with `height:100px`, border 6 + padding 10: border-box 84 px below line 1 (before 116),
+  content-box 116 (before 148).
+- Fixtures 01-09 byte-identical to the output of `ebb49fb`; 2000-row table byte-identical, 200-241 ms.
+- `min-height` on a cell staying a row minimum is the F13 behaviour; Chrome ignores it (`mm_100_40.html`).
+- Found while validating, filed as F50-F54 in the findings: `td { display: block | flex }` drops the cell, `overflow` on a
+  `td` keeps the row from growing, image cell rows, extra table height distribution, `td { height: 100000px }`.
+

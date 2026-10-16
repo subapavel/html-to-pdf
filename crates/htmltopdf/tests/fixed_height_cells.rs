@@ -283,6 +283,151 @@ fn a_table_height_smaller_than_its_rows_is_only_a_minimum() {
     assert_below(&words(&pdf), "AFTER", "Line0005");
 }
 
+// ---- a table's own height (F48 follow-up: border and padding are inside it, or outside it, like in Chrome) ----
+
+/// `AFTER` sits `px` CSS px below `Line0001` on the same page.
+fn assert_after_below_first(pdf: &[u8], px: f32, what: &str) {
+    let found = words(pdf);
+    let (p1, y1) = word_at(&found, "Line0001");
+    let (p2, y2) = word_at(&found, "AFTER");
+    assert_eq!(p1, p2, "{what}: same page");
+    let want = px * 0.75;
+    assert!(
+        (y2 - y1 - want).abs() <= TOL,
+        "{what}: AFTER is {:.1}pt below Line0001, expected {want:.1}pt ({px} px)",
+        y2 - y1
+    );
+}
+
+/// A 500 px wide table with `style`, one cell of three 20 px lines (60 + 2 x 4 px padding), then `AFTER`.
+fn sized_table(style: &str) -> Vec<u8> {
+    render(&format!(
+        "<table style=\"width:500px;{style}\"><tr><td>{}</td></tr></table><p>AFTER</p>",
+        lines(1..=3)
+    ))
+}
+
+const FRAME: &str = "border:6px solid #888;padding:10px";
+
+#[test]
+fn a_table_height_includes_its_border_and_padding_under_border_box() {
+    // Chrome 141: the table is 100 px tall in total, so `Line0001` (6 + 10 + 4 px below the top) is 80 px above AFTER.
+    for prop in ["height", "min-height"] {
+        let pdf = sized_table(&format!("box-sizing:border-box;{prop}:100px;{FRAME}"));
+        assert_after_below_first(&pdf, 80.0, prop);
+    }
+    // Tailwind's `h-32 border` shape, scaled down: only a border, only padding.
+    let pdf = sized_table("box-sizing:border-box;height:100px;border:1px solid #888");
+    assert_after_below_first(&pdf, 95.0, "border only");
+    let pdf = sized_table("box-sizing:border-box;height:100px;padding:10px");
+    assert_after_below_first(&pdf, 86.0, "padding only");
+}
+
+#[test]
+fn a_table_height_is_the_content_box_under_content_box() {
+    // 100 px of content box + 2 x (6 + 10) px = 132 px in total.
+    for prop in ["height", "min-height"] {
+        let pdf = sized_table(&format!("box-sizing:content-box;{prop}:100px;{FRAME}"));
+        assert_after_below_first(&pdf, 112.0, prop);
+    }
+}
+
+#[test]
+fn a_collapsed_border_table_height_includes_the_border_under_border_box() {
+    let pdf = sized_table(
+        "box-sizing:border-box;height:100px;border:1px solid #888;border-collapse:collapse",
+    );
+    assert_after_below_first(&pdf, 95.0, "1px");
+}
+
+#[test]
+fn a_table_height_smaller_than_its_rows_with_a_frame_changes_nothing() {
+    // Guard: 68 px of row + 32 px of frame = 100 px, whatever the (smaller) height says.
+    for bs in ["border-box", "content-box"] {
+        let pdf = sized_table(&format!("box-sizing:{bs};height:30px;{FRAME}"));
+        assert_after_below_first(&pdf, 80.0, bs);
+    }
+}
+
+#[test]
+fn a_display_table_div_height_includes_its_frame_under_border_box() {
+    // Chrome 141: no cell padding on a `display: table-cell` div; 100 px in total, `Line0001` 16 px below the top.
+    let div = |bs: &str| {
+        render(&format!(
+            "<div style=\"display:table;width:500px;height:100px;box-sizing:{bs};{FRAME}\"><div style=\"display:table-row\">\
+             <div style=\"display:table-cell\"><p>{}</p></div></div></div><p>AFTER</p>",
+            lines(1..=3)
+        ))
+    };
+    assert_after_below_first(&div("border-box"), 84.0, "border-box");
+    assert_after_below_first(&div("content-box"), 116.0, "content-box");
+}
+
+// ---- a table that is a flex or grid item ---------------------------------------------------------------------
+
+/// Two tables of `height:30px` with five lines each, in `wrapper`, then AFTER.
+fn two_tables_in(wrapper: &str, table_style: &str) -> Vec<u8> {
+    let table = format!(
+        "<table style=\"height:30px;{table_style}\"><tr><td>{}</td></tr></table>",
+        lines(1..=5)
+    );
+    render(&format!(
+        "<div style=\"{wrapper}\">{table}{table}</div><p>AFTER</p>"
+    ))
+}
+
+#[test]
+fn a_table_height_smaller_than_its_rows_is_a_minimum_for_a_flex_or_grid_item_too() {
+    // 5 lines + 2 x 4 px padding = 108 px; `Line0001` is 4 px below the top. Chrome 141: 104 px (row, grid); in a
+    // column the second table follows the first one: 108 + 104.
+    for (what, wrapper, style, px) in [
+        ("flex row", "display:flex", "width:50%", 104.0),
+        (
+            "flex column",
+            "display:flex;flex-direction:column",
+            "",
+            212.0,
+        ),
+        (
+            "grid",
+            "display:grid;grid-template-columns:1fr 1fr",
+            "",
+            104.0,
+        ),
+    ] {
+        assert_after_below_first(&two_tables_in(wrapper, style), px, what);
+    }
+}
+
+#[test]
+fn a_display_table_div_that_is_a_flex_item_is_not_clamped_to_its_height() {
+    let cell = format!(
+        "<div style=\"display:table-cell\"><p>{}</p></div>",
+        lines(1..=5)
+    );
+    let one = format!(
+        "<div style=\"display:table;height:30px;width:50%\"><div style=\"display:table-row\">{cell}</div></div>"
+    );
+    let pdf = render(&format!(
+        "<div style=\"display:flex\">{one}{one}</div><p>AFTER</p>"
+    ));
+    // No cell padding: 100 px of lines, Chrome 141: AFTER 100 px below the first line.
+    assert_after_below_first(&pdf, 100.0, "display:table div");
+}
+
+#[test]
+fn a_taller_table_height_for_a_flex_item_keeps_working() {
+    // Guard (green before and after): the item is 200 px (border-box) or 200 + 32 px (content-box) tall.
+    let table = |bs: &str| {
+        render(&format!(
+            "<div style=\"display:flex\"><table style=\"height:200px;width:50%;box-sizing:{bs};{FRAME}\"><tr><td>{}</td></tr></table></div><p>AFTER</p>",
+            lines(1..=5)
+        ))
+    };
+    assert_after_below_first(&table("border-box"), 180.0, "border-box");
+    assert_after_below_first(&table("content-box"), 212.0, "content-box");
+}
+
 // ---- guards: green before and after -------------------------------------------------------------------------
 
 #[test]
