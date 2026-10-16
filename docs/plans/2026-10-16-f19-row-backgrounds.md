@@ -1,6 +1,6 @@
 # F19 — Row and row-group backgrounds
 
-Date: 2026-10-16. Finding: F19 in `2026-10-15-m0-findings.md`. Status: in progress. Fix goes on `subapavel/fulgur`
+Date: 2026-10-16. Finding: F19 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (fulgur 0.40.0 + F1/F11/F12), carried via `[patch.crates-io]`. No Blitz change.
 
 ## 1. Problem
@@ -81,3 +81,19 @@ tolerance); 01, 02, 04 byte-identical.
 - Abutting per-cell fills may show hairline seams; merge contiguous colour rects of a row if visible.
 - Not done: row/group `opacity`, `visibility: collapse`, `empty-cells: hide`, `<col>` backgrounds, `display: table`
   divs (as F12), `background-attachment`, row borders (F22 / Blitz #386), `border-spacing` layout (F21).
+
+## 7. As landed
+
+- Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `df07296` (record row / row-group backgrounds, output-neutral,
+  10 unit tests), `187ebb3` (paint them behind their cells from `draw_table_v2` / `draw_under_clip_table`, 9 smoke
+  tests), `0c01f71` (the F12 repeated header paints its group's backgrounds inside the `/Artifact`, 3 smoke tests).
+  Fork 1908 lib + 225 smoke tests, clippy clean, all 21 example goldens byte-identical, fulgur-vrt green.
+- Deviations: extra `Drawables::table_header_background_owners` so the repeated header finds its backgrounds even
+  when its cells draw nothing; cell rects use the fragment size; tests use `Page { margin_mm: 0.0 }` because the
+  default page margin overrides `@page { margin: 0 }` (F6).
+- Chrome 141 check of test 1: a row background leaves a missing cell bare (`(75,75)` white) — confirmed.
+- No hairline seams between per-cell fills at 96/150/300 dpi.
+- Compare: 03 8.2 → 6.2 % (threshold 0.09 → 0.072; the rest is mostly the missing logo, F9); 05 PDF changes, number
+  unchanged (tints below the 32/255 tolerance); 01, 02, 04 byte-identical.
+- Known gaps: image/gradient row backgrounds on a cell whose own content splits across pages are positioned against
+  the slice; the non-goals of §6.

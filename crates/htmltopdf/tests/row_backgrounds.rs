@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use htmltopdf::{RenderOptions, Renderer};
+use htmltopdf::{Page, RenderOptions, Renderer};
 
 const RED: [u8; 3] = [255, 0, 0];
 const GREEN: [u8; 3] = [0, 128, 0];
@@ -38,7 +38,12 @@ fn row_paints_its_cells_only() {
     );
     let page = rasterise(&pdf, 1, 48);
     assert_pixel(&page, at(0, 0), RED, "row 1, cell without background");
-    assert_pixel(&page, at(1, 0), GREEN, "row 1, cell with its own background");
+    assert_pixel(
+        &page,
+        at(1, 0),
+        GREEN,
+        "row 1, cell with its own background",
+    );
     assert_pixel(&page, at(0, 1), BLUE, "row 2, its only cell");
     assert_pixel(&page, at(1, 1), WHITE, "row 2, the cell it does not have");
 }
@@ -166,14 +171,20 @@ fn root() -> PathBuf {
         .unwrap()
 }
 
-/// A margin-less page with `css` and `body` inside.
+/// A margin-less A4 page (`Page::margin_mm` wins over `@page`) with `css` and `body` inside.
 fn render(css: &str, body: &str) -> Vec<u8> {
     Renderer::builder()
-        .css(format!("@page {{ margin: 0 }} body {{ margin: 0 }} {css}"))
+        .css(format!("body {{ margin: 0 }} {css}"))
         .build()
         .render(
             &format!("<!doctype html><html><body>{body}</body></html>"),
-            &RenderOptions::default(),
+            &RenderOptions {
+                page: Page {
+                    margin_mm: 0.0,
+                    ..Page::A4
+                },
+                ..Default::default()
+            },
         )
         .expect("render")
 }
@@ -313,10 +324,8 @@ fn word_bbox(pdf: &[u8], word: &str) -> (f32, f32, f32, f32) {
 fn temp(pdf: &[u8], ext: &str) -> PathBuf {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!(
-        "htmltopdf-rowbg-{}-{n}.{ext}",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("htmltopdf-rowbg-{}-{n}.{ext}", std::process::id()));
     std::fs::write(&path, pdf).unwrap();
     path
 }
