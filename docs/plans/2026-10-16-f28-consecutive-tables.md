@@ -84,3 +84,11 @@ tables, splitting nested inline roots.
   whose bottom padding / explicit height is what doesn't fit still overflows as before.
 - Known: no keep-with-next, so a heading can stay on the page before its moved grid/table; a header that fits while
   the first body row does not is still orphaned (F12 step 5).
+- After `vrt-validator` (PR #16), fork `cac4b47` (the class C gap is measured from the content edge: a table's own
+  border / padding is not a gap, so a bordered table moves whole instead of leaving an empty frame on the old page),
+  `6813c55` (no push when the first row is taller than a page — it wasted pages: 9 vs Chrome 5), `3d0b483` (body
+  children Blitz lays out side by side — `display: contents` tables, which Blitz treats as inline-level — no longer
+  advance the cursor one by one: 60 rows once on one page instead of 40 + a blank page; Chrome stacks them on 2 pages,
+  which needs a Blitz fix), `87d65a4` (re-blessed `examples/break-inside`: the padded callout now moves to page 2
+  whole). consecutive_tables.rs 12 tests. Fixtures byte-identical.
+- Pre-existing gaps the validator found are recorded as F29–F31.

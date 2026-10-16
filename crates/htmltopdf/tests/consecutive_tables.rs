@@ -229,6 +229,107 @@ fn a_table_whose_header_does_not_fit_moves_whole_and_repeats_its_header() {
     }
 }
 
+/// First page rasterised at 72 dpi (1 px = 1 pt) as `(width, height, 8-bit grey pixels)`.
+fn page_one_pixels(pdf: &[u8]) -> (usize, usize, Vec<u8>) {
+    let path = temp(pdf);
+    let prefix = path.with_extension("");
+    let status = std::process::Command::new("pdftoppm")
+        .args(["-gray", "-r", "72", "-f", "1", "-l", "1", "-singlefile"])
+        .arg(&path)
+        .arg(&prefix)
+        .status()
+        .expect("pdftoppm (poppler-utils) is required for this test and was not found in PATH");
+    assert!(status.success(), "pdftoppm failed");
+    let pgm = prefix.with_extension("pgm");
+    let bytes = std::fs::read(&pgm).expect("pgm");
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&pgm);
+    // "P5\n<w> <h>\n255\n" followed by the raw pixels.
+    let mut fields = Vec::new();
+    let mut at = 0;
+    while fields.len() < 4 {
+        while bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let start = at;
+        while !bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        fields.push(String::from_utf8_lossy(&bytes[start..at]).into_owned());
+    }
+    let (w, h) = (fields[1].parse().unwrap(), fields[2].parse().unwrap());
+    (w, h, bytes[at + 1..].to_vec())
+}
+
+#[test]
+fn a_bordered_table_that_moves_leaves_no_frame_on_the_page_it_left() {
+    // The table's own border is not a gap a break may use (css-break-3 §4.1): the whole table moves, and
+    // nothing of it (not even an empty bordered frame) is drawn on page 1 under the spacer.
+    let rows: String = (1..=3)
+        .map(|i| format!("<tr><td>Radek{i:02}</td></tr>"))
+        .collect();
+    let table = format!(
+        "<table style=\"border-collapse:collapse;border:1px solid #333;width:100%\">{rows}</table>"
+    );
+    // 985 px of 1009 px: less than the table's first row below the spacer.
+    let pdf = render(&format!("<div style=\"height:985px\"></div>{table}"));
+    let found = words(&pdf);
+    assert_eq!(found.len(), 3, "{found:?}");
+    assert!(found.iter().all(|(page, _, _)| *page == 2), "{found:?}");
+    let (w, h, pixels) = page_one_pixels(&pdf);
+    // Below the spacer (15 mm margin + 985 px = 781.3 pt) page 1 is blank.
+    let first_row = (MARGIN_PT + 985.0 * 0.75).ceil() as usize + 1;
+    for y in first_row..h {
+        let row = &pixels[y * w..(y + 1) * w];
+        assert!(
+            row.iter().all(|&p| p == 255),
+            "page 1 has ink at y={y} below the spacer"
+        );
+    }
+}
+
+#[test]
+fn tables_under_display_contents_are_all_printed_once() {
+    // Blitz lays these out side by side instead of stacking them; nothing may be dropped (it used to lose 20
+    // of 60 rows to a second, blank page).
+    let body: String = (1..=60).map(one_row_table).collect();
+    let pdf = render(&format!("<div style=\"display:contents\">{body}</div>"));
+    let found = words(&pdf);
+    let seen: Vec<&str> = found.iter().map(|(_, _, w)| w.as_str()).collect();
+    let mut expected: Vec<String> = radek(1..=60);
+    expected.sort();
+    let mut sorted: Vec<&str> = seen.clone();
+    sorted.sort();
+    assert_eq!(
+        sorted,
+        expected.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    let limit = PAGE_H_PT - MARGIN_PT + SLACK_PT;
+    assert!(found.iter().all(|(_, y, _)| *y <= limit), "{found:?}");
+}
+
+#[test]
+fn a_block_taller_than_a_page_does_not_waste_pages() {
+    // Four blocks whose first row (1100 px) is taller than a page: moving one to a fresh page gains nothing.
+    let paragraphs: String = (1..=20)
+        .map(|i| format!("<p style=\"margin:0;height:24px\">Radek{i:02}</p>"))
+        .collect();
+    let blocks: String = (21..=24)
+        .map(|i| {
+            format!(
+                "<div><div style=\"height:1100px\">Radek{i:02}</div><p style=\"margin:0\">Odstavec{i:02}</p></div>"
+            )
+        })
+        .collect();
+    let pdf = render(&format!("{paragraphs}{blocks}"));
+    let found = words(&pdf);
+    assert_eq!(found.len(), 28, "{found:?}");
+    // 480 + 4 x (1100 + one line) is 5 pages of 1009 px; before the fix each block got a page of its own and
+    // the document had 9.
+    let pages = page_count(&pdf);
+    assert!(pages <= 5, "{pages} pages");
+}
+
 fn temp(pdf: &[u8]) -> std::path::PathBuf {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
