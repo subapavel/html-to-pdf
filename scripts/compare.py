@@ -33,8 +33,9 @@ THRESHOLDS = {
     "01-basic": 0.05,
     # 02: re-baselined by F5 (4 → 3 pages, ADR-0003); F12 (repeated thead) 10.3 / 11.8 / 9.6 → 10.3 / 11.5 / 9.9 %
     #     (p3 grew 0.3: the header band is content that was missing). Rows still drift against Chrome's because
-    #     collapsed `<tr>` borders are not painted (Blitz #386) and cells are not vertically centred (F13).
-    "02-long": 0.125,
+    #     collapsed `<tr>` borders are not painted (Blitz #386, F22). F13 (vertical-align) 10.3 / 11.5 / 9.9 →
+    #     10.2 / 11.4 / 9.8 %.
+    "02-long": 0.124,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %; F19 (row backgrounds) 03 8.2 → 6.2 %.
     # 03: the rest is mostly the missing logo (F9, auto-size <img>).
     "03-logo-qr": 0.072,
