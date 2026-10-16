@@ -74,6 +74,7 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
             && (word.starts_with("Line")
                 || word.starts_with("BOX")
                 || word.starts_with("BLine")
+                || word.starts_with("CLine")
                 || matches!(
                     word,
                     "1." | "right" | "AFTER" | "Item" | "NEXTROW" | "short"
@@ -889,6 +890,63 @@ fn a_flex_or_grid_row_of_two_tall_paragraphs_ends_with_the_taller_one() {
             b_lines(1..=80)
         ));
         assert_row_of_two_tall(&pdf, row);
+    }
+}
+
+fn c_lines(range: std::ops::RangeInclusive<usize>) -> String {
+    range
+        .map(|i| format!("CLine{i:04}"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+#[test]
+fn a_row_of_three_paragraph_cells_ends_with_the_tallest_cell() {
+    // `<td><p>` cells are stretched to the row: the space a shorter cell's frame has below its last line is not
+    // content, so it must not push what follows the row below the tallest cell (Chrome: AFTER right below it).
+    for (what, cells) in [
+        (
+            "tallest last",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                b_lines(1..=90),
+                c_lines(1..=60),
+                lines(1..=120)
+            ),
+        ),
+        (
+            "tallest first",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                lines(1..=120),
+                b_lines(1..=90),
+                c_lines(1..=60)
+            ),
+        ),
+        (
+            "tallest in the middle",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                b_lines(1..=60),
+                lines(1..=120),
+                c_lines(1..=90)
+            ),
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr>{cells}</tr></table><p>AFTER</p>"),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=120));
+        assert_eq!(pages, 3, "{what}");
+        let found = words(&pdf);
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (last_page, last_y) = word_at(&found, "Line0120");
+        assert_eq!(after_page, last_page, "{what}");
+        assert!(
+            after_y > last_y && after_y - last_y <= 20.0,
+            "{what}: AFTER at {after_y}pt, the last line of the tallest cell at {last_y}pt"
+        );
     }
 }
 

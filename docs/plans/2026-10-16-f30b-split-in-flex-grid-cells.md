@@ -197,3 +197,16 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
   introduced here and not fixed here. `<td><p>` B cells still end 2 lines on page 3 and put `AFTER` low (pre-existing).
 - Left to F30h: `align-items: center | flex-end | baseline` rows and `grid-row: span 2` with a tall `<p>` lose lines
   silently (pre-existing, same with `div > p`); F30b covers stretch / start-aligned rows only.
+- Second `vrt-validator` run (fork `ed2d4f4` pinned): the row-end maximum compared the cursors the cells return, and
+  a stretched `<td><p>` cell returns its content end plus the stretch between its last line and the bottom of the row
+  (`closing`). A shorter cell then ended later than the tallest one (`x3c_p`: 90 / 60 / 120 lines, AFTER 12 lines too
+  low; also `xcol2`, `xth4_p`, `xseq2_p`, `xoff1_p`). Fork `8cd0e8c`: `fragment_block_subtree` also returns that stretch
+  and the row end is taken without it. Tests: `a_row_of_three_paragraph_cells_ends_with_the_tallest_cell` (ours, 3
+  orders, red before) and fork `a_row_of_paragraph_cells_ends_below_the_tallest_cells_content` (red before).
+  All 200 probes of `names*.txt` were re-run: 179 are byte-identical to the `ed2d4f4` build and 21 changed (`ctl_td_two_p`,
+  `next_row_two_p`, `x3a_p`–`x3f_p`, `x4a_p`–`x4d_p`, `xcol2`, `xfl2`, `xfl5`, `xmix2`, `xmix3`, `xoff1_p`, `xoff9_p`,
+  `xseq2_p`, `xth4_p`; all now at Chrome's AFTER / NEXTROW position, `xmix2` / `xmix3` 3 px low, `xseq2_p` and
+  `xth4_p` at Chrome's page count); `xth2` (direct text, header repeat) stays at
+  6 pages against Chrome's 5 because the repeated-header strips hold one line fewer than Chrome's from page 2 on
+  (pre-existing in e664406, unrelated to row ends).
+
