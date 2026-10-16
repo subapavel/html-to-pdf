@@ -1,6 +1,6 @@
 # F9 — `<img>` without `width`/`height` attributes is not rendered
 
-Date: 2026-10-16. Finding: F9 in `2026-10-15-m0-findings.md`. Status: in progress. Fix goes on `subapavel/fulgur`
+Date: 2026-10-16. Finding: F9 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours`, carried via `[patch.crates-io]`. No Blitz change.
 
 ## 1. Problem
@@ -61,3 +61,23 @@ logo looks ≈150×37 px, not 48 px tall). Compare: 03 drops; 01, 02, 04, 05 byt
 Seeding must happen before the first resolve; corrupt headers → no seeding (today's behaviour); viewBox-only SVG
 natural size differs from Chrome. Not done: `<img>` in `@page` margin boxes (built with no assets), warning on an
 unregistered `src`, JPEG EXIF orientation / density, `srcset`/`<picture>`, `width="50%"` attributes.
+
+## 7. As landed
+
+- Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `545b016` (bundled raster `<img>` get their natural size in layout:
+  `seed_image_natural_sizes` feeds Blitz `Resource::Image` with header-only `decode_dimensions` before the first
+  resolve), `5b43669` (bundled SVG `<img>` seeded and painted via `insert_svg_entry`). 4 + 1 unit tests, 3 + 1 smoke
+  tests; 21 example goldens byte-identical.
+- Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `4787ff3` — a block-level replaced element with
+  `width: auto` is no longer stretched to the container width by Taffy's block layout (CSS 2.1 §10.3.4; Taffy 0.9.2
+  `compute/block.rs` stretches every block child, `TODO: Allow stretch-sizing to be conditional`). Without it, F9 would
+  have turned "logo missing" into "logo stretched to page width" for Tailwind's preflight `img{display:block}`.
+  Only block-layout calls are affected (flex / grid / absolute pass `vertical_margins_are_collapsible = false`).
+- Logo size question: `logo.png` is 240×72 px (no pHYs); `h-12 w-auto` → 160×48 CSS px; Chrome's "150×37" is the
+  opaque part inside the PNG's transparent frame.
+- `img_natural_size.rs`: 14 tests (bare, height-only ratio, `width:50%`, `width` attr only, table cell, SVG, both
+  attrs, missing src, fixture 03 logo within ±2 px of Chrome, block-level not stretched / clamped by `max-width` /
+  `width:100%` fills / `margin:0 auto` centres / flex items unchanged). Chrome 141 matches every case within 1 px.
+- Compare: 03 6.2 → 5.7 % (threshold 0.072 → 0.067); 01, 02, 04, 05 byte-identical.
+- Known: block-level `<svg>`/`<canvas>` with `width:auto` follow the same rule (not separately tested); the
+  `@page` margin-box `<img>`, unregistered-`src` warning, EXIF orientation, `srcset` remain non-goals.

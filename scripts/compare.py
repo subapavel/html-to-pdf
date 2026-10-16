@@ -37,8 +37,8 @@ THRESHOLDS = {
     #     10.2 / 11.4 / 9.8 %.
     "02-long": 0.124,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %; F19 (row backgrounds) 03 8.2 → 6.2 %.
-    # 03: the rest is mostly the missing logo (F9, auto-size <img>).
-    "03-logo-qr": 0.072,
+    # F9 (<img> natural size: the logo renders) 03 6.2 → 5.7 %.
+    "03-logo-qr": 0.067,
     "04-bilingual-vat": 0.06,
     # 05: the rest is mostly the header printed inside the page margin instead of full-bleed (F6) and the
     #     totals box sitting lower than in Chrome.

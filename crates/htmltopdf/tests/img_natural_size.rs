@@ -7,7 +7,7 @@
 //! Asserted on pixels via poppler's `pdftoppm`: at 96 dpi one device pixel is one CSS px, the page is
 //! margin-less, and the checked box is the bounding box of the non-white pixels of a solid red image, so it
 //! is the image's border box to within anti-aliasing (`TOL` px). The images are inline (the default), like
-//! the ones in an unstyled document; block-level images are `block_level_img_is_not_stretched`.
+//! the ones in an unstyled document; the `block_level_*` tests use Tailwind's `display: block` preflight.
 
 use std::path::{Path, PathBuf};
 
@@ -77,25 +77,84 @@ fn svg_img() {
     assert_bbox(&page, (0, 0, 200, 100), "SVG <img> with height only");
 }
 
+/// Tailwind's preflight rules for images (`img { display: block; max-width: 100%; height: auto }`).
+const PREFLIGHT: &str =
+    "img { display: block; vertical-align: middle; max-width: 100%; height: auto }";
+
 #[test]
-#[ignore = "Taffy block layout stretches every non-table block child to the container width (taffy 0.9.2 compute/block.rs, \
-            `TODO: Allow stretch-sizing to be conditional`), so Tailwind's `img { display: block }` makes an unsized <img> \
-            container-wide; CSS 2.1 §10.3.4 wants the natural width"]
 fn block_level_img_is_not_stretched() {
-    let css = "img { display: block }";
-    let page = rasterise(&render(css, r#"<img src="red.png">"#));
-    assert_bbox(&page, (0, 0, W as i64, H as i64), "display: block <img>");
-    let page = rasterise(&render(css, r#"<img src="red.png" style="height: 60px">"#));
-    assert_bbox(&page, (0, 0, 120, 60), "display: block <img>, height only");
+    // Taffy's block layout hands every block child the container width; a replaced element with
+    // `width: auto` is sized by the inline-replaced rules instead (CSS 2.1 §10.3.4). Chrome 141 gives the
+    // same boxes.
+    let page = rasterise(&render(PREFLIGHT, r#"<img src="red.png">"#));
+    assert_bbox(&page, (0, 0, W as i64, H as i64), "preflight, bare <img>");
+    // Tailwind `h-12 w-auto`.
     let page = rasterise(&render(
-        css,
+        PREFLIGHT,
+        r#"<img src="red.png" style="height: 48px; width: auto">"#,
+    ));
+    assert_bbox(&page, (0, 0, 96, 48), "preflight, h-12 w-auto");
+    let page = rasterise(&render(PREFLIGHT, r#"<img src="red.png" width="100">"#));
+    assert_bbox(&page, (0, 0, 100, 50), "preflight, width=100 only");
+    let page = rasterise(&render(
+        "img { display: block }",
         r#"<img src="red.png" width="120" height="36">"#,
     ));
-    assert_bbox(
-        &page,
-        (0, 0, 120, 36),
-        "display: block <img>, both attributes",
+    assert_bbox(&page, (0, 0, 120, 36), "display: block, both attributes");
+    let page = rasterise(&render(PREFLIGHT, r#"<img src="red.svg">"#));
+    assert_bbox(&page, (0, 0, 100, 50), "preflight, bare SVG <img>");
+}
+
+#[test]
+fn block_level_img_wider_than_its_container_is_clamped() {
+    // 600 x 300 natural size in a 400 px box: `max-width: 100%` clamps it and the ratio is kept.
+    let page = rasterise(&render(
+        PREFLIGHT,
+        r#"<div style="width: 400px"><img src="wide.png"></div>"#,
+    ));
+    assert_bbox(&page, (0, 0, 400, 200), "600x300 image in a 400 px box");
+}
+
+#[test]
+fn block_level_img_with_width_100_percent_fills_its_container() {
+    // The intended stretch: `w-full`.
+    let page = rasterise(&render(
+        PREFLIGHT,
+        r#"<div style="width: 400px"><img src="red.png" style="width: 100%"></div>"#,
+    ));
+    assert_bbox(&page, (0, 0, 400, 200), "width: 100% of 400 px");
+}
+
+#[test]
+fn block_level_img_keeps_auto_margins() {
+    // `margin: 0 auto` centres the image at its natural width: (794 - 80) / 2 = 357 px from the left
+    // (Chrome 141: 356, the page is 793.7 px wide).
+    let page = rasterise(&render(
+        PREFLIGHT,
+        r#"<img src="red.png" style="margin: 0 auto">"#,
+    ));
+    let (x0, _, x1, _) = page.bbox().expect("nothing was painted");
+    assert!(
+        (x0 - 356).abs() <= 2 && (x1 + 1 - x0 - W as i64).abs() <= TOL,
+        "centred image spans {x0}..{x1}, expected 356..436"
     );
+}
+
+#[test]
+fn flex_item_img_keeps_flex_sizing() {
+    // Flex items are not touched by the block rule: a row item keeps its natural size, a column item
+    // stretches across the cross axis and the ratio fills the height (Chrome 141: 300 x 150).
+    let css = "img { display: block }";
+    let page = rasterise(&render(
+        css,
+        r#"<div style="display: flex"><img src="red.png"></div>"#,
+    ));
+    assert_bbox(&page, (0, 0, W as i64, H as i64), "image in a flex row");
+    let page = rasterise(&render(
+        css,
+        r#"<div style="display: flex; flex-direction: column; width: 300px"><img src="red.png"></div>"#,
+    ));
+    assert_bbox(&page, (0, 0, 300, 150), "image in a flex column");
 }
 
 #[test]
@@ -172,13 +231,14 @@ fn root() -> PathBuf {
         .unwrap()
 }
 
-/// A margin-less A4 page with `css` and `body` inside; `red.png` (80 × 40) and `red.svg` (100 × 50) are
-/// registered.
+/// A margin-less A4 page with `css` and `body` inside; `red.png` (80 × 40), `wide.png` (600 × 300) and
+/// `red.svg` (100 × 50) are registered.
 fn render(css: &str, body: &str) -> Vec<u8> {
     Renderer::builder()
         .css(format!("body {{ margin: 0 }} {css}"))
         .image("red.png", solid_png(W, H, [255, 0, 0]))
         .image("red.svg", SVG.as_bytes().to_vec())
+        .image("wide.png", solid_png(600, 300, [255, 0, 0]))
         .build()
         .render(
             &format!("<!doctype html><html><body>{body}</body></html>"),
