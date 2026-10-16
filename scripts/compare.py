@@ -64,6 +64,12 @@ THRESHOLDS = {
     #     page match (3 pages; before F48: 2 pages, wrapped rows overlapping the next row, 6.4 / 6.7 / 0.6 %).
     #     Worst page + 1 point.
     "09-fixed-row-height": 0.061,
+    # 10: new in F50 (items as `tr.block` / `td.block` cards with a `td.flex justify-between` line, totals as `td.flex`).
+    #     5.9 / 1.5 %: before F50 the items and totals were not painted at all (1 page instead of Chrome's 2, 5.1 / 1.2 %
+    #     of mostly empty page). The rest is text drift (cards come out 0.5 px shorter than Chrome's, adding up over 10
+    #     cards) and the card separator lines Chrome paints as `<tr>` borders and we do not (Blitz #386, F22).
+    #     Worst page + 1 point.
+    "10-stacked-items": 0.069,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

@@ -1,6 +1,6 @@
 # F50 — A table part whose `display` is not a table display loses its content
 
-Date: 2026-10-16. Finding: F50 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/blitz`
+Date: 2026-10-16. Finding: F50 in `2026-10-15-m0-findings.md`. Status: **landed**. Fix goes on `subapavel/blitz`
 `htmltopdf/blitz-dom-0.2.4` (anonymous table objects) plus a small change on `subapavel/fulgur` `htmltopdf/srgb-colours`
 (convert walk, row backgrounds), both carried via `[patch.crates-io]`.
 
@@ -143,3 +143,66 @@ item order. Commit the Chrome reference; threshold = worst page + 1 point.
 - Non-goals: F50b (missing-parent fixup, `construct.rs` `_` arm: `table.block`, `tr.block` cells side by side, cells
   outside tables, the stdout `println!`); `white-space: pre` in a run; a second `<caption>`; `inline-table`; `rowspan`
   (F15); real `baseline` (F26); collapsed borders around anonymous cells (Blitz #386).
+
+## 7. As landed
+
+- Forks. `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `77a8593` (one commit: `create_anonymous_block` and `push_cell_item`
+  extracted, then `table_part_of`, `plan_row`, `plan_table_children`, `flatten_contents`, `collect_table_children`,
+  `collect_row`, `collect_row_group`, `push_row_slots`; 11 new unit tests, `cargo test -p blitz-dom` 26 passed). The
+  extraction was checked output-neutral on its own (fixtures 01-09 `cmp` identical) before the rest went in.
+  `subapavel/fulgur` `htmltopdf/srgb-colours`: `e81629c` (`anonymous_table_wrapper`, `convert_table`, `row_cells` /
+  `cell_box` / group loop in `collect_row_backgrounds`; 3 lib tests, 1 `render_smoke` case). Pinned in `Cargo.lock`.
+- Tests. `crates/htmltopdf/tests/table_fixup.rs`, 14 tests (the plan's 1-10). Red before the fix: 12 of 14 (`A0000` ..
+  `A0004` not printed and `N` 47 pt below; flex cell `B0000` missing; `X`, `Y` missing; `R1b`-`R5b` missing, `IA`
+  missing; `U1` missing for `tr.block`, `tr.flex`, `tbody.block`; `Title` missing for the card; `K3` 14 pt *above* `K1`
+  and `K2` on the same row as `K1`; 120 `Desc` words missing; the pixel inside the flex cell white instead of `#eee`),
+  green before and after: `td.hidden` leaves no gap, whitespace between cells creates no cell. After the Blitz fix alone
+  12 of 14 were green; the row-background test (9) needed the fulgur change. Whole `cargo test --release --locked` green
+  (23 binaries; `fixed_height_cells` 19, `cell_vertical_align` 14, `nested_paragraph_split` 35 + 1 ignored). fulgur with
+  our Blitz: lib 1989 (was 1985), `render_smoke` 237, `fulgur-vrt` all green with its goldens untouched;
+  `examples_determinism` only `committed_svg_matches_rendered` (environment). `cargo fmt`, `clippy -D warnings` green in
+  ours and fulgur; Blitz fmt clean, clippy has the same 4 warnings before and after.
+- Chrome 141 vs ours (`out/scratch/f50/`, pt, y = baseline of the word; Chrome / ours after, before in brackets):
+  - P1 `tb_blk_noh`: `N` 81 pt below `A0000` in both (before 47 pt from the top, five `A` lines missing); `A0000` at the
+    same x as `N`.
+  - P2 `C1 | X Y | C4`: `X` and `Y` one 21 pt line apart, same x (ours 215.8, Chrome 223.4: the auto column widths differ);
+    `N` 21 below `Y`; `C4` x 382 vs 354.
+  - P3 flex cell with `height:30px`: content-box `N` 28.5 pt below `A0000` (Chrome 28.5), border-box 22.5 (Chrome 22.5);
+    `B0000` on the line of `A0000`, x 80.0 vs 79.7.
+  - P4 `grid`, `inline-block`, `list-item`, `contents`, nested `display:table`: all words printed, same rows. Offsets
+    from Chrome: `inline-block` 6.6 pt lower (it is 6.6 pt lower in an ordinary cell too, `p4c`), nested table keeps the
+    `td` padding (Chrome does not), columns narrower. Two `inline` cells on one line, `IB` right of `IA`; no horizontal
+    padding on inline boxes in ours, so without a space the words merge (`IAIB`).
+  - P5 `tr.block` with real cells: Chrome puts `U1 U2` side by side (nested anonymous table), ours stacks them (F50b); with
+    `tr.flex` ours matches (`U2` x 64.3 vs 63.8). `T2` 21 pt below `U1` for `tr.flex` (Chrome 21); `tr.block`: 42 (stacked), Chrome 21.
+  - P6 `tbody.block`: every word, `T2` 122.3 vs 122.5, `AFTER` 140.3 vs 140.5; with a normal `thead` (`H1`, `H2`) `U1`..`U3`
+    match, `H2` at x 309.5 vs 385.2 (column widths); `tbody.block` with background, border and padding matches
+    (`p6c.cmp.png`: the wrapper paints the block's own frame).
+  - P7 bare `table-cell` K1, K2 then a row with K3: `K1`, `K2` on one line, `K3` 15 pt below, as Chrome (before: `K3`
+    above). A cell after a row: `K2` below `K1`, same x (before: the same line).
+  - P8 `table.block` (and `p8w`, pretty-printed): unchanged, wrong layout (all cells on one line) and 2028 bytes of `ERROR:
+    Tried to lay out text node individually` on stdout from `layout/mod.rs:149`: F50b.
+  - P9 `tr { background:#e6e6e6 }` with a `td.flex`: pixel in the flex cell `(230, 230, 230)` as Chrome (before white).
+  - P10 normal `thead` with a `th.block` first cell, 120 rows: header `HD` on all 4 pages, 4 pages (before: `HD` missing
+    everywhere); the rows match Chrome's (`r60` 584.3 vs 584.5, `r120` 374.3 vs 374.5).
+- Fixtures. 01-09: PDFs byte-identical to the main (`db81570`) build (also `cmp` against the F48 head binary); the
+  `compare.py` numbers are unchanged. New fixture 10-stacked-items: Chrome 2 pages; ours before 1 page (5.1 / 1.2 %, the items
+  and totals missing), after 2 pages, 5.9 / 1.5 %, item 10 / 11 split at the same place, header repeated; threshold 0.069
+  (worst page + 1 point). The residual is text drift (a card 0.5 px shorter) and the `<tr>` rules (Blitz #386, F22).
+- Timing, 2000-row table (5 renders, release): plain 187-266 ms before 201-249 ms, output byte-identical; the same table with
+  `<td style="display:block">` in the last column: before 202-237 ms (the cell was dropped), after 281-339 ms (2000 anonymous
+  cells and 2000 more words are now laid out and painted).
+- stdout: fixtures 01, 03-10 print nothing; 02 prints 216 bytes of CSS parse errors, the same with the F48 head binary.
+- Deviations from the design: (1) `Level` has two variants (`Table`, `RowGroup`) and a row is planned by `plan_row`
+  directly, instead of a third `Level::Row`; (2) Blitz is one commit, not three; (3) a `display: contents` element now
+  takes part in the fixup: the old `Contents` arm of `collect_table_cells` was dead code (`display: contents` has outside
+  `none`, so it was skipped as hidden), so its content was lost; (4) a table-part `display` that is out of place (a `tr` in
+  a `tr`, a `tbody` in a `tbody`) is wrapped like any other box where the old code recursed into it; (5) a fulgur
+  pagination test changed: a `<p>` that is a non-cell child of a `display: table` div used to be "placed as one unit", it is
+  now in an anonymous cell and splits between lines like a real cell's paragraph (new test
+  `a_paragraph_that_is_a_non_cell_child_of_a_table_box_splits_in_its_anonymous_cell`); (6) the `tbody.block` words were
+  already printed with the Blitz fix alone (the block `tbody` is reached through its zero-size parent); the fulgur wrapper is
+  needed for its own background and border.
+- Not verified: the F50b cases above; `vrt-validator` (run by the coordinator); the fulgur lib tests were not run
+  red-before in isolation (the anonymous-cell background is covered end to end by `table_fixup` test 9, red before the fulgur
+  change); CSS 2.1 §17.2.1 wording is from memory (not re-read), as in §2.
