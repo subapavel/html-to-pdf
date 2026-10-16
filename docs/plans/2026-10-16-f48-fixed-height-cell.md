@@ -1,7 +1,7 @@
 # F48 — A table cell with a `height` smaller than its content cuts or overlaps the content
 
-Date: 2026-10-16. Finding: F48 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/blitz`
-`htmltopdf/blitz-dom-0.2.4`, carried via `[patch.crates-io]`; no fulgur change expected (§3).
+Date: 2026-10-16. Finding: F48 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/blitz`
+`htmltopdf/blitz-dom-0.2.4`, carried via `[patch.crates-io]`; no fulgur change (§3).
 
 ## 1. Problem
 
@@ -114,3 +114,41 @@ row positions. Commit the Chrome reference and a `compare.py` threshold of the w
 - Non-goals: `height`/`max-height` on `thead`/`tbody`/`tr` beyond today (row groups are not grid items); percentage and
   `calc()` cell or table heights; the legacy `<td height>` attribute (in scope only if Stylo maps it, checked in P1);
   changing `min-height` semantics (stays a row minimum, as F13 made it); `rowspan` (F15); siblings of a split cell (F35).
+
+## 7. As landed
+
+- Fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `117c57d` (`height_as_table_minimum` extracted from
+  `collect_table_cells`, `max_size.height = auto` added, 4 unit tests), `ebb49fb` (called from `flush_styles_to_layout`
+  for `DisplayInside::TableCell` and from `build_table_context`). No fulgur change: red tests 4-6 went green with the
+  Blitz fix alone, so the §3 fallback was not needed.
+- Tests: `fixed_height_cells.rs`, 11 tests; 6 red before (cell `height` smaller than content: NEXT 36 pt instead of
+  81 pt below line 1; the same under `border-box`: 30 pt; `z_tdh_one`: 53 of 120 lines; `y_tdh_small`: 53 of 120 A lines;
+  `max-height` cell: 36 pt; `<table style="height:40px">`: AFTER above the last row), 5 green before and after
+  (`height` larger than the content, content-box 68 px / border-box 60 px; `min-height` + 120 lines; `tr { height }` +
+  120 lines; `td { height: 1500px }` + 120 lines; `middle` equals `top` for a cell with a small `height`). Whole
+  `cargo test --release` green (all htmltopdf test binaries, incl. `cell_vertical_align` 14, `nested_paragraph_split`
+  35 + 1 ignored). Blitz `cargo test -p blitz-dom` 13 passed. fulgur with the patched Blitz: lib 1985, `render_smoke`
+  236, `fulgur-vrt` all green with its goldens untouched.
+- Chrome 141 probes (`out/scratch/f48/`, page-relative px from `Line0001` to the next row's text), ours before (a
+  scratch build of the F30b branch) / after F48:
+  - P1 `td height:40px`, 5 lines, then NEXT: Chrome 108, before 48, after 108.
+  - P2 `border-box`: 5 lines + `height:40px` 108 / 40 / 108; one line + `height:60px`: content-box 68, border-box **60**
+    (Chrome; before and after 68 / 60).
+  - P3 `max-height:40px` with 5 lines: Chrome **ignores** it (108), before 48, after 108; `max-height:100px` with 10
+    lines: Chrome 208, before 108, after 208. Same as our rule.
+  - P4 `<table height:40px>` with 5 rows, AFTER: Chrome 136 (AFTER below the rows), before 36, after 136;
+    `height:300px`: Chrome and ours 296 (extra height is shared between the rows, unchanged).
+  - P5 `min-height:40px` cell with 5 lines: Chrome 108, ours 108. `min-height:200px` with one line: Chrome **28**
+    (ignores it), ours 208 (F13 made `min-height` a row minimum; unchanged, a non-goal here).
+- Fixture 09: Chrome 3 pages; ours before 2 pages, 6.4 / 6.7 / 0.6 % (rows 19, 27 overlapping the next row); after 3
+  pages, 5.1 / 4.9 / 0.7 %, the same rows on every page as Chrome (1-15, 16-33, 34-35 + total); threshold 0.061. The
+  residual is text drift and the `<tr>` row rules (F22).
+- Fixtures 01-08: PDFs byte-identical to the build before (`cmp`); `compare.py` numbers unchanged.
+- Timing, 2000-row table (`out/scratch/big2000.html`, 5 renders): before 240-305 ms, after 213-239 ms (noise), output
+  byte-identical; the same table with `td { height: 30px }`: after 201-314 ms (before, same table: 227-294 ms).
+- Guard probe for the §6 risk (`q1.html`: `height:100px` top cell with a `height:100%` child): identical before and
+  after (the child is 100 px tall in both; ours starts 20 px lower than Chrome's, pre-existing, not part of F48).
+- Deviations: none from the design. `max-height` on a cell is ignored (Chrome agrees, P3). Not done (non-goals):
+  `min-height` on a cell stays a row minimum where Chrome ignores it (P5); the legacy `<td height="60">` attribute is **not mapped to a
+  CSS height** by Blitz (probe `p7`: one line, `height="60"`, NEXT 68 px below in Chrome, 28 px in ours, before and after F48), a
+  separate gap, left open.
