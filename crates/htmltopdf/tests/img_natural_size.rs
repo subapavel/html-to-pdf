@@ -289,13 +289,11 @@ fn png_size(png: &[u8]) -> (u32, u32) {
 /// An opaque `w` × `h` RGB PNG of one colour (stored deflate blocks, no compression: the test needs no
 /// image crate).
 fn solid_png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
-    let mut raw = Vec::new();
-    for _ in 0..h {
-        raw.push(0); // filter: none
-        for _ in 0..w {
-            raw.extend_from_slice(&rgb);
-        }
-    }
+    // Each scanline: filter byte 0 (none), then `w` pixels.
+    let row: Vec<u8> = std::iter::once(0)
+        .chain(rgb.iter().copied().cycle().take(3 * w as usize))
+        .collect();
+    let raw = row.repeat(h as usize);
     // zlib stream: header, stored blocks of at most 65535 bytes, Adler-32.
     let mut z = vec![0x78, 0x01];
     let mut chunks = raw.chunks(65535).peekable();
