@@ -1,6 +1,6 @@
 # F30b — A paragraph taller than a page that is itself a flex item, grid item or table cell loses its tail
 
-Date: 2026-10-16. Finding: F30b (follow-up of `2026-10-16-f30-nested-paragraph-split.md`). Status: **planned**. Fix
+Date: 2026-10-16. Finding: F30b (follow-up of `2026-10-16-f30-nested-paragraph-split.md`). Status: **done** (§7). Fix
 goes on `subapavel/fulgur` `htmltopdf/srgb-colours`, carried via `[patch.crates-io]`.
 
 ## 1. Problem
@@ -134,3 +134,50 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
 - Rebase conflicts in `fragment_block_subtree` next to F12, F28, F30 code.
 - Non-goals: F30c–F30g, `box-decoration-break`, `column-reverse` / out-of-DOM-order grid placement, `row-span-*`
   items, reading `orphans`/`widows`.
+
+## 7. As landed
+
+- Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `1cc10f7` (`items_stack_vertically` + `is_flow_child_with_height`;
+  `child_tail` / `closing` switch, `closes_like_block`; 2 unit tests), `4209f06` (`line_split_candidate` admits flex /
+  grid items and cells of a `display: table` box; `first_break_h` is 0 for a line-split item that is not first in its
+  row; `table_row_mate_can_split` → `row_mate_can_split` accepts a direct-text mate; row state restart on a cut; 6 new
+  unit tests, 1 inverted, 1 moved to an `overflow:hidden` parent), `ce302a6` (`paint_table_row_backgrounds` through
+  `frame_fragment`, warning text, 1 `render_smoke` test). Fork: 1982 lib (1975 before), 236 render_smoke, every other
+  test binary green (2211 tests over lib + 40 integration binaries, 0 failed), fulgur-vrt green, `examples_determinism`
+  only `committed_svg_matches_rendered` fails (environment, as before), example goldens and VRT goldens byte-identical,
+  clippy and fmt clean.
+- Ours: `nested_paragraph_split.rs` 30 pass + 1 ignored (`a_short_cell_beside_a_split_cell_stays_on_the_first_page_when_centred`,
+  F35: fails with "Item not printed"); 10 of the 11 new tests were red before (the 11th is the ignored one). Whole
+  workspace `cargo test --release --locked`: 193 passed, 0 failed, 2 ignored.
+- Fixtures 01–07 byte-identical (`cmp` of `out/<name>/htmltopdf.pdf` before and after). Fixture `08-terms-grid`: Chrome
+  reference generated, 2 / 2 pages like Chrome, 13.2 / 12.1 %, threshold 0.142 (before the fix: 1 page, tail lost).
+- Probes (120 or 300 lines of 20 px, Chrome vs ours before → after; `out/scratch/f30b/`):
+  - `flexcol_p`, `grid1_p` (300 lines): Chrome 7 pages, 50 lines each; ours 2 pages with 53 lines → 7 pages, 50 per page, Footer on 7.
+  - `flexcol`, `grid1` (header, bordered `.box > p`, footer) and `flexrow`, `grid2`: already like Chrome, unchanged (7, 7, 6, 6 pages).
+  - `flexcol_direct` (`.box` with direct text): 7 pages like Chrome, but 48 + 2 lines on pages 6 and 7 against Chrome's 50
+    (the F30 box reserves its padding on every strip, `box-decoration-break` is a non-goal).
+  - `td_direct1` (single direct-text cell): 53 lines on 1 page → 6 pages like Chrome. `td_direct` (`<td>Item</td><td>{L}</td>`):
+    6 pages like Chrome, but `Item` is not printed (F35, test 11 stays ignored); the warning now names it.
+  - **P1** (stretched bordered short card beside a tall `<p>` in a `flex` row, 400 px down): Chrome starts the row in
+    place (30 / 50 / 40 lines) and continues the card's frame on pages 2 and 3. Ours: same line positions and 3 pages
+    (before: 33 lines on 1 page, 2 pages), but the card's frame is one page-tall fragment (to the page edge on page 1,
+    missing on 2–3) — F30h.
+  - **P2** (`grid-cols-2`, row 2 = bordered label + tall `<p>`, row 1 500 px high): Chrome starts row 2 in place
+    (24 lines on page 1, 3 pages). Ours moves the row to page 2 (the first item, a stretched leaf, does not fit
+    beside nothing; 50 / 50 / 20 lines, 4 pages) — F30h. Before: 53 lines on page 2 and the rest lost.
+  - **P3** (`items-start` icon + `<p>` row 30 px above the page bottom): Chrome moves the row to page 2 (0 / 50 / 50 / 20);
+    ours the same, 4 pages. The row moves because `leading_block_size` of the container takes the tallest item's two lines.
+  - **P4** (fixture-08 card): 2 pages like Chrome, see above.
+  - **P5** (`flex-col` holding direct text): already like Chrome before the change (3 pages, 50 / 50 / 20): Blitz makes
+    the flex container itself the inline root, so no anonymous flex item exists and the plan's assumption is moot.
+  - **P6** (`grid > p` + Footer): 53 lines on 1 page → 7 pages like Chrome at 300 lines (3 pages at 120 lines, like Chrome).
+- Deviations from the plan: (1) a cut of a first-in-row line-split item restarts the flex / grid `RowState` on the
+  fresh page (the same update the recursion branch always did), otherwise its row mates stayed on the old page; found
+  by a unit test, not in the plan. (2) `first_break_h` gating by `first_in_row` is only visible in a later row of a
+  grid / flex box: a first row is still moved as a whole by the parent's `leading_block_size` (it takes the tallest
+  item's two lines), which is also what Chrome does (P3). (3) The unit test for the row-background fix is the
+  htmltopdf test (pixel check on page 2) and the smoke test; there is no fork unit test of `paint_table_row_backgrounds`.
+  (4) Test 11 is named `a_short_cell_beside_a_split_cell_stays_on_the_first_page_when_centred`.
+- Not verified: `vrt-validator` (run by the caller); row backgrounds with gradients / images on a split direct-text
+  cell (colour fill only is tested); `column-reverse` and out-of-DOM-order grid placement (non-goals); the
+  `examples_determinism` committed-SVG test (fails before and after for environment reasons).
