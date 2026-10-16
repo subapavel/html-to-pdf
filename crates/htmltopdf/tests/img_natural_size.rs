@@ -142,7 +142,7 @@ fn block_level_img_keeps_auto_margins() {
 
 #[test]
 fn flex_item_img_keeps_flex_sizing() {
-    // Flex items are not touched by the block rule: a row item keeps its natural size, a column item
+    // Flex items follow flexbox, not the block rule: a row item keeps its natural size, a column item
     // stretches across the cross axis and the ratio fills the height (Chrome 141: 300 x 150).
     let css = "img { display: block }";
     let page = rasterise(&render(
@@ -155,6 +155,118 @@ fn flex_item_img_keeps_flex_sizing() {
         r#"<div style="display: flex; flex-direction: column; width: 300px"><img src="red.png"></div>"#,
     ));
     assert_bbox(&page, (0, 0, 300, 150), "image in a flex column");
+}
+
+#[test]
+fn flex_row_of_fixed_height_stretches_only_what_has_an_auto_size() {
+    // css-flexbox §9.4: `align-self: stretch` applies to an item whose cross size is `auto`. The
+    // `width`/`height` attributes are presentational hints (HTML §15.4.3), so they make a size definite.
+    // Chrome 141, same markup: 400 x 200, 120 x 60, 100 x 200, 80 x 40.
+    let row = |img: &str| {
+        rasterise(&render(
+            "img { display: block }",
+            &format!(r#"<div style="display: flex; height: 200px">{img}</div>"#),
+        ))
+    };
+    assert_bbox(
+        &row(r#"<img src="red.png">"#),
+        (0, 0, 400, 200),
+        "bare: stretched, the ratio gives the width",
+    );
+    assert_bbox(
+        &row(r#"<img src="red.png" width="120" height="60">"#),
+        (0, 0, 120, 60),
+        "both attributes: definite, not stretched",
+    );
+    assert_bbox(
+        &row(r#"<img src="red.png" width="100">"#),
+        (0, 0, 100, 200),
+        "width attribute: the height still stretches",
+    );
+    assert_bbox(
+        &row(r#"<img src="red.png" height="40">"#),
+        (0, 0, 80, 40),
+        "height attribute: definite, the ratio gives the width",
+    );
+}
+
+#[test]
+fn grid_item_img_is_not_stretched() {
+    // css-grid-1 §6.2 / css-align-3: `normal` self-alignment of an item with a preferred aspect ratio
+    // (every replaced element) behaves as `start`, so a grid item takes its natural size in both axes.
+    // Chrome 141, same markup: 80 x 40, 96 x 48, 120 x 36, 80 x 40.
+    let grid = |css: &str, img: &str| {
+        rasterise(&render(
+            &format!("img {{ display: block }} {css}"),
+            &format!(
+                r#"<div style="display: grid; grid-template-columns: 1fr 1fr; {css}">{img}<div></div></div>"#
+            ),
+        ))
+    };
+    assert_bbox(
+        &grid("", r#"<img src="red.png">"#),
+        (0, 0, W as i64, H as i64),
+        "bare image in a grid",
+    );
+    assert_bbox(
+        &grid(
+            "",
+            r#"<img src="red.png" style="height: 48px; width: auto">"#,
+        ),
+        (0, 0, 96, 48),
+        "h-12 w-auto in a grid",
+    );
+    assert_bbox(
+        &grid("", r#"<img src="red.png" width="120" height="36">"#),
+        (0, 0, 120, 36),
+        "both attributes in a grid",
+    );
+    assert_bbox(
+        &grid("height: 300px", r#"<img src="red.png">"#),
+        (0, 0, W as i64, H as i64),
+        "bare image in a grid row taller than the image",
+    );
+}
+
+#[test]
+fn grid_item_img_stretches_when_asked_to() {
+    // An explicit `stretch` is honoured. Chrome 141: `justify-self: stretch` alone gives
+    // the 397 px column and the ratio height (397 x 199); `justify-items`/`align-items: stretch` on a
+    // 300 px tall grid fill the 600 x 300 cell.
+    let page = rasterise(&render(
+        "img { display: block }",
+        r#"<div style="display: grid; grid-template-columns: 1fr 1fr"><img src="red.png" style="justify-self: stretch"><div></div></div>"#,
+    ));
+    assert_bbox(&page, (0, 0, 397, 199), "justify-self: stretch");
+    let page = rasterise(&render(
+        "img { display: block }",
+        r#"<div style="display: grid; grid-template-columns: 1fr 1fr; height: 300px; justify-items: stretch; align-items: stretch"><img src="red.png"><div></div></div>"#,
+    ));
+    assert_bbox(
+        &page,
+        (0, 0, 600, 300),
+        "justify-items/align-items: stretch",
+    );
+}
+
+#[test]
+fn block_svg_with_only_a_view_box_fills_its_container() {
+    // CSS 2.1 §10.3.4 / §10.3.2: a replaced element with a ratio but no natural width is as wide as its
+    // containing block (Chrome 141: 794 x 397 at 96 dpi for a 20 x 10 viewBox). Tailwind: `svg { display: block }`.
+    let css = "svg { display: block }";
+    let fill = |svg: &str| rasterise(&render(css, svg));
+    let rect = r#"<rect width="20" height="10" fill="red"/>"#;
+    let page = fill(&format!(r#"<svg viewBox="0 0 20 10">{rect}</svg>"#));
+    assert_bbox(&page, (0, 0, 794, 397), "viewBox only");
+    // With a natural width or a definite height the viewBox only gives the ratio (Chrome: 40 x 20, 60 x 30).
+    let page = fill(&format!(
+        r#"<svg width="40" height="20" viewBox="0 0 20 10">{rect}</svg>"#
+    ));
+    assert_bbox(&page, (0, 0, 40, 20), "width and height");
+    let page = fill(&format!(
+        r#"<svg viewBox="0 0 20 10" style="height: 30px">{rect}</svg>"#
+    ));
+    assert_bbox(&page, (0, 0, 60, 30), "viewBox and a height");
 }
 
 #[test]

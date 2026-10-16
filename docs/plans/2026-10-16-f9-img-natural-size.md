@@ -81,3 +81,10 @@ unregistered `src`, JPEG EXIF orientation / density, `srcset`/`<picture>`, `widt
 - Compare: 03 6.2 → 5.7 % (threshold 0.072 → 0.067); 01, 02, 04, 05 byte-identical.
 - Known: block-level `<svg>`/`<canvas>` with `width:auto` follow the same rule (not separately tested); the
   `@page` margin-box `<img>`, unregistered-`src` warning, EXIF orientation, `srcset` remain non-goals.
+- After `vrt-validator` (PR #17), Blitz fork `5c2ec81` (a ratio-only block element — viewBox-only `<svg>`, unsized
+  `<canvas>` — keeps the container width, CSS 2.1 §10.3.4; 4787ff3 had shrunk it to its viewBox) and `cd6a5e8` (replaced
+  grid items with `normal` self-alignment start-align instead of stretching, css-grid-1 §6.6 — a logo in a
+  `grid grid-cols-2` header was distorted to 398×49; `<img>` `width`/`height` attributes become layout hints, so a
+  flex row of fixed height doesn't stretch an attribute-sized image). 4 more tests (18), all checked against Chrome 141.
+  Fixtures unchanged.
+- Other image gaps the validator found are recorded as F32.
