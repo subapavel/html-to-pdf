@@ -97,3 +97,11 @@ tolerance); 01, 02, 04 byte-identical.
   unchanged (tints below the 32/255 tolerance); 01, 02, 04 byte-identical.
 - Known gaps: image/gradient row backgrounds on a cell whose own content splits across pages are positioned against
   the slice; the non-goals of §6.
+- `vrt-validator` (PR #14): no high or medium finding from this change; layering, rgba stacking, gradients,
+  colspan, rounded `overflow-hidden` wrappers, multi-page and repeated-header fills match Chrome 141; no slowdown on a
+  2000-row striped table (≈300 ms); striped PDFs grow ≈48 % (one path per cell). Low, not fixed: translucent row
+  colours show a 1 px darker line where Blitz's independently rounded cell rects overlap (pre-existing for cell
+  backgrounds too); `visibility: hidden` rows/cells still show the group/row colour (Chrome is cell-driven); row
+  colour shows in the corners of a rounded cell under `border-collapse: collapse`; `opacity` on `<tr>`/`<tbody>`
+  ignored (non-goal); under `<table style="opacity">` row fills are translucent but cell fills are not (cells already
+  ignored table opacity before).
