@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0009</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0009</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 29. 10. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<!-- Šablona s jednotnou výškou řádku: h-12 na každé buňce, čtyři popisy se zalamují na 2-3 řádky -->
+<table class="w-full text-sm mb-6">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold w-8">#</th>
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right w-16">Množ.</th>
+      <th class="py-2 px-2 font-semibold text-right w-24">Cena/h</th>
+      <th class="py-2 pl-2 font-semibold text-right w-28">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">1</td>
+      <td class="h-12 py-2 pr-2">Monitoring a ladění</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">4 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">8 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">2</td>
+      <td class="h-12 py-2 pr-2">Úprava XSLT</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">3</td>
+      <td class="h-12 py-2 pr-2">Migrace číselníků – část 3</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">3 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">6 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">4</td>
+      <td class="h-12 py-2 pr-2">Vývoj iFlow pro příjem objednávek (EDIFACT ORDERS) včetně mapování na interní strukturu, validace vstupu a odesílání potvrzení zákazníkovi</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">5</td>
+      <td class="h-12 py-2 pr-2">Revize mapování</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">6</td>
+      <td class="h-12 py-2 pr-2">Konfigurace kanálů – část 6</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">7</td>
+      <td class="h-12 py-2 pr-2">Testování rozhraní</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">8</td>
+      <td class="h-12 py-2 pr-2">Správa transportů</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">9</td>
+      <td class="h-12 py-2 pr-2">Příprava testovacích dat – část 9</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">3 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">6 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">10</td>
+      <td class="h-12 py-2 pr-2">Vývoj iFlow</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">11</td>
+      <td class="h-12 py-2 pr-2">Analýza a oprava chyby v zákaznickém rozhraní: nekonzistentní stavy dokladů po opakovaném doručení zprávy, úprava logiky deduplikace</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">12</td>
+      <td class="h-12 py-2 pr-2">Řešení incidentu – část 12</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">13</td>
+      <td class="h-12 py-2 pr-2">Analýza požadavků</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">14</td>
+      <td class="h-12 py-2 pr-2">Dokumentace</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">3 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">6 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">15</td>
+      <td class="h-12 py-2 pr-2">Podpora provozu – část 15</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">16</td>
+      <td class="h-12 py-2 pr-2">Konzultace</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">17</td>
+      <td class="h-12 py-2 pr-2">Monitoring a ladění</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">18</td>
+      <td class="h-12 py-2 pr-2">Úprava XSLT – část 18</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">19</td>
+      <td class="h-12 py-2 pr-2">Příprava přechodu na novou verzi Integration Suite včetně regresního testování všech aktivních rozhraní a přípravy plánu návratu zpět při selhání nasazení v produkčním prostředí</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">12 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">26 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">20</td>
+      <td class="h-12 py-2 pr-2">Nasazení do produkce</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">4 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">8 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">21</td>
+      <td class="h-12 py-2 pr-2">Revize mapování – část 21</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">22</td>
+      <td class="h-12 py-2 pr-2">Konfigurace kanálů</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">23</td>
+      <td class="h-12 py-2 pr-2">Testování rozhraní</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">4 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">8 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">24</td>
+      <td class="h-12 py-2 pr-2">Správa transportů – část 24</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">25</td>
+      <td class="h-12 py-2 pr-2">Příprava testovacích dat</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">4 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">8 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">26</td>
+      <td class="h-12 py-2 pr-2">Vývoj iFlow</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">27</td>
+      <td class="h-12 py-2 pr-2">Školení správců rozhraní: monitoring, práce s frontami, opakování zpráv, čtení logů a postup při eskalaci incidentů</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">28</td>
+      <td class="h-12 py-2 pr-2">Řešení incidentu</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">29</td>
+      <td class="h-12 py-2 pr-2">Analýza požadavků</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">30</td>
+      <td class="h-12 py-2 pr-2">Dokumentace – část 30</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">31</td>
+      <td class="h-12 py-2 pr-2">Podpora provozu</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">32</td>
+      <td class="h-12 py-2 pr-2">Konzultace</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">33</td>
+      <td class="h-12 py-2 pr-2">Monitoring a ladění – část 33</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">34</td>
+      <td class="h-12 py-2 pr-2">Úprava XSLT</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">1 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="h-12 py-2 pr-2">35</td>
+      <td class="h-12 py-2 pr-2">Migrace číselníků</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="h-12 py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="h-12 py-2 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold">Celkem k úhradě <span class="tabular-nums ml-1">349 800,00 Kč</span></p>
+
+</body>
+</html>

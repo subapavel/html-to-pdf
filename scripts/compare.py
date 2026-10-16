@@ -59,6 +59,11 @@ THRESHOLDS = {
     #     lines; the page break matches (2 pages like Chrome, main printed 3 pages and cut the paragraph after clause 21). Ours also draws the
     #     card's top border again on page 2 (box-decoration-break is not implemented). Worst page + 1 point.
     "08-terms-grid": 0.142,
+    # 09: new in F48 (`h-12` on every `td`, four descriptions wrapping to 3 lines). 5.1 / 4.9 / 0.7 %: the rest is text
+    #     drift and the `<tr>` row rules Chrome paints and we do not (Blitz #386, F22); the page count and every row's
+    #     page match (3 pages; before F48: 2 pages, wrapped rows overlapping the next row, 6.4 / 6.7 / 0.6 %).
+    #     Worst page + 1 point.
+    "09-fixed-row-height": 0.061,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
