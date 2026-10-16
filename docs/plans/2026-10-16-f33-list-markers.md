@@ -89,8 +89,10 @@ fixture 06, compare + `cmp`, docs.
 - `<ul style="list-style-type: decimal">` numbers from 2 (`construct.rs:203`: the non-`ol` branch starts the counter at
   1 instead of 0): separate Blitz bug, **F41**, not touched here (outside lists with `decimal` on a `ul` are not a
   template idiom; `ol` is right).
-- A bundled face without the glyph still paints no marker (Noto Sans has U+2022 but neither U+25E6 nor U+25AA; Inter and
-  JetBrains Mono have all three). Drawing the shapes as vectors (§4, "Not done") removes the dependency.
+- A bundled face without the glyph paints no marker (Noto Sans has U+2022 but neither U+25E6 nor U+25AA; Inter and
+  JetBrains Mono have all three). Without the fulgur guard of §8 Parley shaped GID 0 and a `.notdef` box with no
+  Unicode mapping was painted (found by `pdf-reviewer`). Drawing the shapes as vectors (§4, "Not done") removes the
+  dependency.
 - `disclosure-open` / `disclosure-closed` share `font_for_bullet_style` and get the same fix; `▾` / `▸` coverage depends
   on the bundled face (not in Inter's default subset check here).
 - RTL: `<ul dir=rtl>` is not mirrored by our engine at all (the text stays at the left edge; Chrome puts it at the right
@@ -106,6 +108,11 @@ fixture 06, compare + `cmp`, docs.
   with system fonts, where Blitz registers its own `Bullet` face, and are byte-identical. Probes of §1 now match Chrome:
   disc / circle / square, nested disc → circle → square, wrapped item, `li > p`, `li > div`, `ol`; a `display: flex`
   item has no marker in either.
+- fulgur fork `314df1d` (`list_marker.rs`: `drop_notdef_marker`): an outside marker whose glyph run contains GID 0 is
+  not painted and a warning is logged, instead of a `.notdef` box with no ToUnicode entry (PDF/A-2 §6.2.11.8,
+  PDF/UA-1 §7.21.7–8). Found by `pdf-reviewer` with Noto Sans and `circle` / `square`; 2 unit tests and a
+  `render_smoke` test counting CID 0 in text strings (red before). Inside markers and running text that use a glyph
+  the face lacks are F44.
 - `crates/htmltopdf/tests/list_markers.rs` 10 tests (7 red before the fix); fixtures 01–05 and 07 byte-identical; 06 now
   uses the default outside disc (`class="pl-4" style="list-style: disc"`, `list-disc` is not in the committed
   `tailwind.css`), Chrome reference regenerated: page 1 15.9 % (unchanged), page 2 12.5 → 11.8 %, threshold unchanged
