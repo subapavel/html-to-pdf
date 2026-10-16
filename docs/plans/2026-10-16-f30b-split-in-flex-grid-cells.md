@@ -209,4 +209,14 @@ the Chrome reference and a `compare.py` threshold of the worst page plus 1 point
   `xth4_p` at Chrome's page count); `xth2` (direct text, header repeat) stays at
   6 pages against Chrome's 5 because the repeated-header strips hold one line fewer than Chrome's from page 2 on
   (pre-existing in e664406, unrelated to row ends).
+- Third validation round (fork `8cd0e8c` pinned): subtracting the stretch also removed the margin below the cell's last
+  child (and margins collapsing through its last descendants), so `<td><p style="margin-bottom:60px">` ended the row
+  60 px too high (`z_split_mb_one`, `y_mb_div300`, `y_mb_br`, `y_mb_two`, `z_split_mb_16_next`). Fork `6995d42`:
+  `trailing_margin` measures it (own margin of the last flow child, max with what collapses through boxes without
+  bottom padding or border) and it is not counted as stretch. Tests: ours
+  `the_bottom_margin_of_the_last_child_of_a_split_cell_stays_part_of_the_row` (4 shapes, red before), fork
+  `the_last_childs_bottom_margin_stays_part_of_a_split_cells_row` (3 shapes, red before). All 294 probe HTMLs were
+  re-run against the `8cd0e8c` build: 285 byte-identical, 9 changed (`y_mb_br`, `y_mb_div`, `y_mb_div300`, `y_mb_p`,
+  `y_mb_two`, `y_mid_mb`, `z_split_mb_16`, `z_split_mb_16_next`, `z_split_mb_one`), all now at Chrome's AFTER / ROW2
+  position. `y_pb300_three` (padding-bottom on a middle cell) did not fall out of this change; recorded under F35.
 

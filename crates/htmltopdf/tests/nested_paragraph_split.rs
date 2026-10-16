@@ -950,6 +950,66 @@ fn a_row_of_three_paragraph_cells_ends_with_the_tallest_cell() {
     }
 }
 
+#[test]
+fn the_bottom_margin_of_the_last_child_of_a_split_cell_stays_part_of_the_row() {
+    // Chrome: the margin below a cell's last child is inside the cell, so what follows the table starts
+    // `margin` below the last line (60 px = 45 pt on top of the 15 pt line step).
+    for (what, cell, gap) in [
+        (
+            "p",
+            format!("<p style=\"margin-bottom:60px\">{}</p>", lines(1..=120)),
+            60.0,
+        ),
+        (
+            "div around p",
+            format!(
+                "<div style=\"margin-bottom:300px\"><p>{}</p></div>",
+                lines(1..=120)
+            ),
+            240.0,
+        ),
+        (
+            "margin collapsed through a div",
+            format!(
+                "<div><p style=\"margin-bottom:60px\">{}</p></div>",
+                lines(1..=120)
+            ),
+            60.0,
+        ),
+        (
+            "direct text, then a div",
+            format!(
+                "{}<div style=\"margin-bottom:60px\">tail</div>",
+                lines(1..=120)
+            ),
+            // `tail` is a line after Line0120 and `AFTER` is measured from it.
+            60.0,
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr><td>{cell}</td></tr></table><p>AFTER</p>"),
+        );
+        let found = words(&pdf);
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (last_page, last_y) = if what == "direct text, then a div" {
+            let t = found
+                .iter()
+                .find(|(_, _, w)| w == "tail")
+                .map(|(p, y, _)| (*p, *y));
+            t.unwrap_or_else(|| word_at(&found, "Line0120"))
+        } else {
+            word_at(&found, "Line0120")
+        };
+        assert_eq!(after_page, last_page, "{what}");
+        let step = after_y - last_y;
+        assert!(
+            (gap - 2.0..=gap + 8.0).contains(&step),
+            "{what}: AFTER is {step}pt below the last line, expected about {gap}pt"
+        );
+    }
+}
+
 fn temp(pdf: &[u8]) -> std::path::PathBuf {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
