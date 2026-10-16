@@ -224,7 +224,9 @@ fn many_short_list_items_are_untouched() {
     // Each item's marker is its own number, so only the first reads "1.".
     assert_eq!(found.iter().filter(|(_, _, w)| w == "1.").count(), 1);
     let pages = assert_paginated(&pdf, &expected(1..=200));
-    assert_eq!(pages, 4, "200 x 20 px in 1009 px pages");
+    // The `ol`'s 16 px top margin collapses through <body> and shifts page 0 (F29): 49 + 50 + 50 + 50 + 1 items,
+    // the pages Chrome prints. Before F29 the 50th item hung 8 px below the content box and the count was 4.
+    assert_eq!(pages, 5, "16 px + 200 x 20 px in 1009 px pages");
 }
 
 #[test]

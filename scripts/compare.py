@@ -48,6 +48,10 @@ THRESHOLDS = {
     #     break itself matches (page 1 filled, 2 pages like Chrome). Chrome also leaves the box open at the break,
     #     we draw a border there (box-decoration-break is not implemented).
     "06-long-notes": 0.169,
+    # 07: new in F29 (page 0 starts 32 px down because the first child's `mt-8` collapses through <body>). 7.2 / 7.1 %:
+    #     page 1 holds 21 rows to Chrome's 20 (row heights drift by well under a pixel and add up over 20 rows); without
+    #     F29 a 22nd row hung 13 pt below the content box. The page break itself moves like Chrome's.
+    "07-heading-margin": 0.082,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
