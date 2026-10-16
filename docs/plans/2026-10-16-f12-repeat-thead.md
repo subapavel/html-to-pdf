@@ -1,6 +1,6 @@
 # F12 — Repeat `<thead>` on continuation pages
 
-Date: 2026-10-16. Finding: F12 in `2026-10-15-m0-findings.md`. Status: in progress. Fix goes on `subapavel/fulgur`
+Date: 2026-10-16. Finding: F12 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (base `8d81949`, fulgur 0.40.0), carried via `[patch.crates-io]`.
 
 ## 1. Problem
@@ -105,3 +105,17 @@ No links in the copy. Everything keyed by `BTreeMap`.
 - `draw_table_v2` paints the full `layout_size` frame on every fragment (pre-existing; no effect on Tailwind tables).
 - Rebasing onto newer fulgur: `fragment_block_subtree` changes often; keep the change behind one
   `Option<RepeatingHeader>` in few hunks.
+
+## 7. As landed
+
+- Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `ba074a2` (record header-group drawables), `cbc8412`
+  (output-neutral `dispatch_page_node` refactor), `cbf62b5` (fragmenter + render + tests), `67d8007` (re-blessed
+  `examples/table-header/index.pdf`). Fork: 1895 lib tests, 213 render_smoke tests (4 new), clippy clean; all other
+  example goldens byte-identical (checked with a fontconfig that rejects the sandbox's host Inter, which otherwise
+  breaks `committed_svg_matches_rendered` at the base commit too).
+- Deviations: `HeaderRepeat` (no `top` field; source fragment written lazily with the first repeat, so tables that
+  never repeat leave geometry untouched); repeat also disabled when the table or an ancestor clips, transforms or is
+  translucent (the copy would bypass those wrappers); a header that itself spans pages is not repeated; break-before
+  on the first body row does not create a header-only page.
+- Fixtures: 01, 03, 04, 05 byte-identical. 02 3/3 pages, 10.3 / 11.8 / 9.6 → 10.3 / 11.5 / 9.9 %; page 3 grew 0.3
+  because the header band is content that was missing (merge-policy item 3). Threshold 0.129 → 0.125.
