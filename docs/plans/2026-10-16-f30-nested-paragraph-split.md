@@ -106,3 +106,8 @@ F30f inline-block wrappers, F30g abspos.
 - Known, recorded: sibling cells of a split cell are not sliced per page (their background/text on page 1 only, F35);
   body-level paragraphs still ignore the body offset (F29); no warning for `display:table` / inline-block wrappers
   that lose a split paragraph (F30e/F30f).
+- After the `vrt-validator` re-run, fork `6c23d12`: cells after a split `<td><p>` sit at the row's top on its first
+  page (they were drawn after the split; e1: 4 → 3 pages like Chrome); a bottom padding taller than a page overflows
+  instead of pushing single lines onto extra pages, and the last frame is clamped to the content box; the unprinted-
+  lines warning only claims loss for lines outside the page box. 2 more tests (20 + 1 ignored). Remaining from that
+  run: body offset vs the F28 leading test near the bottom of page 0 (F29).

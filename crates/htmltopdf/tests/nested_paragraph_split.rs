@@ -68,7 +68,9 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
         } else if let Some(rest) = line.trim().strip_prefix("<word ")
             && let Some((attrs, word)) = rest.split_once('>')
             && let Some(word) = word.strip_suffix("</word>")
-            && (word.starts_with("Line") || word.starts_with("BOX") || word == "1.")
+            && (word.starts_with("Line")
+                || word.starts_with("BOX")
+                || matches!(word, "1." | "right" | "AFTER"))
         {
             let y_max = attrs
                 .split_whitespace()
@@ -473,6 +475,76 @@ fn a_paragraph_in_a_cell_repeats_the_table_header_on_every_page() {
         "page 1 is filled: {}",
         lines_on(&found, 1)
     );
+}
+
+fn word_at(found: &[(usize, f32, String)], text: &str) -> (usize, f32) {
+    found
+        .iter()
+        .find(|(_, _, w)| w == text)
+        .map(|(p, y, _)| (*p, *y))
+        .unwrap_or_else(|| panic!("{text} not printed"))
+}
+
+#[test]
+fn cells_after_a_split_cell_sit_at_the_top_of_the_row() {
+    // The cell to the right of a `<td><p>` that continues on later pages stays beside the start of the row,
+    // on its first page, not after the end of the split cell; what follows the table follows the split cell.
+    for cols in [
+        "<td><p>{L}</p></td><td>right</td>",
+        "<td><p>{L}</p></td><td>x</td><td>right</td>",
+        "<td>x</td><td><p>{L}</p></td><td>right</td>",
+    ] {
+        let row = cols.replace("{L}", &lines(1..=120));
+        // `vertical-align: top`: a cell centred in a row taller than a page loses its text (a known gap).
+        let pdf = render_with(
+            "td, th { vertical-align: top }",
+            &format!(
+                "<table style=\"width:100%\"><thead><tr><th>HEAD</th><th>H2</th></tr></thead><tbody><tr>{row}</tr></tbody></table><p>AFTER</p>"
+            ),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=120));
+        let found = words(&pdf);
+        let (right_page, right_y) = word_at(&found, "right");
+        let (_, first_y) = word_at(&found, "Line0001");
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (_, last_y) = word_at(&found, "Line0120");
+        assert_eq!(right_page, 1, "{cols}");
+        assert!(
+            (right_y - first_y).abs() <= 1.0,
+            "{cols}: right {right_y} vs first line {first_y}"
+        );
+        assert_eq!((after_page, pages), (3, 3), "{cols}");
+        assert!(after_y > last_y, "{cols}: AFTER below the last line");
+    }
+}
+
+#[test]
+fn bottom_padding_taller_than_a_page_overflows_instead_of_adding_pages() {
+    let content_bottom = (PAGE_H_PT - MARGIN_PT).round() as usize;
+    for (pb, n) in [(1100, 60), (1500, 100), (600, 60)] {
+        let pdf = render_with(
+            FRAME_CSS,
+            &format!(
+                "<div class=\"box\" style=\"padding-bottom:{pb}px\"><div><p>{}</p></div></div><p>AFTER</p>",
+                lines(1..=n)
+            ),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=n));
+        // The lines take ceil(n / 48) pages (the box's frame takes some of the first) and AFTER at most one more.
+        assert!(pages <= n.div_ceil(48) + 1, "pb {pb}: {pages} pages");
+        for page in 1..=pages {
+            // The frame never runs on below the content box (a page that is only AFTER has none).
+            let found = words(&pdf);
+            if lines_on(&found, page) == 0 {
+                continue;
+            }
+            let bottom = lowest_box_row(&pdf, page);
+            assert!(
+                bottom <= content_bottom + 1,
+                "pb {pb}, page {page}: frame ends at row {bottom}"
+            );
+        }
+    }
 }
 
 #[test]
