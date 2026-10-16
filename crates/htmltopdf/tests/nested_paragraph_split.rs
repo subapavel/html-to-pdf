@@ -63,7 +63,7 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
         } else if let Some(rest) = line.trim().strip_prefix("<word ")
             && let Some((attrs, word)) = rest.split_once('>')
             && let Some(word) = word.strip_suffix("</word>")
-            && (word.starts_with("Line") || word == "1.")
+            && (word.starts_with("Line") || word.starts_with("BOX") || word == "1.")
         {
             let y_max = attrs
                 .split_whitespace()
@@ -92,7 +92,10 @@ fn page_count(pdf: &[u8]) -> usize {
 
 /// The `Line…` words of `found`, as `(page, y_max, text)`.
 fn line_words(found: &[(usize, f32, String)]) -> Vec<&(usize, f32, String)> {
-    found.iter().filter(|(_, _, w)| w != "1.").collect()
+    found
+        .iter()
+        .filter(|(_, _, w)| w.starts_with("Line"))
+        .collect()
 }
 
 /// `expected` lines, each exactly once, in this order, none below the content box. Returns the page count.
@@ -124,7 +127,10 @@ fn assert_paginated(pdf: &[u8], expected: &[String]) -> usize {
 
 /// Number of lines printed on `page` (1-based).
 fn lines_on(found: &[(usize, f32, String)], page: usize) -> usize {
-    line_words(found).iter().filter(|(p, _, _)| *p == page).count()
+    line_words(found)
+        .iter()
+        .filter(|(p, _, _)| *p == page)
+        .count()
 }
 
 #[test]
@@ -141,6 +147,17 @@ fn a_notes_box_with_a_long_paragraph_continues_on_the_next_pages() {
 #[test]
 fn direct_text_in_a_bordered_div_continues_on_the_next_pages() {
     let pdf = render(&format!("<div class=\"box\">{}</div>", lines(1..=400)));
+    let pages = assert_paginated(&pdf, &expected(1..=400));
+    assert!(pages >= 8, "{pages} pages");
+}
+
+#[test]
+fn direct_text_in_a_nested_bordered_div_continues_on_the_next_pages() {
+    // Not a body child: the box is its own paragraph, so its border and padding are reserved on every page.
+    let pdf = render(&format!(
+        "<section><div class=\"box\">{}</div></section>",
+        lines(1..=400)
+    ));
     let pages = assert_paginated(&pdf, &expected(1..=400));
     assert!(pages >= 8, "{pages} pages");
 }
@@ -186,9 +203,7 @@ fn preformatted_text_in_a_div() {
     let pdf = render(&format!("<div class=\"box\"><pre>{text}</pre></div>"));
     let pages = assert_paginated(&pdf, &expected(1..=400));
     assert!(pages >= 8, "{pages} pages");
-    let pdf = render(&format!(
-        "<div style=\"white-space:pre-wrap\">{text}</div>"
-    ));
+    let pdf = render(&format!("<div style=\"white-space:pre-wrap\">{text}</div>"));
     let pages = assert_paginated(&pdf, &expected(1..=400));
     assert!(pages >= 8, "{pages} pages");
 }
@@ -256,6 +271,29 @@ fn a_single_line_is_not_left_alone_on_the_last_page() {
     assert_eq!(pages, 4);
     let found = words(&pdf);
     assert!(lines_on(&found, 4) >= 2, "{found:?}");
+}
+
+#[test]
+fn inline_blocks_in_a_split_paragraph_follow_their_line() {
+    // Atomic inlines belong to the page that holds their line: each printed once, on that page.
+    let text = (1..=130)
+        .map(|i| match i {
+            5 | 70 | 130 => format!(
+                "Line{i:04} <span style=\"display:inline-block;border:1px solid red\">BOX{i}</span>"
+            ),
+            _ => format!("Line{i:04}"),
+        })
+        .collect::<Vec<_>>()
+        .join("<br>");
+    let pdf = render(&format!("<div class=\"box\"><p>{text}</p></div>"));
+    assert_paginated(&pdf, &expected(1..=130));
+    let found = words(&pdf);
+    let boxes: Vec<(usize, &str)> = found
+        .iter()
+        .filter(|(_, _, w)| w.starts_with("BOX"))
+        .map(|(p, _, w)| (*p, w.as_str()))
+        .collect();
+    assert_eq!(boxes, vec![(1, "BOX5"), (2, "BOX70"), (3, "BOX130")]);
 }
 
 #[test]

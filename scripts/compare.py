@@ -43,6 +43,11 @@ THRESHOLDS = {
     # 05: the rest is mostly the header printed inside the page margin instead of full-bleed (F6) and the
     #     totals box sitting lower than in Chrome.
     "05-fancy": 0.22,
+    # 06: new in F30 (a paragraph taller than a page inside a bordered box). 15.9 / 12.5 %: one dense paragraph, so
+    #     the diff is the line-wrapping drift against Chrome's text metrics over ~100 lines, not layout; the page
+    #     break itself matches (page 1 filled, 2 pages like Chrome). Chrome also leaves the box open at the break,
+    #     we draw a border there (box-decoration-break is not implemented).
+    "06-long-notes": 0.169,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

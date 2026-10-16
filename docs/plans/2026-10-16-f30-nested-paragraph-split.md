@@ -1,6 +1,6 @@
 # F30 — A paragraph taller than a page inside a block loses its tail
 
-Date: 2026-10-16. Finding: F30 (paragraph sub-case) in `2026-10-15-m0-findings.md`. Status: in progress. Fix goes on
+Date: 2026-10-16. Finding: F30 (paragraph sub-case) in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on
 `subapavel/fulgur` `htmltopdf/srgb-colours` (0.40.0 + F1, F11, F12, F19, F28, F9), carried via `[patch.crates-io]`.
 
 ## 1. Problem
@@ -74,3 +74,25 @@ Non-goals: `box-decoration-break`, splitting paragraphs shorter than a page (we 
 `orphans`/`widows`. Follow-ups: F30b (flex/grid items, direct-text cells), F30c (body-level parity: pre-advance
 pushes giant paragraphs, widows not relaxed, padded inline roots), F30d columns, F30e `display:table` wrappers,
 F30f inline-block wrappers, F30g abspos.
+
+## 7. As landed
+
+- Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `eaf24bf` (`record_descendant` extracted, output-neutral),
+  `0e07ace` (`plan_line_breaks`, 7 unit tests), `dbfc25e` (render: `PaginationGeometry.line_split_insets`, frame
+  height at the three slice sites, list marker on the first fragment only), `da57d8d` (`nested_line_split`,
+  `fragment_nested_inline_root`, descendant recording, `fragment_block_subtree` wiring, `leading_block_size(page_h)`;
+  9 unit tests, 1 smoke test), `01a4d96` (`warn_unprinted_inline_lines`). Fork: 1954 lib, 232 render_smoke, all other
+  test binaries, fulgur-vrt 64/64 green; clippy clean; example goldens byte-identical.
+- Probes (400 lines, before → after, Chrome): bordered box + `<p>` 52 → 392 lines (Chrome 392); direct text in a box
+  54 → 393; `<ol><li>` 51 → 294 of 300 (Chrome 293); section/article, `td > p`, `pre` all complete; `div > p` now equals
+  the body-level paragraph page for page. (Line counts are `grep ^Line` on pdftotext; tests assert exact words.)
+- `nested_paragraph_split.rs`: 13 tests (12 pass, `<td>` direct text ignored as F30b); 10 of the first 12 red before.
+- New fixture `06-long-notes` (invoice + a `rounded-lg border p-4` terms box ≈ 1.4 pages + payment conditions list):
+  2/2 pages like Chrome, 15.9 / 12.5 % (threshold 0.169). Reference generated with `scripts/reference/render.mjs`
+  (Playwright from /opt/node22). The list uses `list-style: disc inside` because outside disc markers are not painted
+  at all (pre-existing, F33).
+- Fixtures 01–05 byte-identical; thresholds unchanged.
+- Deviations: a box whose paragraph was split closes below its last child (bottom padding + border) and the cursor
+  continues below the frame; table cells and `display: table` parents are excluded (F30b); the list-marker rule applies
+  to every split list item. Continuation pages draw the box's top border again (`box-decoration-break: slice` is a
+  non-goal). F30c (paragraphs shorter than a page still move whole) open.
