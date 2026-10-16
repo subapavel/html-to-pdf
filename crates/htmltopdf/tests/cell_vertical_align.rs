@@ -183,6 +183,87 @@ fn paginated_and_repeated() {
 }
 
 #[test]
+fn percentage_height_child_stays_inside_the_cell() {
+    // `height: 100%` against a cell that is only as tall as the row is `auto` (CSS 2.1 §10.5: the
+    // containing block's height is not specified explicitly), so the box is one line, centred, and
+    // never pushed out of the four-line row. Chrome 141: `P100` at Řa + 22.5 pt.
+    let d = "<td>Řa<br>Řb<br>Řc<br>Řd</td>";
+    for (child, what) in [
+        ("<div style=\"height: 100%\">P100</div>", "block"),
+        (
+            "<div style=\"height: 100%; display: flex; align-items: center\">P100</div>",
+            "flex",
+        ),
+        ("<div style=\"min-height: 100%\">P100</div>", "min-height"),
+    ] {
+        let w = words(&render(&format!(
+            "<table><tr>{d}<td>{child}</td></tr></table>"
+        )));
+        let find = |t: &str| w.iter().find(|x| x.text == t).unwrap();
+        let (a, last, p) = (find("Řa"), find("Řd"), find("P100"));
+        assert!(
+            p.y_min >= a.y_min - TOL && p.y_max <= last.y_max + TOL,
+            "{what}: `P100` ({}..{}) is outside the row ({}..{})",
+            p.y_min,
+            p.y_max,
+            a.y_min,
+            last.y_max
+        );
+        assert!(
+            (p.y_min - (a.y_min + 22.5)).abs() <= TOL,
+            "{what}: `P100` at {} is not centred (expected {})",
+            p.y_min,
+            a.y_min + 22.5
+        );
+    }
+}
+
+#[test]
+fn cell_height_is_a_row_minimum_and_aligns() {
+    // CSS 2.1 §17.5.3: a cell's `height` is the minimum height of its row. The row is 48 CSS px, both
+    // cells are centred in it (Chrome 141: `Aa` and `Bé` at 71.06, next row at 102.56, i.e. 31.5 pt
+    // below), and a `bottom` cell sits on the bottom edge.
+    let table = |b: &str| {
+        words(&render(&format!(
+            "<table><tr><td style=\"height: 48px\">Aa</td><td{b}>Bé</td></tr>\
+             <tr><td>Cc</td><td>Dd</td></tr></table>"
+        )))
+    };
+    let w = table("");
+    assert_aligned(&w, "Bé", "Aa");
+    let (a, c) = (find(&w, "Aa"), find(&w, "Cc"));
+    assert!(
+        (c.y_min - a.y_min - 31.5).abs() <= TOL,
+        "the second row starts {} pt below `Aa`, expected 31.5 (a 48 px first row)",
+        c.y_min - a.y_min
+    );
+    let w = table(" style=\"vertical-align: bottom\"");
+    let (a, b) = (find(&w, "Aa"), find(&w, "Bé"));
+    assert!(
+        (b.y_min - a.y_min - 10.5).abs() <= TOL,
+        "bottom cell at {} but `Aa` at {}, expected 10.5 pt lower",
+        b.y_min,
+        a.y_min
+    );
+}
+
+#[test]
+fn row_height_is_a_row_minimum_and_aligns() {
+    // `<tr style="height: 48px">` (Tailwind `h-12` on a `tr`): a 48 px row, so the next row starts 28.5 pt
+    // below the centred text (Chrome 141: 68.06 and 96.56).
+    let w = words(&render(
+        "<table><tr style=\"height: 48px\"><td>Aa</td><td>Bé</td></tr><tr><td>Cc</td></tr></table>",
+    ));
+    assert_aligned(&w, "Bé", "Aa");
+    let (a, c) = (find(&w, "Aa"), find(&w, "Cc"));
+    assert!(
+        (c.y_min - a.y_min - 28.5).abs() <= TOL,
+        "the second row starts {} pt below `Aa`, expected 28.5",
+        c.y_min - a.y_min
+    );
+}
+
+#[test]
 fn fixture_02_row_2_centred() {
     // Row 2 of the long invoice: the description wraps to two lines, `2` and `6 h` are centred on them.
     let root = root();
@@ -285,6 +366,12 @@ fn fixture_renderer() -> Renderer {
     b.build()
 }
 
+fn find<'a>(w: &'a [Word], t: &str) -> &'a Word {
+    w.iter()
+        .find(|x| x.text == t)
+        .unwrap_or_else(|| panic!("`{t}` not found in the PDF text"))
+}
+
 /// `want` is on the same line as `line` (same `yMin` within `TOL`).
 fn assert_aligned(w: &[Word], want: &str, line: &str) {
     let find = |t: &str| {
@@ -309,6 +396,7 @@ struct Word {
     page: usize,
     text: String,
     y_min: f32,
+    y_max: f32,
 }
 
 /// Every word of the PDF with its page and `yMin` (pt, from the top), in content order.
@@ -342,6 +430,7 @@ fn words(pdf: &[u8]) -> Vec<Word> {
                 page,
                 text: rest[text_start..text_end].to_string(),
                 y_min: attr("yMin"),
+                y_max: attr("yMax"),
             });
         }
     }

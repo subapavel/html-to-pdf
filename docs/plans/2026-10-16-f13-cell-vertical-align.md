@@ -86,3 +86,11 @@ byte-identical.
   not shifted.
 - Compare: 02 10.3 / 11.5 / 9.9 → 10.2 / 11.4 / 9.8 % (threshold 0.125 → 0.124); 01, 03, 04, 05 byte-identical;
   2000-row table unchanged (≈280 ms, byte-identical — single-line rows do not move); deterministic.
+- After `vrt-validator` (PR #15), fork `6904781` + `0f30f6f`: aligned cells are laid out at their natural height (as
+  if `height`/`min-height` were auto), so a `height:100%` child is auto and centred like Chrome instead of pushed out
+  of the cell (M1); a cell's length `height` becomes a row minimum (`min_size.height`), so Tailwind `h-12` cells are
+  stretched and aligned with their siblings (M3, within ≈1 pt of Chrome). 3 more tests (14 total). Fixtures
+  unchanged vs `dda274d`; 2000-row table byte-identical, ≈250 ms; deterministic.
+- Known, not fixed: `background-clip: content-box` on a shifted cell shrinks to a strip (the `padding.top` bump); a
+  row taller than a page loses its short cells (pre-existing truncation of oversized rows); `vertical-align: top`
+  cells with a `height:100%` child still fill the cell (Chrome: auto).
