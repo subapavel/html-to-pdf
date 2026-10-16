@@ -1,6 +1,6 @@
 # F13 — Table cell content ignores `vertical-align` (cells are top-aligned)
 
-Date: 2026-10-16. Finding: F13 in `2026-10-15-m0-findings.md`. Status: in progress. Fix goes on `subapavel/blitz`
+Date: 2026-10-16. Finding: F13 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/blitz`
 `htmltopdf/blitz-dom-0.2.4`, carried via `[patch.crates-io]`. No fulgur change.
 
 ## 1. Problem
@@ -70,3 +70,19 @@ byte-identical.
 - `padding.top` grows visibly (affects `background-clip: content-box` on shifted cells).
 - Not done: real `baseline` (F26), `valign` attribute (F27), `rowspan` (F15), cells with explicit `height`
   (unstretched), absolutely positioned children at static position.
+
+## 7. As landed
+
+- Fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `bb18d4c` (output-neutral: `compute_node_layout` extracted,
+  `Node::table_cell_offset`), `dda274d` (`middle` / `bottom` alignment, `padding.top` bump in
+  `set_unrounded_layout`).
+- Tests: `cell_vertical_align.rs` 11 tests; 8 red before (default middle, explicit middle, bottom, inherited from `tr`,
+  block children, row background still fills the row, paginated + repeated header, fixture 02 row 2), 3 green before
+  and after (top, baseline-like values, single-line row unchanged). Chromium 141, 14 renders of the test HTML: every
+  expectation matches (3 lines at 15 pt pitch: default on line 2, bottom on line 3, top / baseline / sub / super /
+  text-top on line 1).
+- Deviations: only cells with a definite (stretched) height are aligned; offsets < 0.001 px count as 0; a stale offset
+  is reset on any other `PerformLayout`; absolutely positioned children and the cell's reported first baseline are
+  not shifted.
+- Compare: 02 10.3 / 11.5 / 9.9 → 10.2 / 11.4 / 9.8 % (threshold 0.125 → 0.124); 01, 03, 04, 05 byte-identical;
+  2000-row table unchanged (≈280 ms, byte-identical — single-line rows do not move); deterministic.
