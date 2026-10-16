@@ -2,6 +2,9 @@
 //! notes box) splits at line boxes like the same paragraph at body level (F30), instead of printing the lines that
 //! fit its first page and drawing the rest below the page box (css-break-3 §4.1, CSS 2.1 §13.3.3).
 //!
+//! F30b: the same holds when the paragraph is itself a flex item, a grid item or a table cell (`flex-col > p`,
+//! `grid > p`, `<td>` with direct text).
+//!
 //! Every `LineNNNN` must appear exactly once, in page order, and none may sit below the content box. Asserted on
 //! each page's words with their positions (`pdftotext -bbox`). Lines are forced with `<br>` (20 px each) so the
 //! number of lines per page does not depend on font metrics.
@@ -70,7 +73,12 @@ fn words(pdf: &[u8]) -> Vec<(usize, f32, String)> {
             && let Some(word) = word.strip_suffix("</word>")
             && (word.starts_with("Line")
                 || word.starts_with("BOX")
-                || matches!(word, "1." | "right" | "AFTER"))
+                || word.starts_with("BLine")
+                || word.starts_with("CLine")
+                || matches!(
+                    word,
+                    "1." | "right" | "AFTER" | "Item" | "NEXTROW" | "short" | "tail"
+                ))
         {
             let y_max = attrs
                 .split_whitespace()
@@ -550,7 +558,6 @@ fn bottom_padding_taller_than_a_page_overflows_instead_of_adding_pages() {
 }
 
 #[test]
-#[ignore = "F30b: a table cell with direct text is not split"]
 fn direct_text_in_a_table_cell() {
     let pdf = render(&format!(
         "<table><tr><td>{}</td></tr></table>",
@@ -558,6 +565,449 @@ fn direct_text_in_a_table_cell() {
     ));
     let pages = assert_paginated(&pdf, &expected(1..=400));
     assert!(pages >= 8, "{pages} pages");
+}
+
+/// `(page, y)` of the word `later` is below the word `earlier` in reading order.
+fn assert_below(found: &[(usize, f32, String)], later: &str, earlier: &str) {
+    let (lp, ly) = word_at(found, later);
+    let (ep, ey) = word_at(found, earlier);
+    assert!(
+        lp > ep || (lp == ep && ly > ey),
+        "{later} (page {lp}, y {ly}) is not below {earlier} (page {ep}, y {ey})"
+    );
+}
+
+const FLEX_COL: &str = "display:flex;flex-direction:column";
+
+#[test]
+fn a_paragraph_that_is_a_flex_column_item_continues_on_the_next_pages() {
+    let pdf = render(&format!(
+        "<div style=\"{FLEX_COL}\"><p>{}</p><p>AFTER</p></div>",
+        lines(1..=300)
+    ));
+    let pages = assert_paginated(&pdf, &expected(1..=300));
+    // Chrome (probe `flexcol_p`): 50 lines per page, 7 pages.
+    assert_eq!(pages, 7);
+    assert_below(&words(&pdf), "AFTER", "Line0300");
+}
+
+#[test]
+fn direct_text_in_a_flex_column_item_continues_on_the_next_pages() {
+    let pdf = render(&format!(
+        "<div style=\"{FLEX_COL}\"><div class=\"box\">{}</div></div>",
+        lines(1..=300)
+    ));
+    let pages = assert_paginated(&pdf, &expected(1..=300));
+    let plain = render(&format!("<div class=\"box\">{}</div>", lines(1..=300)));
+    assert_eq!(pages, assert_paginated(&plain, &expected(1..=300)));
+}
+
+#[test]
+fn a_paragraph_that_is_a_grid_item_continues_on_the_next_pages() {
+    let pdf = render(&format!(
+        "<div style=\"display:grid;gap:16px\"><h3>T</h3><p>{}</p><p>AFTER</p></div>",
+        lines(1..=300)
+    ));
+    assert_paginated(&pdf, &expected(1..=300));
+    assert_below(&words(&pdf), "AFTER", "Line0300");
+}
+
+#[test]
+fn flex_and_grid_items_split_like_the_same_paragraph_in_a_div() {
+    let reference = render(&format!("<div><p>{}</p></div>", lines(1..=300)));
+    let pages = assert_paginated(&reference, &expected(1..=300));
+    let r = words(&reference);
+    for wrapper in [FLEX_COL, "display:grid"] {
+        let pdf = render(&format!(
+            "<div style=\"{wrapper}\"><p>{}</p></div>",
+            lines(1..=300)
+        ));
+        assert_eq!(
+            assert_paginated(&pdf, &expected(1..=300)),
+            pages,
+            "{wrapper}"
+        );
+        let w = words(&pdf);
+        for page in 1..=pages {
+            assert_eq!(
+                lines_on(&r, page),
+                lines_on(&w, page),
+                "{wrapper}, page {page}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_padded_flex_column_box_closes_below_its_split_item() {
+    // The box is block flow for fragmentation (css-flexbox-1 §12): its frame ends at the content bottom on the
+    // pages it leaves and the last frame, with its bottom padding and border, stays inside the content box.
+    let content_bottom = (PAGE_H_PT - MARGIN_PT).round() as usize;
+    for n in 140..=160 {
+        let pdf = render_with(
+            FRAME_CSS,
+            &format!(
+                "<div class=\"box\" style=\"{FLEX_COL};gap:16px\"><h3>T</h3><p>{}</p></div>",
+                lines(1..=n)
+            ),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=n));
+        assert!(pages >= 3, "{n}: {pages} pages");
+        for page in 1..pages {
+            let bottom = lowest_box_row(&pdf, page);
+            assert!(
+                bottom <= content_bottom + 1 && bottom + 8 >= content_bottom,
+                "{n} lines, page {page}: the frame ends at row {bottom}, the content bottom is {content_bottom}"
+            );
+        }
+        let bottom = lowest_box_row(&pdf, pages);
+        assert!(
+            bottom <= content_bottom + 1,
+            "{n} lines: the box ends at row {bottom} on page {pages}, the content bottom is {content_bottom}"
+        );
+    }
+}
+
+#[test]
+fn a_paragraph_beside_a_square_in_a_flex_row_paginates_like_one_in_a_div() {
+    let row = |second: String| {
+        let pdf = render(&format!(
+            "<div style=\"display:flex;align-items:flex-start;gap:16px\">\
+             <div style=\"width:20px;height:20px;background:#ccc\"></div>{second}<p>AFTER</p></div>",
+        ));
+        assert_paginated(&pdf, &expected(1..=300))
+    };
+    let p = row(format!("<p>{}</p>", lines(1..=300)));
+    let div = row(format!("<div><p>{}</p></div>", lines(1..=300)));
+    assert_eq!(p, div);
+}
+
+#[test]
+fn cells_with_direct_text_after_a_split_cell_sit_at_the_top_of_the_row() {
+    for cols in [
+        "<td>{L}</td><td>right</td>",
+        "<td>{L}</td><td>x</td><td>right</td>",
+        "<td>x</td><td>{L}</td><td>right</td>",
+    ] {
+        let row = cols.replace("{L}", &lines(1..=120));
+        let pdf = render_with(
+            "td, th { vertical-align: top }",
+            &format!(
+                "<table style=\"width:100%\"><thead><tr><th>HEAD</th><th>H2</th></tr></thead><tbody><tr>{row}</tr></tbody></table><p>AFTER</p>"
+            ),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=120));
+        let found = words(&pdf);
+        let (right_page, right_y) = word_at(&found, "right");
+        let (_, first_y) = word_at(&found, "Line0001");
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (_, last_y) = word_at(&found, "Line0120");
+        assert_eq!(right_page, 1, "{cols}");
+        assert!(
+            (right_y - first_y).abs() <= 1.0,
+            "{cols}: right {right_y} vs first line {first_y}"
+        );
+        assert_eq!((after_page, pages), (3, 3), "{cols}");
+        assert!(after_y > last_y, "{cols}: AFTER below the last line");
+    }
+}
+
+#[test]
+fn direct_text_in_a_cell_repeats_the_table_header_on_every_page() {
+    let rows = format!(
+        "<table style=\"width:100%\"><thead><tr><th>HEADERA</th><th>HEADERB</th></tr></thead>\
+         <tbody><tr><td>Left</td><td>{}</td></tr><tr><td>Row2</td><td>After</td></tr></tbody></table>",
+        lines(1..=150)
+    );
+    let pdf = render(&rows);
+    let pages = assert_paginated(&pdf, &expected(1..=150));
+    assert_eq!(pages, 4, "the row starts on page 1 instead of moving whole");
+    for page in 1..=pages {
+        let path = temp(&pdf);
+        let out = std::process::Command::new("pdftotext")
+            .args(["-f", &page.to_string(), "-l", &page.to_string()])
+            .arg(&path)
+            .arg("-")
+            .output()
+            .expect("pdftotext");
+        let _ = std::fs::remove_file(&path);
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert_eq!(text.matches("HEADERA").count(), 1, "page {page}: {text:?}");
+    }
+    let found = words(&pdf);
+    assert!(
+        lines_on(&found, 1) >= 45,
+        "page 1 is filled: {}",
+        lines_on(&found, 1)
+    );
+}
+
+#[test]
+fn a_row_background_covers_a_split_direct_text_cell_on_every_page() {
+    // `<tr>` backgrounds are painted from the cell frames: on page 2 the fill starts at the content top, not
+    // after the line span or at the padding edge of the first page.
+    let pdf = render_with(
+        "tr { background: #ffe9a8 } td { padding: 16px }",
+        &format!(
+            "<table style=\"width:100%\"><tr><td>{}</td></tr></table>",
+            lines(1..=120)
+        ),
+    );
+    let pages = assert_paginated(&pdf, &expected(1..=120));
+    assert!(pages >= 3, "{pages}");
+    let (w, h, rgb) = page_rgb(&pdf, 2);
+    let first_fill = (0..h)
+        .find(|&y| {
+            (0..w).any(|x| {
+                let p = &rgb[(y * w + x) * 3..(y * w + x) * 3 + 3];
+                [0xffu8, 0xe9, 0xa8]
+                    .iter()
+                    .zip(p)
+                    .all(|(a, b)| a.abs_diff(*b) < 12)
+            })
+        })
+        .expect("no fill on page 2");
+    let top = MARGIN_PT.round() as usize;
+    assert!(
+        first_fill.abs_diff(top) <= 1,
+        "the fill starts at row {first_fill}, the content top is {top}"
+    );
+}
+
+#[test]
+#[ignore = "F35: a cell centred in a row taller than a page is not placed beside the start of the row"]
+fn a_short_cell_beside_a_split_cell_stays_on_the_first_page_when_centred() {
+    let pdf = render(&format!(
+        "<table style=\"width:100%\"><tr><td>Item</td><td>{}</td></tr></table>",
+        lines(1..=120)
+    ));
+    assert_paginated(&pdf, &expected(1..=120));
+    let found = words(&pdf);
+    let (item_page, item_y) = word_at(&found, "Item");
+    let (_, first_y) = word_at(&found, "Line0001");
+    assert_eq!(item_page, 1);
+    assert!(
+        (item_y - first_y).abs() <= 1.0,
+        "Item {item_y} vs Line0001 {first_y}"
+    );
+}
+
+/// `BLine0001<br>…`: the second tall item of a row.
+fn b_lines(range: std::ops::RangeInclusive<usize>) -> String {
+    range
+        .map(|i| format!("BLine{i:04}"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+/// `BLine…` words of `found` as `(page, y_max, text)`.
+fn b_words(found: &[(usize, f32, String)]) -> Vec<&(usize, f32, String)> {
+    found
+        .iter()
+        .filter(|(_, _, w)| w.starts_with("BLine"))
+        .collect()
+}
+
+/// Two (or three) tall siblings in one row, the first taller than the others: every line of both once and
+/// in order, the row ends where its tallest item ends and what follows starts below it (Chrome: A on pages
+/// 1-3, B on pages 1-2, AFTER on page 3).
+fn assert_row_of_two_tall(pdf: &[u8], what: &str) {
+    let pages = assert_paginated(pdf, &expected(1..=120));
+    assert_eq!(pages, 3, "{what}");
+    let found = words(pdf);
+    let b: Vec<&str> = b_words(&found).iter().map(|(_, _, w)| w.as_str()).collect();
+    let want: Vec<String> = (1..=80).map(|i| format!("BLine{i:04}")).collect();
+    assert_eq!(
+        b,
+        want.iter().map(String::as_str).collect::<Vec<_>>(),
+        "{what}: B lines"
+    );
+    let last_b = b_words(&found).last().map(|(p, _, _)| *p).unwrap();
+    assert_eq!(last_b, 2, "{what}: B ends on page 2");
+    assert_eq!(lines_on(&found, 1), 50, "{what}");
+    assert_below(&found, "AFTER", "Line0120");
+}
+
+#[test]
+fn a_row_of_two_tall_direct_text_cells_ends_with_the_taller_one() {
+    for (what, cells) in [
+        (
+            "two cells",
+            format!("<td>{}</td><td>{}</td>", lines(1..=120), b_lines(1..=80)),
+        ),
+        (
+            "three cells",
+            format!(
+                "<td>{}</td><td>{}</td><td>short</td>",
+                lines(1..=120),
+                b_lines(1..=80)
+            ),
+        ),
+        (
+            "taller last",
+            format!("<td>{}</td><td>{}</td>", b_lines(1..=80), lines(1..=120)),
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr>{cells}</tr></table><p>AFTER</p>"),
+        );
+        assert_row_of_two_tall(&pdf, what);
+    }
+}
+
+#[test]
+fn the_row_after_a_row_of_two_tall_direct_text_cells_starts_below_the_taller_one() {
+    let pdf = render_with(
+        "td { vertical-align: top }",
+        &format!(
+            "<table style=\"width:100%\"><tr><td>{}</td><td>{}</td></tr><tr><td>NEXTROW</td><td>x</td></tr></table>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ),
+    );
+    let pages = assert_paginated(&pdf, &expected(1..=120));
+    assert_eq!(pages, 3);
+    assert_below(&words(&pdf), "NEXTROW", "Line0120");
+}
+
+#[test]
+fn a_flex_or_grid_row_of_two_tall_paragraphs_ends_with_the_taller_one() {
+    // The first item is the taller one and both split: what follows the row starts below the taller item.
+    for row in [
+        "display:flex;align-items:flex-start;gap:16px",
+        "display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:16px",
+    ] {
+        let pdf = render(&format!(
+            "<div style=\"{row}\"><p>{}</p><p>{}</p></div><p>AFTER</p>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ));
+        assert_row_of_two_tall(&pdf, row);
+        let pdf = render(&format!(
+            "<div style=\"{row}\"><div><p>{}</p></div><div><p>{}</p></div></div><p>AFTER</p>",
+            lines(1..=120),
+            b_lines(1..=80)
+        ));
+        assert_row_of_two_tall(&pdf, row);
+    }
+}
+
+fn c_lines(range: std::ops::RangeInclusive<usize>) -> String {
+    range
+        .map(|i| format!("CLine{i:04}"))
+        .collect::<Vec<_>>()
+        .join("<br>")
+}
+
+#[test]
+fn a_row_of_three_paragraph_cells_ends_with_the_tallest_cell() {
+    // `<td><p>` cells are stretched to the row: the space a shorter cell's frame has below its last line is not
+    // content, so it must not push what follows the row below the tallest cell (Chrome: AFTER right below it).
+    for (what, cells) in [
+        (
+            "tallest last",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                b_lines(1..=90),
+                c_lines(1..=60),
+                lines(1..=120)
+            ),
+        ),
+        (
+            "tallest first",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                lines(1..=120),
+                b_lines(1..=90),
+                c_lines(1..=60)
+            ),
+        ),
+        (
+            "tallest in the middle",
+            format!(
+                "<td><p>{}</p></td><td><p>{}</p></td><td><p>{}</p></td>",
+                b_lines(1..=60),
+                lines(1..=120),
+                c_lines(1..=90)
+            ),
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr>{cells}</tr></table><p>AFTER</p>"),
+        );
+        let pages = assert_paginated(&pdf, &expected(1..=120));
+        assert_eq!(pages, 3, "{what}");
+        let found = words(&pdf);
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (last_page, last_y) = word_at(&found, "Line0120");
+        assert_eq!(after_page, last_page, "{what}");
+        assert!(
+            after_y > last_y && after_y - last_y <= 20.0,
+            "{what}: AFTER at {after_y}pt, the last line of the tallest cell at {last_y}pt"
+        );
+    }
+}
+
+#[test]
+fn the_bottom_margin_of_the_last_child_of_a_split_cell_stays_part_of_the_row() {
+    // Chrome: the margin below a cell's last child is inside the cell, so what follows the table starts
+    // `margin` below the last line (60 px = 45 pt on top of the 15 pt line step).
+    for (what, cell, gap) in [
+        (
+            "p",
+            format!("<p style=\"margin-bottom:60px\">{}</p>", lines(1..=120)),
+            60.0,
+        ),
+        (
+            "div around p",
+            format!(
+                "<div style=\"margin-bottom:300px\"><p>{}</p></div>",
+                lines(1..=120)
+            ),
+            240.0,
+        ),
+        (
+            "margin collapsed through a div",
+            format!(
+                "<div><p style=\"margin-bottom:60px\">{}</p></div>",
+                lines(1..=120)
+            ),
+            60.0,
+        ),
+        (
+            "direct text, then a div",
+            format!(
+                "{}<div style=\"margin-bottom:60px\">tail</div>",
+                lines(1..=120)
+            ),
+            // `tail` is a line after Line0120 and `AFTER` is measured from it.
+            60.0,
+        ),
+    ] {
+        let pdf = render_with(
+            "td { vertical-align: top }",
+            &format!("<table style=\"width:100%\"><tr><td>{cell}</td></tr></table><p>AFTER</p>"),
+        );
+        let found = words(&pdf);
+        let (after_page, after_y) = word_at(&found, "AFTER");
+        let (last_page, last_y) = if what == "direct text, then a div" {
+            let t = found
+                .iter()
+                .find(|(_, _, w)| w == "tail")
+                .map(|(p, y, _)| (*p, *y));
+            t.unwrap_or_else(|| word_at(&found, "Line0120"))
+        } else {
+            word_at(&found, "Line0120")
+        };
+        assert_eq!(after_page, last_page, "{what}");
+        let step = after_y - last_y;
+        assert!(
+            (gap - 2.0..=gap + 8.0).contains(&step),
+            "{what}: AFTER is {step}pt below the last line, expected about {gap}pt"
+        );
+    }
 }
 
 fn temp(pdf: &[u8]) -> std::path::PathBuf {
