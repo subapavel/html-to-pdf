@@ -1,6 +1,6 @@
 # F83b — `break-inside: avoid` on block wrappers: the recursion gate and the nested paths ignore it
 
-Date: 2026-10-18. Finding: F83b in `2026-10-15-m0-findings.md`. Status: planned. Fix goes on `subapavel/fulgur`
+Date: 2026-10-18. Finding: F83b in `2026-10-15-m0-findings.md`. Status: **done**. Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (after `659affe`), carried via `[patch.crates-io]`. All fork line numbers are in
 `crates/fulgur/src/pagination_layout.rs` at `659affe`.
 
@@ -317,4 +317,84 @@ The moved box's top margin is truncated (§5.2), and a test pins it.
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed on branch `f83b-avoid-on-wrappers`; fulgur fork `htmltopdf/srgb-colours` **`906d05f`** (on top of `659affe`); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `906d05f` (`cargo update -p fulgur` changed
+that one entry). Status: **done**.
+
+**Step 1, the model held, no stop.** Our CLI (debug) built against the local fork with temporary `eprintln!`s at the body gate, the F28 pre-advance and the nested gate (removed again, `git checkout`):
+- probe 1 (`c1`): `body-gate child=8 cursor=954 child_h=92 room=55 needs=true avoid=true`, no F28 advance (first row 20 px fits): the gate is the emitter;
+- probe 2 (`c4`, nested): `nested-gate child=10 line_split=true avoid=true`: entered in place, first break = `leading`;
+- `c5` (nested wrapper): outer `needs=true`, inner avoid wrapper `needs=true avoid=true` at 946 px.
+
+Chrome probes (Chromium Skia/PDF m141, A4, 15 mm, Inter, `/tmp/claude-0/vrt-f83b/probe.py`, 20 px lines; `normal` gives the same picture for `c1`, `c3`-`c9`; page counts differ by F81 as in F83). "Moves" is Chrome's:
+
+| Case | Chrome | main (before) |
+|---|---|---|
+| 1 spacer 930 + avoid wrapper of three `<p>`, `mt-24px` (inline and class) | all on page 2 | `aaa` p1, `bbb`/`ccc` p2 |
+| 2 the same wrapper first in the body | page 1 | page 1 |
+| 3 `<p>before</p>` + avoid wrapper of four 700-word `<p>` | `word00000` p2, 9 pages | p1, 8 pages |
+| 4 `<div><p>before</p><p avoid>` 2500 words | p2, 9 pages | p1, 8 pages |
+| 5 nested: `<div>` spacer + avoid wrapper (spacer 930 with UA margins, 960 with Tailwind) | all on page 2 | split |
+| 6 `<p>before</p><div border-top><div avoid>` four long `<p>` | p2, border on page 2 only | p1, border on page 1 |
+| 7 spacer 960 + avoid [a1 a2 a3 `break-before:page` bb] | a1-a3 p2, bb p3 (without `avoid`: a1 p1) | a1 p1 |
+| 7g spacer 930 + avoid [a1 `break-before:page` bb] | a1 p1, bb p2 | same |
+| 8 avoid `height:980px` first in body with `margin-top:40px` | starts on page 1 (2 pages) | page 1 |
+| 8b relaxed avoid `<div class="mt-8">` first in body | `word00000` p1 | p1 |
+| 9 `<p>before</p>` + avoid `height:1500px` with two `<p>` | pages 2-3, `a` p2 | same |
+| 10 60 rows, `tr{break-inside:avoid}` | no row split | no row split |
+| flex row with an avoid item (F83d) | row moves to page 2 | item split |
+| `<tr avoid>` / `<td avoid>` with a cell of six 3-line `<p>` (F83d) | row moves to page 2 | cell split 4 / 2 |
+| avoid box with border and padding after a spacer | the whole box, border included, moves | split |
+
+So rules (2) and (4) stay (Chrome moves cases 3, 4, 6 and 7), `avoid_piece_size` stays (case 7), probes 1 and 5 move. F83d is confirmed (last three rows). One more probe (F83e): a margin gap between an outer box's border
+and its first avoid child makes Chrome move the outer box where ours enters it; filed.
+
+**Red before** (main at `36d4e5b`, fork `659affe`):
+- ours `avoid_wrappers.rs`: 6 of 11 red (`an_avoid_wrapper_that_fits_a_fresh_page_moves_whole`, `..._of_four_long_paragraphs_after_content_starts_on_the_next_page`, `a_nested_relaxed_avoid_paragraph_starts_on_the_next_page`,
+  `a_nested_avoid_wrapper_that_fits_a_page_moves_whole`, `an_avoid_wrapper_inside_a_bordered_box_takes_the_box_with_it`, `a_forced_break_inside_an_avoid_box_wins_and_the_piece_before_it_moves_whole`); the other 5 are guards
+  (first in body, four paragraphs first in body, no blank page, F83c, table rows);
+- fork lib: 5 red (`avoid_wrapper_that_fits_a_fresh_page_moves_whole`: 2 fragments `(0, 150)` + `(1, 0)`; `avoid_wrapper_taller_than_a_page_after_content_starts_on_the_next_page`: `(0, 20)`;
+  `nested_avoid_wrapper_moves_whole`; `nested_relaxed_avoid_paragraph_starts_a_page`: `(0, 20)`; `forced_break_piece_of_an_avoid_box_moves_whole`: `(0, 150)`), the 2 guards
+  (`avoid_wrapper_first_on_its_page_is_entered`, `avoid_box_on_a_short_first_strip_is_split`) green;
+- fork `render_smoke_avoid_wrapper_moves_whole_to_the_next_page`: red (`ALPHA` on page 1).
+
+**Green after:** all of them, plus the unit tests `avoid_keeps_whole_combinations`, `avoid_piece_size_stops_at_the_first_forced_break`, `starts_with_relaxed_avoid_follows_the_first_child_without_a_gap`,
+`leading_block_size_counts_an_avoid_first_row_whole`.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib`, crates.io Blitz | 2063 passed, 13 failed: the same 13 (9 `seed_image_natural_size_tests`, 3 `convert::table`, 1 `pagination_layout` table test) as at `659affe` |
+| fork `--lib`, local Blitz (`/home/user/blitz`, `52b22ef`) | 2076 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz 251 passed, 3 failed (the same `outside_*_markers`, `table_parts_with_a_non_table_display`); local Blitz 254 passed, 0 failed |
+| fork other test binaries | all 42 `tests/*.rs` one by one (local Blitz): no failure, no error |
+| fork `fulgur-vrt` (`fonts-noinInter.conf`, crates.io Blitz) | 31 tests green, goldens byte-identical, nothing re-blessed |
+| fork 21 examples (debug CLI before = `659affe`, after) | byte-identical, 21 of 21; `break-inside`'s `.callout`: page 2 before and after, unchanged (F28 already moved its `<p>`; now the box moves whole through the avoid rule to the same place) |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked --no-fail-fast` | 361 passed, 0 failed (11 new `avoid_wrappers.rs`; `fixtures.rs` renders 14 strict); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-13 | `cmp` byte-identical to the render of main's binary (`/tmp/claude-0/htmltopdf-main-36d4e5b`): 13 of 13; `compare.py` numbers unchanged (4.4, 10.2/11.4/9.8, 5.7, 5.7, 21.6, 15.9/11.8, 7.2/7.1, 13.2/12.1, 5.1/4.9/0.7, 5.9/1.5, 6.9, 14.6/7.2, 1.9/11.7/1.9 %), page counts unchanged |
+| render time 01 / 02 (25 runs, median, alternating) | 17.5 / 49 ms on main, 17.9 / 49 ms now (second round 16.6 / 48.7 against 17.6 / 47.7): noise |
+| fixture 14 | new: **2 pages like Chrome, 7.5 / 1.6 %** against main's binary 7.8 / 1.9 % (wrapper split), threshold 0.085 (worst page + 1 point) |
+| regression harness (F83 `att` cases 1-6, 316 documents, new against main's binary, no Chrome) | 3 differ, 0 worse (words, duplicates, out of box, order): `li_after`, `nested_div_p_after`, `div_p_avoid_after` gain a page and now match Chrome's page count (4, 3, 3) |
+
+Fixture 14 (`out/compare/14-totals-keep-together-p1.png`, `-p2.png`, git-ignored): page 1 is the head, party grid and eight item rows; page 2 starts at the content top with the totals, then payment details and signature, like Chrome.
+Main's binary leaves the totals table under the items on page 1 and starts page 2 with the payment details. The remaining diff is text drift (rows about 3 px lower than Chrome's) and the rule Chrome paints above the
+total (`border-t-2` on a `<tr>`, Blitz #386). Not in `PAGE_COUNT_MAY_DIFFER`. The items table's last row ends about 170 px above the page-1 content bottom.
+
+Deviations from the plan:
+
+1. **Steps 3 and 4 in one pass.** Rules (1)/(3)/(4) and (2) went in together (the red tests of rule (2) share the helpers); the §5 step 3 checks were run once, on the final code, not on a rules-(1)/(3)/(4)-only state.
+2. **`avoid_extent(node)` has no `doc` parameter** (it would be unused). `has_avoid`, `is_block_flow_container` and `first_forced_break_offset` are extra private helpers; `leading_block_size(doc, node, column_styles, depth, page_height_px)` takes the table
+   after `node_id`; its own root's `avoid` is left to the caller (it knows `content_above`), so a first-on-page box with a margin is not advanced to a blank page; `row_mate_can_split` passes `None` (table cells, F83d).
+3. **Fixture 14 content**: the numeric columns have fixed `w-20` / `w-32` / `w-28` widths so Chrome's and our column widths agree (the first version without them differed by 8.2 / 1.6 % because of wrapped headers and
+   amounts); eight item rows (the table ends about 170 px above the page-1 content bottom; with nine rows main still splits the wrapper, with ten the table itself no longer fits).
+4. **Test expectations were adjusted to the document the test renders**: Tailwind's preflight zeroes `p` margins, so the nested case uses a 960 px spacer (930 px fits) and the control of case 1 splits `aaa`, `bbb` | `ccc`; `red_pixels`
+   reads a PPM file (`pdftoppm` here has no `-ppm` flag and no stdout output). Chrome was re-probed on the Tailwind variants (`t1`-`t9`) with the same results.
+5. **`vrt-validator` was not run** (a subagent cannot start another); the regression harness above and the probes stand in for part of it.
+
+Filed: **F83d** (avoid on flex / grid items and table rows or cells that are entered), **F83e** (a margin gap between an outer border and its first avoid child).
+
+Not verified here: `vrt-validator`; `pdf-reviewer` (not required, writer, fonts and metadata untouched); the spec citations of §2 (from memory, `css-spec-researcher` not run); `avoid` inside a transformed, clipped or floated box
+(no probe; `starts_with_relaxed_avoid` and `avoid_keeps_whole` do not look at them); an avoid box inside a `display: contents` or anonymous-wrapper chain beyond the `layout_children` walk; `line-height: normal` for cases 5 to 10 of
+§4 (only the Chrome side was probed for `c1`, `c3`-`c9`; our tests use 20 px); the 13 crates.io-Blitz failures were counted, not diffed name by name against `659affe`; `avoid` combined with repeated table headers (F12) or multicol containers
+nested in an avoid wrapper (the helper returns "not relaxed" for multicol, no probe); right-to-left text; the fork examples were compared with the debug CLI, not the release one.

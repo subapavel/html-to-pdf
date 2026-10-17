@@ -90,6 +90,13 @@ THRESHOLDS = {
     #     text drift every fixture has (page 2 is a dense paragraph, a line of drift part-way down). Worst page + 1 point.
     #     Since F87 the paragraph carries the Tailwind class `break-inside-avoid` instead of an inline style; the PDF is byte-identical.
     "13-terms-keep-together": 0.127,
+    # 14: new in F83b (a `break-inside-avoid` wrapper with the totals, the payment details and the signature, about 300 px,
+    #     after an items table that ends about 170 px above the page-1 content bottom). 7.5 / 1.6 %: on main the wrapper
+    #     was entered and split (totals table under the items on page 1, payment and signature on page 2: 7.8 / 1.9 %);
+    #     now it starts page 2 whole like Chrome's. The rest is the text drift every fixture has (rows about 3 px lower
+    #     than Chrome's, adding up over 8 rows) and the `border-t-2` Chrome paints on the total's `<tr>` and we do not
+    #     (Blitz #386, F22). Worst page + 1 point.
+    "14-totals-keep-together": 0.085,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
