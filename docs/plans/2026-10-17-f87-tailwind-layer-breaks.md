@@ -1,6 +1,6 @@
 # F87 — Tailwind break utilities inside `@layer` never reach fulgur's break / column reader
 
-Date: 2026-10-17. Finding: F87 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/fulgur`
+Date: 2026-10-17. Finding: F87 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (after `752df13`), carried via `[patch.crates-io]`. All fork line numbers are at `752df13`.
 
 ## 1. Problem
@@ -214,4 +214,74 @@ Pixel diff: fixtures 01–12 `cmp` byte-identical to main's binary, compare numb
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed on branch `f87-tailwind-layer-breaks`; fulgur fork `htmltopdf/srgb-colours` **`645c15e`** (on top of `752df13`); the Blitz fork is unchanged. `Cargo.lock` pins `645c15e` (one line).
+Status: **done**.
+
+**Step 1, the model held** (our CLI built against the local fork with a temporary log in `extract_column_style_table`, removed again; probes in `/tmp/claude-0/vrt-f87/cls/`, Chrome = Playwright Chromium, print media,
+A4, 15 mm, Inter, `line-height: 20px`):
+
+- Fixture 13 on the unfixed code: `parse_stylesheet` returns 0 rules (Tailwind contributes none); fixture 02: 2 rules (its own `tr` and `.keep-together`). The harvested order is the head `<style>`, our injected
+  `@layer htmltopdf-property-defaults{...}` sheet, then the bundled `tailwind.css` (22 KB), as §3 said. Parsing took 115-145 us; building the table for fixture 02 82 us.
+- `@layer utilities{.columns-2{columns:2}}` gives two columns today (Stylo handles layers): no F87c.
+- `break-inside:avoid !important` is dropped (the declaration parser never calls `parse_important`; a throwaway unit test confirmed it): F87b is real. Chrome keeps the box together, with and without a competing inline `auto`.
+- Chrome agrees with §2 on cases A, B, C, D and acceptance 8 (table below). No stop.
+
+**Deviation found in step 1: `break-inside` cannot be seen on a body-level `<p>`** (§4 items 1, 5, 6, 7 and the Q1 table use `<p>`). In the fork a body-level paragraph that does not fit below the cursor moves whole to the next page
+whether or not it is `avoid` (the pre-advance of the line path, F30c; Chrome starts an `auto` paragraph on page 1 and splits it), and one that is taller than a page is relaxed to `auto` since F83. So `<p class="break-inside-avoid">`
+and a plain `<p>` render the same PDF and no assertion can be red on it. The box where `avoid` and `auto` differ is a multi-column container that does not fit the room under it (F30d: `auto` splits it over the pages, `avoid`
+moves it whole), and Chrome does the same. The tests use `<div class="break-inside-avoid" style="columns:2">` of 100 words after a 960 px spacer. The cases and their meaning are unchanged.
+
+| Probe (spacer 960 px, then a two-column box of 100 words) | Chrome: page of `word00000` | ours before F87 | ours with F87 |
+|---|---|---|---|
+| no property / inline `avoid` | 1 / 2 | 1 / 2 | 1 / 2 |
+| `class="break-inside-avoid"` | **2** | 1 | 2 |
+| A: head `div{break-inside:auto}` plus the class | 1 | 1 | 1 |
+| B: body `<style>@layer base{div{break-inside:auto}}</style>` plus the class | **2** | 1 | 2 |
+| C: `@layer utilities, overrides;@layer overrides{.t{auto}}`, classes `break-inside-avoid t` | 1 | 1 | 1 |
+| D: `@layer a{.k{auto} @layer b{.k{avoid}}}` | 1 | 1 | 1 |
+| class plus inline `auto` | 1 | 1 | 1 |
+| `<p>a</p><p class="break-before-page">b</p>`, `break-after-page`, `print:break-before-page` (inline Tailwind shape) | `b` on page 2 | page 1 | page 2 |
+| `@media screen{.x{break-before:page}}` / `@media print{...}` | no break / break | no break / **no break** | no break / break |
+
+**Red before** (fork `752df13`): ours `tailwind_breaks.rs`, 6 of 11 red: `break_inside_avoid_class_keeps_a_box_together`, `break_before_page_class_starts_a_page`, `break_after_page_class_starts_the_next_page`,
+`print_variant_class_starts_a_page`, `a_later_source_in_an_earlier_layer_loses_to_the_utility_layer` (case B), `media_screen_does_not_break_and_media_print_does`; the other 5 are guards, green before and after (control, A, C, D,
+inline beats the layer). Fork lib: 11 red (`a_rule_inside_a_layer_is_read`, `an_earlier_layer_loses_to_a_later_one_whatever_the_source_order`, `a_layer_beats_its_own_sublayers`, `a_dotted_layer_name_is_the_nested_layer`,
+`anonymous_layers_are_distinct_and_ordered`, `a_layer_statement_fixes_the_order_without_rules`, `media_blocks_are_read_when_the_query_matches_the_device`, `a_media_block_nests_in_a_layer_and_in_a_media_block`,
+`an_escaped_class_selector_matches_the_class`, `deeply_nested_blocks_do_not_overflow_the_stack`, `nesting_up_to_the_cap_is_read`) plus `column_reader_media_type_agrees_with_stylo_device` (red on the reader's
+assertion; the Stylo colouring assertions passed, so the device is a screen) and `pagination_layout::break_before_inside_a_layer_starts_a_page` (0, 0 against 0, 1). Green guards: `unlayered_rule_beats_a_layer_whatever_the_order`
+(case A), `the_style_attribute_beats_layered_and_unlayered_rules`, `supports_blocks_stay_skipped`, `other_at_rules_stay_skipped_and_do_not_swallow_the_next_rule`. Two tests were added after the first run:
+`layer_ranks_are_post_order`, `stylesheet_reads_matching_media_and_layers_in_cascade_order`; `stylesheet_skips_at_rules` became `stylesheet_skips_unmatched_at_rules`. **Green after:** all of them.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib` | crates.io Blitz: 2061 passed, 13 failed, the same 13 as at `752df13`; local Blitz (`/home/user/blitz`, `52b22ef`): 2074 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz: 250 passed, 3 failed (the same `outside_*_markers`, `table_parts_with_a_non_table_display`); local Blitz: 253 passed, 0 failed |
+| fork other test binaries | all 42 `tests/*.rs` one by one with the local Blitz: green |
+| fork `fulgur-vrt` | green, no golden changed. It needs `FONTCONFIG_FILE` to hide the host's system Inter (`fonts-noinInter.conf`, as before); with the repo's own `examples/.fontconfig/fonts.conf` 26 of 64 differ in this environment, which is a host-font effect, not this change |
+| fork examples | all 21 PDFs rendered with the debug CLI at `752df13` and after: byte-identical |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | 336 passed, 0 failed (11 new in `tailwind_breaks.rs`); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-13 | `cmp` byte-identical to the render of main's binary (`htmltopdf-main-089675f`, fulgur `752df13`): 13 of 13; `compare.py` numbers unchanged: 4.4, 10.2/11.4/9.8, 5.7, 5.7, 21.6, 15.9/11.8, 7.2/7.1, 13.2/12.1, 5.1/4.9/0.7, 5.9/1.5, 6.9, 14.6/7.2, 1.9/11.7/1.9 %; page counts and thresholds unchanged |
+| render time, 5 runs x 2 rounds, main / branch | 01: 22-27 / 19-25 ms; 02: 52-58 / 49-58 ms. Within noise; the parse of the whole Tailwind sheet is about 0.1 ms (step 1 log), far under the 1 ms bound |
+
+**Fixture 13, main against the branch: byte-identical, and so are the class, the inline style and neither property** (all six combinations of main / branch and class / inline / no property render the same PDF, 3 pages, 1.9 / 11.7 / 1.9 %,
+Chrome reference pixel-identical to the committed one). §4 predicted that the class version differs on main; it does not, for the reason in the deviation above (an `avoid` paragraph and an `auto` one are placed alike at body
+level, and an `avoid` one taller than a page is relaxed since F83). Fixture 13 now uses `class="text-xs text-gray-600 break-inside-avoid"` (`text-gray-600` kept, §4 dropped it from the quoted class list, but it changes the colour
+and `cmp`-identity needs it); it documents the idiom but proves nothing about F87. The proof is `tailwind_breaks.rs`. The README says so.
+
+Deviations from the plan:
+
+1. **Tests use a two-column box, not a `<p>`** (above). Case A-D semantics and the acceptance numbers are the plan's; `p{...}` selectors became `div{...}`.
+2. **Fixture 13 does not show F87** (above); the plan's step 5 expectation "differs on main" was wrong.
+3. **Chrome reference** rendered with the scratch `render-ref.mjs` (hard-coded Playwright path, as in F83 §7); `chrome.pdf` bytes changed, the three PNGs are identical.
+4. `media_query_list_matches` returns `true` for an empty list (Media Queries 4 §2.1); a query naming a type other than `all`, `screen`, `print` never matches, `not` included.
+5. Fork `--lib` tests count 2074 (the plan did not give a number).
+
+Filed in `2026-10-15-m0-findings.md`: **F87a** (media features, `md:break-before-page`), **F87b** (`!important`); F87c was not needed. The `columns-*` claim of the F87 entry is corrected there. Added to **F30c**: a body-level `avoid`
+paragraph is placed like an `auto` one.
+
+Not verified: `vrt-validator` (not run); `pdf-reviewer` (not required, writer path untouched); the spec citations in §2 (from memory; Chrome probes agree on every case, the spec text was not read); `@layer` inside a skipped
+`@media` (not registered, unverified against the spec, no fixture depends on it); `@import ... layer()`, `<link>` sheets (fulgur-s5ro); fork `fulgur-vrt` with the repo's own fontconfig (host fonts differ here); the F83
+`render_smoke`-style end-to-end tests on a Tailwind page with the class (no such shape is observable on a `<p>`, see above); right-to-left or non-Latin documents (the change is CSS-only).

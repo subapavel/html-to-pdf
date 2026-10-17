@@ -88,6 +88,7 @@ THRESHOLDS = {
     #     dropped); now all 1167. The paragraph starts at the top of page 2 like
     #     Chrome's, breaks after the same word at the bottom of page 2 and ends at the same line of page 3. The rest is the
     #     text drift every fixture has (page 2 is a dense paragraph, a line of drift part-way down). Worst page + 1 point.
+    #     Since F87 the paragraph carries the Tailwind class `break-inside-avoid` instead of an inline style; the PDF is byte-identical.
     "13-terms-keep-together": 0.127,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
