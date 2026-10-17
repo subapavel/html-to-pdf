@@ -957,7 +957,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#a5977c9a1e63322a245cdb2b4f578f6866ef9a82"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#659affebe68e1c2c5ce7d5e8b407960882fdb6f6"
 dependencies = [
  "blitz-dom",
  "blitz-html",
@@ -973,6 +973,7 @@ dependencies = [
  "minijinja",
  "parley",
  "png",
+ "selectors",
  "serde",
  "serde_json",
  "skrifa 0.44.0",
@@ -981,6 +982,7 @@ dependencies = [
  "thiserror 2.0.21",
  "unicode-properties",
  "unicode-segmentation",
+ "url",
  "usvg",
  "woff2-patched",
  "zune-jpeg 0.5.15",

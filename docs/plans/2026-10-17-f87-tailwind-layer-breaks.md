@@ -299,7 +299,7 @@ sheet that is now read: with layered utilities visible, an important override an
    important beats an unlayered important; an unlayered important beats a layered normal; earlier layer beats later for important in both source orders; a sub-layer beats its parent; a malformed tail
    (`!important foo`, `!`, `!importantx`) drops the declaration.
 2. **Specificity (MEDIUM).** `@layer u{div.k{break-inside:auto} .k{break-inside:avoid}}`: Chrome page 1, first version page 2. The sort key is now (importance tier, layer rank, specificity, source order). Specificity
-   is (ids, classes, types) of the reader's selector subset, summed over `A + B`, and for a selector list the highest of the selectors that matched this element (probes `spec_list_max`, `spec_list_max2`). The same flaw
+   is (ids, classes, types) of the selector (first version: the reader's own subset; §7.3: Stylo's), summed over `A + B`, and for a selector list the highest of the selectors that matched this element (probes `spec_list_max`, `spec_list_max2`). The same flaw
    existed for unlayered rules on main (`unl_spec`: main 2, Chrome 1); it is fixed too. No fixture moved: fixtures 01-13 `cmp` byte-identical to main's binary, compare numbers unchanged.
 3. **`@layer a .b{}` (LOW).** The dotted-name parse skipped whitespace before the dot; Chrome rejects the at-rule. It now reads the tokens including whitespace, so `a .b`, `a. b` and `a . b` make the at-rule
    (and a statement) invalid.
@@ -366,3 +366,46 @@ Coordinator's request: nothing that matched Chrome on main may stop matching. Fo
 | fixtures 01-13 | `cmp` byte-identical to main's binary (13 of 13); `compare.py` numbers unchanged |
 
 Not verified: `break-before: column` inside a real multicol (the table has no column breaks, so it is "none"); `<noscript>` with scripting disabled (Chrome's print has it on).
+
+### 7.3 Re-validation H1: selectors, matched the way the engine does
+
+**H1 (blocker).** The reader dropped every rule whose selector its own grammar did not know (descendant, child, `~`, attribute, `:not`, `:is`, `:where`, pseudo-classes). An unlayered override such as `body div{break-inside:auto}` or
+`body .k{...}` therefore lost to the layered `.k{break-inside:avoid}` utility: Chrome and main page 1, the branch page 2 (`c13.py`: `tw_desc_override`, `desc_override`, `child_override`, `not_override`, `attr_override`). The same gap meant
+that author rules like `.invoice tr{break-inside:avoid}` never applied, on main either.
+
+**Route taken: Stylo's parser and matcher, no Blitz change.** Feasibility was checked first, from fulgur:
+- `style::selector_parser::SelectorParser::parse_author_origin_no_namespace(&str, &UrlExtraData)` is public and returns a `SelectorList<SelectorImpl>`, the list Blitz styles with. It wants a `UrlExtraData` (an `Arc<url::Url>`; it only asks if
+  the scheme is `chrome`), so fulgur takes `url` as a direct dependency.
+- `selectors::Element` is implemented for `&blitz_dom::Node` (`stylo.rs`, through a private alias of a public type), so `matches_selector(&selector, 0, None, &node, &mut context)` runs on the document's own nodes, including sibling and
+  parent navigation. fulgur takes `selectors` as a direct dependency. Both crates are already in `Cargo.lock` at the version Blitz / Stylo use (`selectors` 0.32.0, `url` 2.5.8): no version bump, no new package, only the `fulgur` entry's
+  dependency list gains two names (in ours too). Precedent: F32a added `png`, `gif`, `zune-jpeg`.
+- The `MatchingContext`: `MatchingMode::Normal`, no bloom filter, `QuirksMode::NoQuirks` (Blitz hard-codes it: `Stylist::new(device, QuirksMode::NoQuirks)`), links unvisited, `NeedsSelectorFlags::No`, one `SelectorCaches` per walk.
+- Specificity is `Selector::specificity()` of the highest matching selector of a list (Stylo's packed ids / classes / types, so `:where()` is 0 and `:is()`, `:not()` take their maximum, as Selectors 4 §17).
+- Behaviour that follows from the engine: `:hover`, `:focus`, `:active` are false, a selector with a pseudo-element matches no element, a list with one invalid selector is invalid as a whole (so `.k, .k:bogus` drops the rule, `.zz:hover, .k`
+  keeps it: `sel_list_bad` now matches Chrome).
+- The fallback (extending the reader's own matcher) was not needed. The reader's selector model (`SimpleSelector`, `CompoundSelector`, `ComplexSelector`), its parser, its matcher and the previous-sibling bookkeeping are deleted; 27 tests of
+  that model went with it, replaced by behaviour tests on the engine's matcher.
+
+**Tests, red before.** Fork lib, 6 new tests, all red on `a5977c9`: `descendant_and_child_combinators_are_matched`, `sibling_combinators_are_matched`, `attribute_selectors_are_matched`, `not_is_where_and_structural_pseudo_classes_are_matched`,
+`interactive_pseudo_classes_pseudo_elements_and_bad_selectors_match_nothing`, `selector_specificity_comes_from_the_parsed_selector` (`.invoice tr` reaches `tr`; `body .k` beats `.k`; `:where()` 0, `:is(#k, .zz)` the id, `:not(#zz)` the id, an attribute a class).
+Ours `tailwind_breaks.rs`, 3 new tests red on `a5977c9`, green now: `unlayered_override_with_a_complex_selector_beats_the_utility` (ten overriding selectors win, six non-matching ones leave the utility in charge, the control keeps
+page 2), `descendant_specificity_orders_rules_inside_a_layer`, `a_break_rule_with_a_combinator_applies`. **Honest limit on `.invoice tr{break-inside:avoid}`:** a table row is not observable in the fork (a row that does not fit moves
+whole to the next page with or without `avoid`, like a body-level paragraph, F30c), and a multi-column box inside a wrapper `div` is not split whatever its `break-inside`. So the ours test uses body-level boxes reached by `body`, `~` and `+`, and the
+fork test pins `.invoice tr` matching the rows.
+
+**After.**
+
+| Check | Result |
+|---|---|
+| fork `--lib` | crates.io Blitz 2052 passed, the same 13 failed; local Blitz 2065 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz 250 passed + the same 3 failed; local Blitz: all 42 `tests/*.rs` one by one: green |
+| fork `fulgur-vrt`, 21 examples | green, no golden changed; examples byte-identical |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | 350 passed, 0 failed (25 in `tailwind_breaks.rs`); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-13 | `cmp` byte-identical to main's binary (13 of 13); `compare.py` numbers unchanged (no fixture has a combinator break rule: 02's `<style>` has `tr` and `.keep-together` only) |
+| harness `c1`-`c13`, Chrome / main / branch | 0 regressions except the known: `template` / `noscript` (intended, F87e) and the two `<style media>` feature cases (L1, F87h); `c13` H1 cases all match Chrome; mismatches left (all the same on main): `c2` 26 (media features, F87a), `c4` 2 (F87a), `c5` 1 (`cdc_in_middle`), `c8` 1 (`template_unl`, Blitz) |
+| `fuzz.py`, `fuzz2.py` (seeds 3, 4; 50 cases each) | 0 bad, 0 regressions |
+| `perf3.py` (min of 5, branch against branch before) | same-layer 1.65 s (1.72), anonymous layers 1.70 s (1.80), all-matching important 1.47 s (1.43): not slower; fixtures 01 / 02 within noise of main |
+
+Filed: **F87h** (L1: `<style media>` features ignored by the reader; L2: Blitz ignores the attribute). Not verified: `selectors` matching on a document that was never `resolve`d beyond what the lib tests cover (they use parsed, unresolved documents
+and pass); behaviour with `:nth-child(... of S)` and other selector-4 forms beyond what Stylo 0.8 parses; quirks-mode documents (Blitz always uses `NoQuirks`).

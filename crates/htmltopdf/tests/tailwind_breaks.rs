@@ -384,3 +384,90 @@ fn styles_inside_template_and_noscript_follow_the_engine() {
         }
     }
 }
+
+// -- selectors: the engine's own parser and matcher (F87 review) --------------------------------
+
+/// An unlayered author rule with a descendant, child, `:not()` or attribute selector beats the layered Tailwind
+/// utility: the reader used to drop every rule whose selector it did not know, so the override never applied and
+/// the layered `break-inside-avoid` won (Chrome: the override).
+#[test]
+fn unlayered_override_with_a_complex_selector_beats_the_utility() {
+    let tw = box_after_spacer("break-inside-avoid", "");
+    assert_eq!(
+        page_of(&render("", &tw), "word00000"),
+        2,
+        "control: the utility keeps the box together"
+    );
+    for sel in [
+        "body div",
+        "html body div",
+        "body > .break-inside-avoid",
+        "body>div",
+        "div:not(.zz)",
+        ":is(div, p).break-inside-avoid",
+        "[class]",
+        "[class~=break-inside-avoid]",
+        "div:last-child",
+        ".break-inside-avoid:not(#zz)",
+    ] {
+        let pdf = render(&format!("{sel}{{break-inside:auto}}"), &tw);
+        assert_eq!(page_of(&pdf, "word00000"), 1, "{sel}");
+    }
+    // A selector that does not match the box leaves the utility in charge.
+    for sel in [
+        "section div",
+        "body > section",
+        ".zz:not(.a)",
+        "div:hover",
+        "div::before",
+        "[data-x]",
+    ] {
+        let pdf = render(&format!("{sel}{{break-inside:auto}}"), &tw);
+        assert_eq!(page_of(&pdf, "word00000"), 2, "{sel}");
+    }
+}
+
+/// Specificity of a descendant selector orders rules inside a layer (Selectors 4 §17).
+#[test]
+fn descendant_specificity_orders_rules_inside_a_layer() {
+    let pdf = render(
+        "@layer utilities{body .k{break-inside:auto}.k{break-inside:avoid}}",
+        &box_after_spacer("k", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+    // `:where()` adds nothing, so the later rule wins.
+    let pdf = render(
+        "@layer utilities{:where(body) .k{break-inside:auto}.k{break-inside:avoid}}",
+        &box_after_spacer("k", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 2);
+}
+
+/// A break rule whose selector has a combinator applies: `body .box`, `.a ~ .box`, `.a + .box`. (A multi-column box
+/// inside a wrapper `div` is not split by the fork's fragmenter whatever its `break-inside`, so the box is a
+/// body-level one and the combinator reaches it through its siblings or `body`.)
+#[test]
+fn a_break_rule_with_a_combinator_applies() {
+    let body = |wrapper: &str| {
+        format!(
+            r#"<div class="{wrapper}" style="height:960px"></div><div class="box" style="columns:2">{}</div>"#,
+            words(100)
+        )
+    };
+    for sel in [
+        "body .box",
+        "html > body > .box",
+        ".invoice ~ .box",
+        ".invoice + .box",
+        "div + div",
+        "div:first-child ~ div",
+    ] {
+        let pdf = render(&format!("{sel}{{break-inside:avoid}}"), &body("invoice"));
+        assert_eq!(page_of(&pdf, "word00000"), 2, "{sel}");
+    }
+    // The first sibling is not `.invoice`: the rule does not apply and the box splits in place.
+    for sel in [".invoice ~ .box", ".invoice + .box", ".invoice .box"] {
+        let pdf = render(&format!("{sel}{{break-inside:avoid}}"), &body("other"));
+        assert_eq!(page_of(&pdf, "word00000"), 1, "{sel}");
+    }
+}
