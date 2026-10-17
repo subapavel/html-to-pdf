@@ -368,16 +368,19 @@ fn style_media_attribute_is_a_media_query_list_for_print() {
     }
 }
 
-/// A `<style>` inside `<template>` or `<noscript>` never applies, layered or not.
+/// A `<style>` inside `<noscript>` or `<template>` is read like the engine reads it. There is no scripting, so
+/// `<noscript>` content applies; Blitz also applies a `<style>` in an inert `<template>` (a browser never does), and the
+/// break reader follows the engine's cascade so that one stylesheet does not apply half its declarations. The
+/// fork's `column_reader_agrees_with_stylo_on_template_and_noscript_styles` pins the agreement.
 #[test]
-fn styles_inside_template_and_noscript_are_not_read() {
+fn styles_inside_template_and_noscript_follow_the_engine() {
     for wrap in ["template", "noscript"] {
         for css in [".x{break-before:page}", "@layer u{.x{break-before:page}}"] {
             let body = format!(
                 r#"<{wrap}><style>{css}</style></{wrap}><p>alpha</p><p class="x">bravo</p>"#
             );
             let pdf = render("", &body);
-            assert_eq!(page_of(&pdf, "bravo"), 1, "<{wrap}> {css}");
+            assert_eq!(page_of(&pdf, "bravo"), 2, "<{wrap}> {css}");
         }
     }
 }

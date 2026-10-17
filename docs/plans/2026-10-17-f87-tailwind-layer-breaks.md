@@ -342,14 +342,19 @@ Coordinator's request: nothing that matched Chrome on main may stop matching. Fo
 - **F87d, `<style media>`.** The harvester evaluated the attribute as a substring test (`contains("print")`), so `not print` was print. It is now a media query list on a print device
   (`media_query_list_matches_on(input, "print", true)`; our crate swaps `print` and `screen` in CSS text, not in attributes, so the at-rule reader keeps `READER_MEDIA_TYPE`). `features_match` keeps `print and (min-width: 1px)`
   on (the old test applied it whole) and never under `not`. Side effect, toward Chrome: `all and (orientation: portrait)` and `not screen` now apply (the substring test dropped them).
-- **F87e, `<template>` / `<noscript>`.** The harvester returns at both elements, so a `<style>` inside is not read, layered or not. `template_unl` (unlayered, same bug on main) now matches Chrome.
+- **F87e, `<template>` / `<noscript>`: no skip (corrected after the first version of 7.2).** The first version of the fork skipped `<style>` inside both, as Chrome-with-JS does. Correction from the coordinator: there is
+  no scripting here, so `<noscript>` content applies, and the break reader must agree with our own engine's cascade, not with Chrome with JS. The agreement test
+  (`column_reader_agrees_with_stylo_on_template_and_noscript_styles`, fork `a5977c9`) showed Stylo applies a `<style>` in `<noscript>` (agreement, as the correction said) **and in `<template>`** (Blitz does not make
+  template contents inert; the correction assumed it did). The skip for `<template>` therefore contradicted Stylo and made one sheet apply half its declarations, so the harvester skips neither, for layered and unlayered
+  rules. The agreement test was red with the `<template>` skip in place and is green without. The harness cases `template`, `template_unl`, `noscript` are intended differences from Chrome-with-JS (the first two are
+  Blitz's `<template>` bug, F87e); ours pins them in `styles_inside_template_and_noscript_follow_the_engine`.
 
 **Red before** (against `3b158b6`): fork lib `avoid_and_column_values_map_to_no_forced_break`, `a_later_avoid_value_overrides_an_earlier_page`, `always_is_a_value_of_the_legacy_properties_only`,
-`extract_column_style_table_evaluates_the_media_attribute`, `extract_column_style_table_skips_template_and_noscript_styles`; ours `tailwind_breaks.rs` `a_later_avoid_value_cancels_an_earlier_forced_break`,
-`always_breaks_only_as_a_legacy_page_break_value`, `style_media_attribute_is_a_media_query_list_for_print`, `styles_inside_template_and_noscript_are_not_read`. **Green after:** all.
+`extract_column_style_table_evaluates_the_media_attribute`, `column_reader_agrees_with_stylo_on_template_and_noscript_styles` (red with the `<template>` skip); ours `tailwind_breaks.rs` `a_later_avoid_value_cancels_an_earlier_forced_break`,
+`always_breaks_only_as_a_legacy_page_break_value`, `style_media_attribute_is_a_media_query_list_for_print`, `styles_inside_template_and_noscript_follow_the_engine` (the last pins the engine-following behaviour, red only against the first version's skip). **Green after:** all.
 
-**Harness** (`c1.py`-`c12.py`, Chrome / main / branch): **0 regressions**. Mismatches left, all the same as main: 28 in `c2` (media features and responsive variants: F87a), `tw_bf_page_sm` and
-`tw_bf_page_nested_amp` (F87a), `cdc_in_middle`, `sel_list_bad` (selector grammar). `template_unl` is gone. `fuzz.py 2 60`: 0 bad.
+**Harness** (`c1.py`-`c12.py`, Chrome / main / branch): **0 regressions**, except that `template` and `noscript` (c7) differ from Chrome-with-JS by design, see F87e. Mismatches left, all the same as main: 28 in `c2` (media features and responsive variants: F87a), `tw_bf_page_sm` and
+`tw_bf_page_nested_amp` (F87a), `cdc_in_middle`, `sel_list_bad` (selector grammar). `template_unl` stays (Blitz applies `<template>` styles, F87e); `c8` mismatch 1 -> same as main. `fuzz.py 2 60`: 0 bad.
 
 | Check | Result |
 |---|---|
