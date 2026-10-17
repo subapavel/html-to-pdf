@@ -1,6 +1,6 @@
 # F83 — A `break-inside: avoid` paragraph taller than a page loses words
 
-Date: 2026-10-17. Finding: F83 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/fulgur`
+Date: 2026-10-17. Finding: F83 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (after `ab9fe07`), carried via `[patch.crates-io]`. All fork line numbers are at `ab9fe07`.
 
 ## 1. Problem
@@ -167,5 +167,72 @@ Pixel diff: fixtures 01–12 `cmp` byte-identical. Compare numbers unchanged (as
 
 ## 7. Result
 
-(Filled in at landing: the step 1 numbers and the Chrome probes; red before and green after, per test; the fork commit
-and the `Cargo.lock` pin; the check table as in F30d §7; fixture 13 numbers and PNGs; deviations from the plan.)
+Landed on branch `f83-break-inside-avoid`; fulgur fork `htmltopdf/srgb-colours` **`ebd78f5`** (on top of `ab9fe07`); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `ebd78f5`.
+Status: **done**.
+
+**Step 1, the model held** (our CLI built against the local fork with a temporary log in the strip slicer, removed again; `pbi_normal.html`, 2500 words, Inter, A4, 15 mm,
+`line-height: normal`): the `<p>` goes through the strip slicer at `:1638` (child 6816 px, fresh page 1009.1 px, 355 lines, edges at 993 / 2002 / 3011 / 4020 / 5030 / 6039 px),
+7 fragments, 0 line slices, 7 renderer warnings. The edges straddle lines 51, 104, 156, 209, 261 and 314. Against the same paragraph without `avoid` (identical line wrapping), the 22
+missing words are lines 103, 208 and 313 (7 words each, the line just above the straddled one at three of the six cuts) plus the one word of the last line (355): 21 + 1 = 22. 42 words
+were drawn above the content top (the straddling line starting the next page). `pbi_1.3.html`: 8 pages, 7 edges, 21 missing. So the emitter is the strip slicer, as planned; no stop.
+The other cases (before the fix, all green): `page-break-inside`, `div > p{avoid}`, `div{avoid} > p`, four 700-word paragraphs in an `avoid` div: all words once, 0 warnings.
+F83b probe: confirmed (see findings). The `height:1500px` probe: the §6 risk is real, filed as **F83c** (below).
+
+Chrome probes (Chromium Skia/PDF m141, A4, 15 mm, Inter; `line-height: normal` and `20px` give the same picture; 2500 words):
+
+| Case | Chrome: page of `word00000`, pages | Chrome without `avoid` |
+|---|---|---|
+| 1 `<p avoid>` first | page 1, 8 pages; first word per page 0, 344, 694, 1045, 1409, 1761, 2113, 2464 | identical |
+| 2 `<p>before</p><p avoid>` | **page 2**, 9 pages | page 1, 8 pages (the paragraph starts below `before`) |
+| 3 `<div avoid>` direct text, first / after `<p>before</p>` | page 1, 8 pages / page 2, 9 pages | page 1 / page 1 |
+| `<div><p>before</p><p avoid>` | page 2, 9 pages (ours: page 1, F83b) | |
+| four-paragraph `avoid` wrapper | starts in place, same as without | |
+| spacer 930 px + `div{avoid}` of three short `<p>` (F83b) | moves whole to page 2 (ours: splits in place) | splits in place |
+
+So Chrome breaks a too-tall `avoid` box between lines like an `auto` one and moves it to a fresh page when something precedes it, as §2 said. With `line-height: 20px` our new first-word-per-page
+list is Chrome's up to one line on the later pages (case 1: 0, 344, 694, **1044**, **1408**, 1761, 2113, 2464 against 1045 and 1409; case 2: 0, 351, 701, **1051**, **1415**, 1768, 2121, 2471 against 1052 and
+1417: widows / orphans placement differs by one line at two breaks). With `normal` the page counts differ from Chrome's (7 / 8 against 8 / 9): F81, not this finding.
+
+**Red before** (main at `c6fdadb`, fork `ab9fe07`):
+- ours `break_inside_avoid.rs`: 3 of 8 red: `a_body_paragraph_taller_than_a_page_loses_no_word` (printed 2473 of 2500), `a_paragraph_taller_than_a_page_after_content_starts_on_the_next_page`
+  (2473 of 2500; `word00000` was already on page 2), `a_body_div_with_direct_text_taller_than_a_page_loses_no_word` (2480 of 2500); the other 5 are guards, green before and after;
+- ours `fallback_warning.rs`, flipped: red (the warning fired);
+- fork lib: `avoid_paragraph_taller_than_a_page_splits_like_an_auto_one` and `avoid_div_with_direct_text_taller_than_a_page_splits_like_an_auto_one` (0 slices for 4 fragments); the guards
+  `avoid_paragraph_that_fits_a_page_moves_whole`, `avoid_paragraphs_in_a_div_keep_their_tiling_slices` and the unit test of `avoid_inside_holds` green;
+- fork `render_smoke`: `render_smoke_an_avoid_paragraph_over_many_a4_pages_loses_no_line` red (6920 of 7000 words).
+
+**Green after:** all of them.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib` | 2041 passed, 13 failed on crates.io Blitz: the same 13 as on `e073b6b` / `ab9fe07`; with the local Blitz fork path (`/home/user/blitz`, `52b22ef`) 2054 passed, 0 failed (the 5 new tests included) |
+| fork `render_smoke` | crates.io Blitz: 250 passed, 3 failed (the same `outside_*_markers`, `table_parts_with_a_non_table_display`); local Blitz: 253 passed, 0 failed |
+| fork other test binaries | all 42 `tests/*.rs` run one by one (with the local Blitz): green; `break_inside_avoid.rs` 3 passed |
+| fork `fulgur-vrt` | green, goldens byte-identical, nothing re-blessed |
+| fork examples | all 21 example PDFs rendered with the debug CLI before (`ab9fe07` plus stash) and after: byte-identical |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | 324 passed, 0 failed (8 new `break_inside_avoid.rs`, `fallback_warning.rs` flipped, `fixtures.rs` renders 13 strict); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-12 | `cmp` byte-identical to the render of main's binary (`/tmp/claude-0/vrt-f83/htmltopdf-base`, main `c6fdadb`, fulgur `ab9fe07`): 12 of 12; `compare.py` numbers unchanged: 4.4, 10.2/11.4/9.8, 5.7, 5.7, 21.6, 15.9/11.8, 7.2/7.1, 13.2/12.1, 5.1/4.9/0.7, 5.9/1.5, 6.9, 14.6/7.2 %; page counts unchanged |
+| fixture 13 | new: **3 pages like Chrome, 1.9 / 11.7 / 1.9 %**, threshold 0.127 in `compare.py` (measured 11.7 % + 1 point) |
+
+Fixture 13 (`out/compare/13-terms-keep-together-p1.png` .. `-p3.png`, git-ignored): page 1 is the invoice head, items and total (1.9 %); the terms start at the top of page 2 like Chrome's; page 2 breaks after the
+same word as Chrome's ("... proti pohledávkám") and page 3 holds the same nine lines; every line once. The 11.7 % of page 2 is text drift (Chrome and we put the same words on every line; a line of vertical
+drift part-way down a dense page). It is not in `PAGE_COUNT_MAY_DIFFER`: Chrome also starts the terms on page 2.
+
+Deviations from the plan:
+
+1. **Acceptance 4, the wrapper test**: "four `<p>` of 700 words each (about 2.5 pages together)": 2800 words are about 8 pages together; the test uses four paragraphs of 700 words, each a few pages long.
+2. **Fixture 13 text**: the 27 clauses of fixture 12 plus ten new clauses (37, 8276 characters), one `<p>` with the clause numbers inline (no `<h3>`, so no heading is left alone on page 1).
+3. **`avoid_paragraph_that_fits_a_page_moves_whole`** asserts page index 1: "one fragment, on page 1" in §4 means the second page.
+4. **Chrome reference** rendered with the scratch copy of `render.mjs` (it hard-codes Playwright's install path); `scripts/reference/render.mjs` cannot resolve `playwright` from the repo in this environment. Output format is the same.
+5. **Fork tests run against the local Blitz fork** as well as crates.io Blitz (the 13 + 3 failures are Blitz-fork tests that crates.io Blitz fails); the counts above give both.
+6. **Comments rewritten** at the gate (`:1463`) say what is true (the gate does not read `break-inside`, F83b), not what the old comment claimed.
+
+Filed: **F83a**, **F83b**, **F83c** in `2026-10-15-m0-findings.md`. **F83c is a visible regression for one shape**: an `avoid` box whose height exceeds a page only through `height` and that holds two or more
+lines (`<div style="height:1500px;background:#eee;break-inside:avoid">a<br>b<br>c</div>` after content) used to start on page 2 and span pages 2-3 like Chrome; it now takes the `auto` line path (as §6 allowed)
+and is cut at the bottom of page 1 without its remainder (one page; no text lost; an `auto` box of that shape is drawn the same way). Not fixed: the plan says file it.
+
+Not verified here: `vrt-validator` (not run); `pdf-reviewer` (not required, `render.rs` unchanged); the spec citations (§2, from memory, `css-spec-researcher` not run); a transformed avoid paragraph taller than a page
+(§6 risk, no probe); `avoid` paragraphs with inline boxes (`<img>`, `inline-block`) across the cut (the code path is `fragment_inline_root`'s F32a one, no avoid-specific test); right-to-left text; timing (not measured after the change: the line path is the one an `auto` paragraph already takes; `pbi_normal.html` took 55 ms before).
