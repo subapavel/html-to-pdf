@@ -1,6 +1,6 @@
 # F60 — a JPEG with `0xFF` fill bytes before a marker draws nothing, without a warning
 
-Date: 2026-10-17. Finding: F60 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix on `subapavel/fulgur`
+Date: 2026-10-17. Finding: F60 in `2026-10-15-m0-findings.md`. Status: **done** (fulgur fork `f5ef832`). Fix on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (from `f757f56`).
 
 ## 1. Problem
@@ -78,4 +78,25 @@ numbers unchanged; no new fixture (fill bytes are invisible in HTML; the test ge
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed as planned: the scan skips the fill bytes, `validate_jpeg` compares the scan with the decoder.
+
+- **Cause confirmed:** `decode_dimensions` (as §1). Krilla and zune-jpeg were never the layer.
+- **Fork** (`f5ef832` on `htmltopdf/srgb-colours`, from `f757f56`): `image.rs` JPEG branch skips `0xFF` bytes before the
+  marker; `header_size_note` + the call in `validate_jpeg` (before the 16 Mpx return, so it also covers large JPEGs). The
+  note names both sizes: "the size in the header could not be read (scan: W × H | none; decoder: W × H); it is drawn
+  only where CSS gives both sizes" (the plan's text had no `scan:` part). Tests: `jpeg_decode_dimensions_skips_fill_bytes`
+  (red first), 2 `header_size_note` unit tests, `jpeg_with_fill_bytes_is_valid_and_not_damaged`,
+  `render_smoke_jpeg_with_fill_bytes_is_painted` (red first). `cargo test -p fulgur --lib` 2010 passed, `render_smoke`
+  241, `fulgur-vrt` goldens unchanged; fmt and clippy clean.
+- **Ours:** `image_robustness.rs` `jpeg_with_fill_bytes_is_painted_at_its_natural_size` (DQT, SOF0, DHT, SOS and all four,
+  7 bytes each), `fill_byte_jpeg_with_css_width_keeps_its_ratio`, `fill_byte_jpeg_as_background_image_is_drawn_at_natural_size`
+  — all three red on `f757f56` (no XObject; nothing painted; a 3 × 3 px smear for the 1 × 1 fallback), green now, DHT
+  and SOS cases are guards that were green before. `image_warnings.rs` and `image_strict.rs`: no warning and a strict
+  `Ok` for a fill-byte JPEG. `cargo test --release --locked`: 276 passed, 0 failed.
+- **Fixtures 01-11:** PDFs byte-identical (`cmp`) before and after the lock bump; compare numbers unchanged (01 4.4 %, 02
+  11.4 %, 03 5.7 %, 04 5.7 %, 05 21.6 %, 06 15.9 %, 07 7.2 %, 08 13.2 %, 09 5.1 %, 10 5.9 %, 11 6.9 %).
+- **Probe** `single/fill.jpg.html` (64 × 48 JPEG, `width:100px`): ours paints 101 × 76 px of non-white at 96 dpi (100 × 75
+  image plus antialiasing), as Chrome does (101 × 76; the offset differs by page margin and size only). One image
+  XObject, `qpdf --check` clean, poppler renders it. The stream is the file's own bytes, fill bytes included.
+- **Not verified:** mutool and other PDF consumers' DCT decoders on the fill bytes (`mutool` is not installed; left to
+  `pdf-reviewer`, fallback in §6); no real-world JPEG makes the new note fire, only the unit tests do.
