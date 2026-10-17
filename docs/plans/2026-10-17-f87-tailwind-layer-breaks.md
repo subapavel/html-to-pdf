@@ -202,8 +202,8 @@ Pixel diff: fixtures 01–12 `cmp` byte-identical to main's binary, compare numb
 - The whole Tailwind sheet is now parsed on every `extract_column_style_table` call (Speed goal). Step 4 measures it.
 - Non-goals:
   - **F87a:** media features and Tailwind responsive variants (`md:break-before-page`), which would need Stylo media evaluation.
-  - **F87b:** `!important` (Tailwind `!break-inside-avoid`), if step 1 confirms it is dropped.
-  - Specificity.
+  - ~~**F87b:** `!important`~~ (done in §7.1, after `vrt-validator`).
+  - Specificity (also done in §7.1).
   - Evaluating `@supports`.
   - `<link>`/`@import` sheets (fulgur-s5ro) and `@import … layer()`.
   - CSS nesting.
@@ -279,9 +279,52 @@ Deviations from the plan:
 4. `media_query_list_matches` returns `true` for an empty list (Media Queries 4 §2.1); a query naming a type other than `all`, `screen`, `print` never matches, `not` included.
 5. Fork `--lib` tests count 2074 (the plan did not give a number).
 
-Filed in `2026-10-15-m0-findings.md`: **F87a** (media features, `md:break-before-page`), **F87b** (`!important`); F87c was not needed. The `columns-*` claim of the F87 entry is corrected there. Added to **F30c**: a body-level `avoid`
+Filed in `2026-10-15-m0-findings.md`: **F87a** (media features, `md:break-before-page`); the first version also filed **F87b** (`!important`), which §7.1 fixed; F87c as named here (`columns-*`) was not needed. The `columns-*` claim of the F87 entry is corrected there. Added to **F30c**: a body-level `avoid`
 paragraph is placed like an `auto` one.
 
 Not verified: `vrt-validator` (not run); `pdf-reviewer` (not required, writer path untouched); the spec citations in §2 (from memory; Chrome probes agree on every case, the spec text was not read); `@layer` inside a skipped
 `@media` (not registered, unverified against the spec, no fixture depends on it); `@import ... layer()`, `<link>` sheets (fulgur-s5ro); fork `fulgur-vrt` with the repo's own fontconfig (host fonts differ here); the F83
 `render_smoke`-style end-to-end tests on a Tailwind page with the class (no such shape is observable on a `<p>`, see above); right-to-left or non-Latin documents (the change is CSS-only).
+
+### 7.1 After `vrt-validator` (no-merge): `!important`, specificity, layer-name whitespace
+
+The validator found three defects the first version introduced or exposed (fork `3b158b6` on top of `645c15e`; ours: lock bump and tests). §3's "Specificity stays ignored" and §6's F87b non-goal were wrong for a
+sheet that is now read: with layered utilities visible, an important override and a more specific rule in the same layer flipped decisions that main (which dropped the whole layer) and Chrome agreed on.
+
+1. **`!important` (HIGH).** `class="break-inside-avoid break-inside-auto!"` (Tailwind's `!` modifier: `@layer utilities{.break-inside-auto\!{break-inside:auto!important}}`) landed on page 2 where Chrome and main gave
+   page 1. The declaration parser now takes the flag per declaration (`scan_tail`, `Declared { normal, important }`; `!`, optional whitespace, `important` in any case, anything else after a `!` drops the declaration)
+   and `StyleRule` carries both halves. `walk` folds per element, lowest to highest: normal by layer rank, specificity, order; the `style` attribute's normal declarations; important by layer in **reverse** rank
+   (Cascade 5 §6.4.4: the unlayered ones lose, an earlier layer wins, a sub-layer beats its parent), specificity, order; the `style` attribute's important declarations. Chrome probes (`/tmp/claude-0/vrt-f87/c10.py`,
+   box after a spacer, same on `break-inside` and `break-before`) agree on every tier: inline important beats important unlayered, layered and earlier-layer rules; an important rule beats the inline normal; a layered
+   important beats an unlayered important; an unlayered important beats a layered normal; earlier layer beats later for important in both source orders; a sub-layer beats its parent; a malformed tail
+   (`!important foo`, `!`, `!importantx`) drops the declaration.
+2. **Specificity (MEDIUM).** `@layer u{div.k{break-inside:auto} .k{break-inside:avoid}}`: Chrome page 1, first version page 2. The sort key is now (importance tier, layer rank, specificity, source order). Specificity
+   is (ids, classes, types) of the reader's selector subset, summed over `A + B`, and for a selector list the highest of the selectors that matched this element (probes `spec_list_max`, `spec_list_max2`). The same flaw
+   existed for unlayered rules on main (`unl_spec`: main 2, Chrome 1); it is fixed too. No fixture moved: fixtures 01-13 `cmp` byte-identical to main's binary, compare numbers unchanged.
+3. **`@layer a .b{}` (LOW).** The dotted-name parse skipped whitespace before the dot; Chrome rejects the at-rule. It now reads the tokens including whitespace, so `a .b`, `a. b` and `a . b` make the at-rule
+   (and a statement) invalid.
+
+**Red before** (against `645c15e`): fork lib, 7 new tests: `important_declarations_are_read`, `important_beats_normal_whatever_the_layer_or_the_style_attribute`, `important_reverses_the_layer_order`,
+`important_in_the_style_attribute_beats_everything`, `specificity_orders_rules_inside_one_layer_and_unlayered`, `id_beats_classes_and_types_and_adjacent_siblings_add_up`,
+`whitespace_inside_a_dotted_layer_name_is_invalid`. Ours `tailwind_breaks.rs`, 7 new tests, all red: `important_modifier_beats_the_plain_utility`, `important_modifier_in_a_print_variant_beats_the_plain_utility`,
+`important_modifier_cancels_a_forced_break`, `important_rule_beats_the_style_attribute_and_loses_to_its_important`, `specificity_orders_rules_inside_a_layer`, `specificity_orders_unlayered_rules`,
+`whitespace_in_a_layer_name_drops_the_block`. `TAILWIND_EXTRA` gained `.break-inside-auto\!`, `.break-before-auto\!` and `print:break-inside-auto!` in Tailwind's compiled shape. **Green after:** all.
+
+**Validator harness** (`/tmp/claude-0/vrt-f87/c1.py`-`c9.py`, each case in `break-inside` and `break-before` mode, Chrome / main / branch; ours built from the lock): mismatches 47 -> 33 and regressions
+(branch differs from Chrome where main matched) 13 -> 5. `c1` 10 -> 0 (+ 4 -> 0), `c5` 2 mismatches (unchanged) and its regression 1 -> 0, `c9` 3 -> 0 (+ 3 -> 0). My own `c10.py` (important tiers, specificity, Tailwind `!`):
+26 mismatches and 7 regressions -> 0 and 0. `fuzz.py 1 60`: 60 cases, 0 bad. Left, all filed: 5 regressions F87c (`avoid-page`), F87d (`media="not print"`), F87e (`<template>`, `<noscript>`); 33 mismatches the same
+on main (30 media features and responsive variants, F87a; `cdc_in_middle`, `sel_list_bad`, `template_unl`).
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib` | crates.io Blitz 2068 passed, the same 13 failed; local Blitz 2081 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz 250 passed + the same 3 failed; local Blitz: all 42 `tests/*.rs` including it, one by one: green |
+| fork `fulgur-vrt`, 21 examples | green, no golden changed; examples byte-identical to `752df13` |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | 343 passed, 0 failed (7 new in `tailwind_breaks.rs`, 18 there); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-13 | `cmp` byte-identical to main's binary (13 of 13); `compare.py` numbers unchanged |
+
+Filed, not fixed: F87c-F87g (findings). Not verified: the validator's 3586-level and `.a{` x 10 000 repros (taken from its report, not re-run); the speed of `walk` after the change (`hits` is built per
+element and sorted; it allocates only for elements that match a rule, `perf.py` not re-run); `<style>` in `<template>` (not fixed).

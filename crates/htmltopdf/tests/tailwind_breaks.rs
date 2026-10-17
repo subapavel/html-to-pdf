@@ -14,12 +14,12 @@
 //! (probes in the F87 plan §7).
 //!
 //! `TAILWIND_EXTRA` is Tailwind v4's own shape for utilities the committed `fixtures/tailwind/tailwind.css` does not
-//! contain (`break-before-page`, `break-after-page`, `break-inside-auto`, `print:break-before-page`). It is written inline
+//! contain (`break-before-page`, `break-after-page`, `break-inside-auto`, `print:break-before-page`, and the `!` modifier `break-inside-auto!`). It is written inline
 //! because rebuilding the sheet needs npm (precedent: `white_space.rs`). Asserted with `pdftotext -bbox`.
 
 use htmltopdf::{RenderOptions, Renderer};
 
-const TAILWIND_EXTRA: &str = r"@layer utilities{.break-before-page{break-before:page}.break-after-page{break-after:page}.break-inside-auto{break-inside:auto}@media print{.print\:break-before-page{break-before:page}}}";
+const TAILWIND_EXTRA: &str = r"@layer utilities{.break-before-page{break-before:page}.break-after-page{break-after:page}.break-inside-auto{break-inside:auto}.break-inside-auto\!{break-inside:auto!important}.break-before-auto\!{break-before:auto!important}@media print{.print\:break-before-page{break-before:page}.print\:break-inside-auto\!{break-inside:auto!important}}}";
 
 fn inter() -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -238,4 +238,80 @@ fn media_screen_does_not_break_and_media_print_does() {
     assert_eq!(page_of(&screen, "bravo"), 1, "@media screen is not printed");
     let print = render("@media print{.x{break-before:page}}", body);
     assert_eq!(page_of(&print, "bravo"), 2, "@media print applies");
+}
+
+// -- importance (Cascade 5 §6.1, §6.4.4) --------------------------------------------------------
+
+/// Tailwind's `!` modifier compiles to `!important`: `break-inside-auto!` beats the plain utility `break-inside-avoid`
+/// although both are in the same layer and the plain one comes later in the class list.
+#[test]
+fn important_modifier_beats_the_plain_utility() {
+    let pdf = render(
+        "",
+        &box_after_spacer("break-inside-avoid break-inside-auto!", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+}
+
+#[test]
+fn important_modifier_in_a_print_variant_beats_the_plain_utility() {
+    let pdf = render(
+        "",
+        &box_after_spacer("break-inside-avoid print:break-inside-auto!", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+}
+
+#[test]
+fn important_modifier_cancels_a_forced_break() {
+    let pdf = render(
+        "",
+        r#"<p>alpha</p><p class="break-before-page break-before-auto!">bravo</p>"#,
+    );
+    assert_eq!(page_of(&pdf, "bravo"), 1);
+}
+
+/// An important rule beats the `style` attribute's normal declaration, and the attribute's own `!important` beats
+/// an important rule.
+#[test]
+fn important_rule_beats_the_style_attribute_and_loses_to_its_important() {
+    let head = ".k{break-inside:avoid!important}";
+    let pdf = render(head, &box_after_spacer("k", "break-inside:auto"));
+    assert_eq!(page_of(&pdf, "word00000"), 2);
+    let pdf = render(head, &box_after_spacer("k", "break-inside:auto!important"));
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+}
+
+// -- specificity (Cascade 5 §6.1) ---------------------------------------------------------------
+
+/// Inside one layer the more specific selector wins whatever the order: `div.k` beats `.k`.
+#[test]
+fn specificity_orders_rules_inside_a_layer() {
+    let pdf = render(
+        "@layer utilities{div.k{break-inside:auto}.k{break-inside:avoid}}",
+        &box_after_spacer("k", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+}
+
+/// The same for unlayered rules, which the reader folded in source order before.
+#[test]
+fn specificity_orders_unlayered_rules() {
+    let pdf = render(
+        "div.k{break-inside:auto}.k{break-inside:avoid}",
+        &box_after_spacer("k", ""),
+    );
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+}
+
+// -- syntax -------------------------------------------------------------------------------------
+
+/// Whitespace in a dotted layer name makes the at-rule invalid (Cascade 5 §6.4.2).
+#[test]
+fn whitespace_in_a_layer_name_drops_the_block() {
+    let body = r#"<p>alpha</p><p class="x">bravo</p>"#;
+    let pdf = render("@layer a .b{.x{break-before:page}}", body);
+    assert_eq!(page_of(&pdf, "bravo"), 1);
+    let pdf = render("@layer a.b{.x{break-before:page}}", body);
+    assert_eq!(page_of(&pdf, "bravo"), 2);
 }
