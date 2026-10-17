@@ -35,6 +35,11 @@ const HEAD: &str = "@page{size:A4;margin:15mm}body{font-family:Inter;line-height
 const SPACER: &str = r#"<div style="height:960px"></div>"#;
 
 fn render(head_style: &str, body: &str) -> Vec<u8> {
+    render_with_head(&format!("<style>{head_style}</style>"), body)
+}
+
+/// `head_html` is placed in `<head>` after the page style, so a test can add `<style media="...">`.
+fn render_with_head(head_html: &str, body: &str) -> Vec<u8> {
     let tailwind = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/tailwind/tailwind.css");
     Renderer::builder()
@@ -47,7 +52,7 @@ fn render(head_style: &str, body: &str) -> Vec<u8> {
         .build()
         .render(
             &format!(
-                "<!doctype html><html><head><style>{HEAD}{head_style}</style></head>\
+                "<!doctype html><html><head><style>{HEAD}</style>{head_html}</head>\
                  <body>{body}</body></html>"
             ),
             &RenderOptions::default(),
@@ -314,4 +319,65 @@ fn whitespace_in_a_layer_name_drops_the_block() {
     assert_eq!(page_of(&pdf, "bravo"), 1);
     let pdf = render("@layer a.b{.x{break-before:page}}", body);
     assert_eq!(page_of(&pdf, "bravo"), 2);
+}
+
+// -- break values and harvesting (F87 review) --------------------------------------------------
+
+/// A later `avoid` / `avoid-page` / `avoid-column` / `column` value overrides an earlier `page` (css-break-3 §3.1),
+/// before and after; Chrome: no break.
+#[test]
+fn a_later_avoid_value_cancels_an_earlier_forced_break() {
+    for v in ["avoid", "avoid-page", "avoid-column", "column"] {
+        let head = format!("@layer u{{.a{{break-before:page}}.b{{break-before:{v}}}}}");
+        let pdf = render(&head, r#"<p>alpha</p><p class="a b">bravo</p>"#);
+        assert_eq!(page_of(&pdf, "bravo"), 1, "break-before:{v}");
+        let head = format!("@layer u{{.a{{break-after:page}}.b{{break-after:{v}}}}}");
+        let pdf = render(&head, r#"<p class="a b">alpha</p><p>bravo</p>"#);
+        assert_eq!(page_of(&pdf, "bravo"), 1, "break-after:{v}");
+    }
+}
+
+/// `always` is a value of `page-break-before`, not of `break-before`: the latter is ignored (Chrome too).
+#[test]
+fn always_breaks_only_as_a_legacy_page_break_value() {
+    let body = r#"<p>alpha</p><p class="x">bravo</p>"#;
+    let pdf = render("@layer u{.x{break-before:always}}", body);
+    assert_eq!(page_of(&pdf, "bravo"), 1);
+    let pdf = render("@layer u{.x{page-break-before:always}}", body);
+    assert_eq!(page_of(&pdf, "bravo"), 2);
+    let pdf = render("@layer u{.x{page-break-before:page}}", body);
+    assert_eq!(page_of(&pdf, "bravo"), 1);
+}
+
+/// The `media` attribute of a `<style>` is a media query list for print, not a substring test.
+#[test]
+fn style_media_attribute_is_a_media_query_list_for_print() {
+    let body = r#"<p>alpha</p><p class="x">bravo</p>"#;
+    let rule = ".x{break-before:page}";
+    for (media, breaks) in [
+        ("print", true),
+        ("not screen", true),
+        ("print and (min-width:1px)", true),
+        ("not print", false),
+        ("screen", false),
+        ("only screen", false),
+    ] {
+        let pdf = render_with_head(&format!(r#"<style media="{media}">{rule}</style>"#), body);
+        let want = if breaks { 2 } else { 1 };
+        assert_eq!(page_of(&pdf, "bravo"), want, "media={media:?}");
+    }
+}
+
+/// A `<style>` inside `<template>` or `<noscript>` never applies, layered or not.
+#[test]
+fn styles_inside_template_and_noscript_are_not_read() {
+    for wrap in ["template", "noscript"] {
+        for css in [".x{break-before:page}", "@layer u{.x{break-before:page}}"] {
+            let body = format!(
+                r#"<{wrap}><style>{css}</style></{wrap}><p>alpha</p><p class="x">bravo</p>"#
+            );
+            let pdf = render("", &body);
+            assert_eq!(page_of(&pdf, "bravo"), 1, "<{wrap}> {css}");
+        }
+    }
 }

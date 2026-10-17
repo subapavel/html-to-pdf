@@ -328,3 +328,36 @@ on main (30 media features and responsive variants, F87a; `cdc_in_middle`, `sel_
 
 Filed, not fixed: F87c-F87g (findings). Not verified: the validator's 3586-level and `.a{` x 10 000 repros (taken from its report, not re-run); the speed of `walk` after the change (`hits` is built per
 element and sorted; it allocates only for elements that match a rule, `perf.py` not re-run); `<style>` in `<template>` (not fixed).
+
+### 7.2 Closing the last five harness regressions (F87c, F87d, F87e)
+
+Coordinator's request: nothing that matched Chrome on main may stop matching. Fork `69bfd0e` on top of `3b158b6`; ours is the lock bump, the tests and the docs.
+
+- **F87c, break values.** `break-before` / `break-after` take `auto | avoid | avoid-page | page | left | right | recto | verso | avoid-column | column` (css-break-3 §3.1; region values stay invalid). The table models a
+  forced page break or none, so `avoid*` and `column` (no column breaks in the table; Chrome ignores `column` outside a multicol) map to none, and a later one cancels an earlier `page`. Chrome probes (`c11.py`, `c12.py`,
+  13 values x before / after x alone / after `page`) also showed two cases the first version got wrong, both found by the same probes and fixed with it: **`break-before: always` is not a value of `break-*`**
+  (Chrome ignores it and keeps an earlier `page`; the reader forced a break), and the legacy `page-break-*` takes only `auto | always | avoid | left | right` (`page`, `recto`, `verso` are invalid there; `avoid` is the alias
+  of `avoid`). Three older fork unit tests pinned `break-before|after: always` as a break; they now pin it as ignored and `page-break-*: always` as a break. This moves unlayered and inline `break-before: always` toward
+  Chrome too (it was forced on main).
+- **F87d, `<style media>`.** The harvester evaluated the attribute as a substring test (`contains("print")`), so `not print` was print. It is now a media query list on a print device
+  (`media_query_list_matches_on(input, "print", true)`; our crate swaps `print` and `screen` in CSS text, not in attributes, so the at-rule reader keeps `READER_MEDIA_TYPE`). `features_match` keeps `print and (min-width: 1px)`
+  on (the old test applied it whole) and never under `not`. Side effect, toward Chrome: `all and (orientation: portrait)` and `not screen` now apply (the substring test dropped them).
+- **F87e, `<template>` / `<noscript>`.** The harvester returns at both elements, so a `<style>` inside is not read, layered or not. `template_unl` (unlayered, same bug on main) now matches Chrome.
+
+**Red before** (against `3b158b6`): fork lib `avoid_and_column_values_map_to_no_forced_break`, `a_later_avoid_value_overrides_an_earlier_page`, `always_is_a_value_of_the_legacy_properties_only`,
+`extract_column_style_table_evaluates_the_media_attribute`, `extract_column_style_table_skips_template_and_noscript_styles`; ours `tailwind_breaks.rs` `a_later_avoid_value_cancels_an_earlier_forced_break`,
+`always_breaks_only_as_a_legacy_page_break_value`, `style_media_attribute_is_a_media_query_list_for_print`, `styles_inside_template_and_noscript_are_not_read`. **Green after:** all.
+
+**Harness** (`c1.py`-`c12.py`, Chrome / main / branch): **0 regressions**. Mismatches left, all the same as main: 28 in `c2` (media features and responsive variants: F87a), `tw_bf_page_sm` and
+`tw_bf_page_nested_amp` (F87a), `cdc_in_middle`, `sel_list_bad` (selector grammar). `template_unl` is gone. `fuzz.py 2 60`: 0 bad.
+
+| Check | Result |
+|---|---|
+| fork `--lib` | crates.io Blitz 2073 passed, the same 13 failed; local Blitz 2086 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz 250 passed + the same 3 failed; local Blitz: all 42 `tests/*.rs` one by one: green |
+| fork `fulgur-vrt`, 21 examples | green, no golden changed; examples byte-identical |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | 347 passed, 0 failed (22 in `tailwind_breaks.rs`); `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-13 | `cmp` byte-identical to main's binary (13 of 13); `compare.py` numbers unchanged |
+
+Not verified: `break-before: column` inside a real multicol (the table has no column breaks, so it is "none"); `<noscript>` with scripting disabled (Chrome's print has it on).
