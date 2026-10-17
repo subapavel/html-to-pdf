@@ -83,11 +83,11 @@ THRESHOLDS = {
     #     after a line. The rest is the text drift every fixture has (headings and rows about 3 px lower than Chrome's).
     #     Worst page + 1 point.
     "12-terms-columns": 0.156,
-    # 13: new in F83 (one body-level `break-inside-avoid` paragraph of 37 clauses, 1.3 pages tall, under the items table).
-    #     1.9 / 11.7 / 1.9 %: before F83 the paragraph lost 22 of its words in the strip slicer; now it starts at the top
-    #     of page 2 like Chrome's, breaks at the same word at the bottom of page 2 and ends at the same line of page 3.
-    #     The rest is the text drift every fixture has (page 2 is a dense paragraph, a line of drift part-way down).
-    #     Worst page + 1 point.
+    # 13: new in F83 (one body-level `break-inside: avoid` paragraph of 37 clauses, 1.3 pages tall, under the items table).
+    #     1.9 / 11.7 / 1.9 %: on main the strip slicer printed 1158 of its 1167 words (the line straddling the page cut was
+    #     dropped); now all 1167. The paragraph starts at the top of page 2 like
+    #     Chrome's, breaks after the same word at the bottom of page 2 and ends at the same line of page 3. The rest is the
+    #     text drift every fixture has (page 2 is a dense paragraph, a line of drift part-way down). Worst page + 1 point.
     "13-terms-keep-together": 0.127,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the

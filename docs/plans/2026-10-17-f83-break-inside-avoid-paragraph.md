@@ -57,8 +57,9 @@ Rule: `break-inside: avoid` holds while the box fits a page. Past that it is rel
   { collect_inline_line_metrics(child) }`. Rewrite the comments at `:1365-1367`, `:1463-1465` and `:1577-1582`, and the
   docs at `:53` and `:730-731`.
 - A relaxed paragraph then takes the `auto` line path. The pre-advance at `:1382-1389` still moves it to a fresh page
-  when something precedes it, the same start the strip path gives today (`:1583`). So placement does not change, only
-  where the cuts fall. `fragment_inline_root` records tiling `LineSlice`s (`:4441-4445`, `:4472-4481`) and keeps
+  when something precedes it, the same start the strip path gives today (`:1583`). So the start does not change, but the cuts do, and with them the page count can: a paragraph that is just over a page long is split
+  between lines (orphans / widows 2) where the strip path cut it at a pixel height, so its page count and the lines per page can move by one (first-word-per-page lists at `line-height: 20px` differ from Chrome's by
+  one line at two breaks, §7). `fragment_inline_root` records tiling `LineSlice`s (`:4441-4445`, `:4472-4481`) and keeps
   ORPHANS/WIDOWS = 2 (`:4390-4393`, `:4411-4425`), as css-break-3 §4.4 requires. Inline boxes go to the page of their
   line (`record_split_inline_root_descendants`, `:1405-1414`) instead of page 1 only.
 - An avoid paragraph that fits a page: `avoid_inside_holds` is true and the code path is today's. It moves whole to the
@@ -254,3 +255,21 @@ and it takes the path it always had. `avoid_inside_holds` is unchanged; its call
   green, no golden changed; 21 examples byte-identical; fmt and `clippy --all-targets -D warnings` clean; ours `cargo test --release --locked` 325 passed, 0 failed, fmt / clippy clean; fixtures 01-12 `cmp`
   byte-identical to main's binary, fixture 13 byte-identical to the `ebd78f5` build, `compare.py` numbers unchanged (13: 1.9 / 11.7 / 1.9 %).
 - The "Filed: F83c ... visible regression" paragraph above is superseded: nothing regresses.
+
+### 7.2 After `vrt-validator`
+
+**MEDIUM-1, fixed: fixture 13 showed nothing.** Its first version set `class="break-inside-avoid"`, and fulgur never reads that class: Tailwind v4 puts every utility in `@layer utilities{...}` and the fork's break / column reader skips
+at-rule blocks, so the paragraph was an ordinary one on main and on the branch (byte-identical, no strip slicer, no warning). Filed as **F87** (HIGH: it also means F83 does not cover the Tailwind idiom the finding was named after).
+Fixture 13 now sets `style="break-inside:avoid"` (as 12 does for `columns`). Measured with `pdftotext` (terms words after the total, 1167 in the source): **main prints 1158 (9 missing: the first line of page 3, which the strip
+slicer's cut at 1009 px straddles), the branch prints 1167**, 3 pages both. The branch render is the same as before (compare 1.9 / 11.7 / 1.9 %, threshold 0.127, Chrome reference regenerated: unchanged);
+`text-xs` was kept because it already loses a line on main (`text-sm` loses 3 words, `text-xs leading-snug` 9). README and the `compare.py` comment state these numbers.
+
+**MEDIUM-2** (last line 4-12 px into the bottom margin when a relaxed paragraph exceeds the page by less than a line; Chrome moves two lines): the widow handling of the `auto` path, identical in the `auto` twin: first bullet of **F30c**
+(`cases1/sz_20px_51_after.html` +8 pt; `cases4/sw_25.27_after.html` did not reproduce, page 2 ends 1 pt inside the box). No new finding.
+
+**LOW-1**: §3 said "placement does not change"; it said so about the start of the paragraph. The cuts change and with them the page count and lines per page of a just-over-a-page paragraph (§3 reworded).
+
+**LOW-2** (pre-existing, identical on main and in the `auto` twin): abspos `<p>` prints 0 words -> F30g; a two-cell row loses the short cell -> F35; `rotate(1deg)` on a tall `<p>`: not a loss (branch prints all 700 words like Chrome, main 381; `pdftotext`
+duplicates tokens of rotated text in Chrome's PDF too); `padding:600px` + 700 words prints 329 -> **F88**; `@page{margin:0}` 3 pages against Chrome's 2 -> **F89**.
+
+Re-run: `cargo test --release --locked`, fixtures 01-12 `cmp` against main, `compare.py`: see the commit message. No engine code changed.
