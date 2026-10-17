@@ -190,3 +190,52 @@ P10 and P13 answer the plan's question (clip or widen): Chrome widens a `truncat
 page. The `white-space` keywords other than the ones probed (`break-spaces`). `css-spec-researcher` was not run; the spec
 section references are from memory. The Stylo parse noise `ERROR: Unexpected token` printed by the fork tests is not from
 these changes (not investigated).
+
+### Review follow-up (`vrt-validator` on PR #28)
+
+**H1, an explicit cell `width` below the min-content width (fixed).** Two causes in the Blitz fork, `layout/table.rs`: the grid
+got the explicit length as a *fixed* track, and the cell's own `width` was also the size Taffy's leaf layout reported for its
+min-content, so even a minmax track could not widen. Fix (`204c4c2`): (1) `TableTreeWrapper::compute_child_layout` hides a cell's
+length `width` while the cell is measured (percentages stay, see F73), (2) `widen_explicit_columns` (called where the table's grid
+is laid out) measures, in automatic layout, the min-content width of every cell that starts in and spans only a column with an
+explicit length, and gives the column a fixed track of `max(width, that)`. The width remains the column's *preferred* width
+(a 300 px column with `Short` stays 300 px), the fixed algorithm is untouched. A first attempt, `minmax(min-content, width)`
+tracks, was dropped: Taffy shares free space equally among tracks below their limit, so the explicit columns no longer reached
+their width and fixtures 02 (4 pages), 09 and 11 moved. A second attempt that hid the width of percentage cells too moved the
+`multicol-table-width` golden (F73), so it hides length widths only.
+- Chrome vs ours (`out/scratch/f66/h1a-h1f`, A4, Inter 14 px; x of the red `b` after the first cell): `<td nowrap width=80>` and
+  `style="white-space:nowrap;width:80px"` 222 vs 221, long unbreakable word in `width:80px` 275 vs 274, 300 px column with
+  short text 358 vs 357, `table-layout:fixed` 138 vs 137 (the text overflows in both), the later-row price below a header
+  `width:96px`: no overlap (ours `x` 329, Chrome 407 because Chrome also spreads the spare width of the 400 px table, F15).
+  `atk/uw1`, `uw2`, `r2` look like Chrome's; `atk/c5`, `vrt-f5/r1` no longer spill but the table stays narrower than Chrome's (spare width, F15).
+- Tests, **red before** (against `aebe118`): ours `white_space.rs` +5, three red (`explicit_width_below_nowrap_text_widens_the_column`,
+  `explicit_width_below_an_unbreakable_word_widens_the_column`, `nowrap_text_in_a_later_row_widens_the_column_of_a_header_width`)
+  and two guards (`explicit_width_above_the_min_content_is_kept`, `fixed_layout_keeps_the_explicit_width_and_the_text_overflows`);
+  fork `explicit_cell_width_never_goes_below_the_min_content` (red without the Blitz commit: a 477 px text in an 82 px cell).
+- **Fixtures:** 01, 02, 04-11 byte-identical. **03 moved**: the `w-20` "Množství" header column was 80 px with its semibold text spilling into the
+  padding, it is now 88 px (the cell's min-content), which is Chrome's width; the columns right of it shift by 8 px and the
+  first column is 8 px narrower. Compare 03: 5.6837 % -> 5.6788 % (displayed 5.7 % both times, threshold 7 % unchanged), pages 1/1.
+  No committed golden exists for the invoice fixtures. `fulgur-vrt` goldens: byte-identical (after the second attempt above).
+- Time, release CLI: a 2000-row table with five explicit-width columns (34 pages): 367-419 ms (median 398) against 371-477 ms
+  (median 425) before F66; no measurable cost. Tables without explicit lengths do no extra work.
+
+**H2, content past the page edge (warned, F66g).** Decision and scope in the findings file. fulgur `140000c`: `Canvas::paint_extent`
+(`PaintExtent`: rightmost x of glyphs, inline images and inline boxes via `paragraph::lines_right_edge` (trailing whitespace is
+not ink), and boxes with a visible background or border via `render::note_painted_box`; nothing is recorded between
+`push_clip_path` / `push_transform` and their pops, where x is not a page coordinate or the content is clipped anyway),
+`render_v2` warns per page when the extent exceeds the page width by more than 0.5 pt. PDF bytes are unchanged (`fulgur-vrt`
+goldens identical, fixtures `cmp`-identical, no fixture warns). Test `page_overflow_warning.rs` (red before: no warning; one
+test, the logger is global): a 1500 pt `nowrap` line, a 1200 px box with a background, the second page only, identical
+message on a repeat, and silence for wrapping text, short `nowrap`, a clipped line, a wide box in a clip, a line that overflows
+the margin but not the page, a transparent box; strict images do not turn it into an error. Fork unit tests `PaintExtent`
+(2). Not covered: inline-block content (drawn under a transform) and tables' own frame.
+
+**Findings filed:** F66g, F70 (HIGH, `pre` / `code` text dropped), F71, F72, F73; notes under F66 (RTL, `<wbr>`), F66b (`<nobr>`,
+`normal` span in a `nowrap` root) and F15. `<code>`, `<kbd>`, `<samp>`, `<tt>` and `<pre>` were all checked with the release CLI.
+
+**Commits after the first landing:** Blitz `204c4c2`, fulgur `140000c`, ours: lock pins, tests, docs. Fork tests: lib 2014 -> 2017,
+`render_smoke` 241, `fulgur-vrt` green, `clippy --workspace --all-targets -D warnings` clean; Blitz `cargo test -p blitz-dom` 37 passed.
+
+**Not verified (follow-up):** `<table>` inside flex / grid items with explicit widths; a colspan cell wider than its column
+(not measured, as designed); cells below the first row that have a length `width` in a column past the first row's width (their `width`
+is now ignored while measuring); whether the page warning fires for content under `position: fixed` / `absolute`.

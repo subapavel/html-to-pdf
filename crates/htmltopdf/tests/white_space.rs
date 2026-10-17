@@ -154,6 +154,89 @@ fn nowrap_long_lines_on_both_sides_of_a_br_stay_two_rows() {
     assert!(both.iter().all(|r| r.right > LEFT + BOX + 100), "{both:?}");
 }
 
+// -- explicit cell widths below the min-content width (H1 of the F66 review) ---------------------
+
+/// `<td>` with text of `text` px or so in a 200 px table, and a red `b` in the second cell. Chrome: the first column is
+/// as wide as its text, so the `b` starts right after it.
+fn width_row(first_cell: &str, table_style: &str) -> (Vec<Row>, Vec<Row>) {
+    let pdf = render(&format!(
+        r#"<table style="width:200px;{table_style}"><tr>{first_cell}
+           <td style="color:rgb(200,0,0)">b</td></tr></table>"#
+    ));
+    (rows(&pdf), red_rows(&pdf))
+}
+
+#[test]
+fn explicit_width_below_nowrap_text_widens_the_column() {
+    // CSS 2.1 §17.5.2.2: a column is at least as wide as its cells' min-content. Chrome: text 58..219, `b` at 222.
+    for cell in [
+        "<td nowrap width=80>Short nowrap text longer</td>",
+        r#"<td style="white-space:nowrap;width:80px">Short nowrap text longer</td>"#,
+    ] {
+        let (dark, red) = width_row(cell, "");
+        assert_eq!(dark.len(), 1, "{cell}: the text wrapped: {dark:?}");
+        assert!(dark[0].right.abs_diff(219) <= 2, "{cell}: {dark:?}");
+        assert!(
+            red[0].left.abs_diff(222) <= 2,
+            "{cell}: `b` starts at {}, Chrome has 222 (the text spills over it)",
+            red[0].left
+        );
+    }
+}
+
+#[test]
+fn explicit_width_below_an_unbreakable_word_widens_the_column() {
+    // Chrome: word 58..272, `b` at 275. (Pre-existing: Blitz kept the 80 px.)
+    let (dark, red) = width_row(
+        r#"<td style="width:80px">Supercalifragilisticexpialidocious</td>"#,
+        "",
+    );
+    assert!(dark[0].right.abs_diff(272) <= 2, "{dark:?}");
+    assert!(red[0].left.abs_diff(275) <= 2, "`b` at {}", red[0].left);
+}
+
+#[test]
+fn explicit_width_above_the_min_content_is_kept() {
+    // Guard. A 300 px column with a short text stays 300 px wide: Chrome `b` at 358.
+    let pdf = render(
+        r#"<table style="width:600px"><tr><td style="white-space:nowrap;width:300px">Short</td>
+           <td style="color:rgb(200,0,0)">b</td></tr></table>"#,
+    );
+    let red = red_rows(&pdf);
+    assert!(red[0].left.abs_diff(358) <= 2, "`b` at {}", red[0].left);
+}
+
+#[test]
+fn fixed_layout_keeps_the_explicit_width_and_the_text_overflows() {
+    // §17.5.2.1: the fixed algorithm takes the width as it is. Chrome: `b` at 138, over the text (58..219).
+    let (dark, red) = width_row(
+        r#"<td style="white-space:nowrap;width:80px">Short nowrap text longer</td>"#,
+        "table-layout:fixed",
+    );
+    assert_eq!(dark.len(), 1, "{dark:?}");
+    assert!(red[0].left.abs_diff(138) <= 2, "`b` at {}", red[0].left);
+}
+
+#[test]
+fn nowrap_text_in_a_later_row_widens_the_column_of_a_header_width() {
+    // The `width` is on the header cell, the long `nowrap` text in the row below. Blitz wrapped (before F66) or spilled
+    // over the next column (F66 alone); Chrome widens the column.
+    let pdf = render(
+        r#"<table style="width:400px"><tr><td>Popis</td><td style="width:96px">Celkem</td>
+           <td style="color:rgb(200,0,0)">x</td></tr>
+           <tr><td>a</td><td style="white-space:nowrap">12 345 678,00 Kč</td>
+           <td style="color:rgb(200,0,0)">y</td></tr></table>"#,
+    );
+    let (dark, red) = (rows(&pdf), red_rows(&pdf));
+    assert_eq!(dark.len(), 2, "{dark:?}");
+    assert!(
+        dark[1].right < red[1].left,
+        "the price ends at {}, the next column starts at {}",
+        dark[1].right,
+        red[1].left
+    );
+}
+
 // -- helpers --------------------------------------------------------------------------------------
 
 #[derive(Debug)]
