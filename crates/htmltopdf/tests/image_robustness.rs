@@ -319,6 +319,109 @@ fn render_with_a_broken_image_is_deterministic() {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// 3. Fill bytes before a marker (F60)
+// ---------------------------------------------------------------------------------------------------------
+//
+// ITU-T T.81 §B.1.1.2: "Any marker may optionally be preceded by any number of fill bytes, which are
+// bytes assigned code X'FF'." Krilla's header reader (zune-jpeg) skips them and so do Chrome and poppler;
+// fulgur's own scan for the natural size took the first fill byte for the marker and the next two for a
+// segment length, so the image had no size and was not painted, without a warning.
+
+/// `JPEG` with `n` fill bytes (`0xFF`) in front of the first occurrence of each marker in `markers`
+/// (second byte of the marker, e.g. `0xDB`). Markers are found by walking the segments up to and including
+/// SOS, never by searching the bytes, so table contents and entropy-coded data are not mistaken for markers.
+fn jpeg_with_fill_bytes(markers: &[u8], n: usize) -> Vec<u8> {
+    let mut at = Vec::new();
+    let mut seen = Vec::new();
+    let mut i = 2; // after SOI
+    loop {
+        assert_eq!(JPEG[i], 0xFF, "segment walk lost the marker at {i}");
+        let m = JPEG[i + 1];
+        if markers.contains(&m) && !seen.contains(&m) {
+            seen.push(m);
+            at.push(i);
+        }
+        if m == 0xDA {
+            break;
+        }
+        i += 2 + usize::from(u16::from_be_bytes([JPEG[i + 2], JPEG[i + 3]]));
+    }
+    assert_eq!(
+        seen.len(),
+        markers.len(),
+        "not every marker is in the header"
+    );
+    let mut out = JPEG.to_vec();
+    for &p in at.iter().rev() {
+        out.splice(p..p, std::iter::repeat_n(0xFFu8, n));
+    }
+    out
+}
+
+#[test]
+fn jpeg_with_fill_bytes_is_painted_at_its_natural_size() {
+    let html = r#"<img src="f.jpg"><div class="m"></div>"#;
+    let intact = rasterise(&render(&[("f.jpg", JPEG.to_vec())], html));
+    let marker_top = intact.bbox(is_blue).expect("marker").1;
+    assert_box(
+        intact.bbox(is_not_white),
+        (CONTENT_LEFT, CONTENT_LEFT, 64, 64),
+        "the intact JPEG",
+    );
+    for (what, markers) in [
+        ("DQT", &[0xDB][..]),
+        ("SOF0", &[0xC0]),
+        ("DHT", &[0xC4]),
+        ("SOS", &[0xDA]),
+        ("DQT, SOF0, DHT and SOS", &[0xDB, 0xC0, 0xC4, 0xDA]),
+    ] {
+        let jpeg = jpeg_with_fill_bytes(markers, 7);
+        assert!(jpeg.len() > JPEG.len(), "{what}: no fill bytes inserted");
+        let pdf = render(&[("f.jpg", jpeg)], html);
+        assert_eq!(xobjects(&pdf), 1, "{what}");
+        let page = rasterise(&pdf);
+        assert_box(
+            page.bbox(is_not_white),
+            (CONTENT_LEFT, CONTENT_LEFT, 64, 64),
+            &format!("fill bytes before {what}"),
+        );
+        let top = page.bbox(is_blue).expect("marker").1;
+        assert!(
+            (top - marker_top).abs() <= TOL,
+            "{what}: marker at y = {top}, {marker_top} after the intact JPEG"
+        );
+    }
+}
+
+#[test]
+fn fill_byte_jpeg_with_css_width_keeps_its_ratio() {
+    // `width: 100px` and no height: the height comes from the natural ratio, which needs the size.
+    let page = rasterise(&render(
+        &[("f.jpg", jpeg_with_fill_bytes(&[0xDB], 3))],
+        r#"<img src="f.jpg" style="width:100px"><div class="m"></div>"#,
+    ));
+    assert_box(
+        page.bbox(is_not_white),
+        (CONTENT_LEFT, CONTENT_LEFT, 100, 100),
+        "fill-byte JPEG at width 100px",
+    );
+}
+
+#[test]
+fn fill_byte_jpeg_as_background_image_is_drawn_at_natural_size() {
+    // `no-repeat` at `auto` size paints the natural size (css-images-3 §5.3); a lost size fell back to 1 x 1.
+    let page = rasterise(&render(
+        &[("f.jpg", jpeg_with_fill_bytes(&[0xDB, 0xC0], 5))],
+        r#"<div style="width:64px;height:64px;background:url(f.jpg) no-repeat"></div>"#,
+    ));
+    assert_box(
+        page.bbox(is_not_white),
+        (CONTENT_LEFT, CONTENT_LEFT, 64, 64),
+        "fill-byte JPEG as background-image",
+    );
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------------------------------------
 
@@ -366,6 +469,11 @@ fn is_red(p: [u8; 3]) -> bool {
 
 fn is_blue(p: [u8; 3]) -> bool {
     p[2] > 200 && p[0] < 60 && p[1] < 60
+}
+
+/// Anything but white and the blue marker: the gradient JPEG.
+fn is_not_white(p: [u8; 3]) -> bool {
+    p.iter().any(|&c| c < 250) && !is_blue(p)
 }
 
 fn is_dark(p: [u8; 3]) -> bool {

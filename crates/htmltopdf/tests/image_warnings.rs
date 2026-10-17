@@ -22,6 +22,15 @@ impl log::Log for Capture {
 
 const JPEG: &[u8] = include_bytes!("data/gradient64.jpg");
 
+/// `JPEG` with three fill bytes in front of the first marker after APP0 (T.81 §B.1.1.2 allows them).
+fn jpeg_with_fill_bytes() -> Vec<u8> {
+    let app0_end = 2 + 2 + usize::from(u16::from_be_bytes([JPEG[4], JPEG[5]]));
+    let mut out = JPEG[..app0_end].to_vec();
+    out.extend_from_slice(&[0xFF; 3]);
+    out.extend_from_slice(&JPEG[app0_end..]);
+    out
+}
+
 fn take() -> Vec<String> {
     std::mem::take(&mut *LOG.lock().unwrap())
 }
@@ -32,6 +41,7 @@ fn warnings_name_the_images_that_are_missing_or_damaged_and_only_those() {
     log::set_max_level(log::LevelFilter::Warn);
     let r = Renderer::builder()
         .image("ok.jpg", JPEG.to_vec())
+        .image("fill.jpg", jpeg_with_fill_bytes())
         .image("cut.jpg", JPEG[..JPEG.len() * 3 / 4].to_vec())
         .image("bad.jpg", JPEG[..10].to_vec())
         // Registered and broken, never referenced: decoded by nobody, mentioned by nobody.
@@ -47,6 +57,13 @@ fn warnings_name_the_images_that_are_missing_or_damaged_and_only_those() {
 
     render(r#"<img src="ok.jpg">"#);
     assert_eq!(take(), Vec::<String>::new(), "an intact image is silent");
+
+    render(r#"<img src="fill.jpg">"#);
+    assert_eq!(
+        take(),
+        Vec::<String>::new(),
+        "a JPEG with fill bytes is valid and silent"
+    );
 
     render(r#"<img src="cut.jpg">"#);
     let log = take();

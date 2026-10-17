@@ -24,6 +24,12 @@ fn renderer(strict: bool) -> Renderer {
         .image("garbage.png", b"not an image at all".to_vec())
         // Decodes leniently: embedded although damaged, so not a problem.
         .image("cut.jpg", JPEG[..JPEG.len() * 3 / 4].to_vec())
+        // Fill bytes before a marker are legal (T.81 §B.1.1.2): a valid image.
+        .image("fill.jpg", {
+            let mut j = JPEG.to_vec();
+            j.splice(20..20, [0xFF; 3]);
+            j
+        })
         .build()
 }
 
@@ -134,4 +140,10 @@ fn a_damaged_jpeg_that_decodes_is_not_a_strict_problem() {
     // Truncated JPEGs are drawn as Chrome draws them; strict mode reports only what is refused.
     render(&renderer(true), r#"<img src="cut.jpg"><img src="ok.png">"#)
         .expect("a truncated JPEG is embedded, not an error");
+}
+
+#[test]
+fn a_jpeg_with_fill_bytes_is_not_a_strict_problem() {
+    assert_eq!(&JPEG[20..22], [0xFF, 0xDB], "the first DQT follows APP0");
+    render(&renderer(true), r#"<img src="fill.jpg">"#).expect("a valid JPEG with fill bytes");
 }
