@@ -103,7 +103,7 @@ derivations).
 
 Landed on branch `f78-lost-line-at-page-break`; fulgur fork `htmltopdf/srgb-colours` `8993bd5` (fragmenters record
 `LineSlice`s, `line_slices_tile`, output-neutral) and `412f902` (renderer paints the slices, fallback warning); the Blitz
-fork is unchanged (`52b22ef`). `Cargo.lock` pins `412f902`.
+fork is unchanged (`52b22ef`). `Cargo.lock` pins `412f902` (`e073b6b` after §8).
 
 **Step 1, the model held** (`fulgur` CLI with a scratch dump in `fragment_inline_root` and `paragraph_lines_for_page`,
 removed again; N = 12 000, Inter, A4, `--margin 15`): 33 pages, 1709 lines both in the fragmenter's metrics and in
@@ -176,3 +176,16 @@ document (it breaks lines differently because of F81, so there is no line-for-li
 inline 14 px images, 9 pages: the same words on every page before and after, 148 images; the PDF differs, the first line
 of every continuation page is at 42.1 pt like the others where it drifted between 39.9 and 41.4 pt before, and the images
 stay in their lines on the pages looked at (page 4, top and bottom)).
+
+## 8. After the review of PR #30 (`vrt-validator`, `pdf-reviewer`: merge)
+
+- **M2 (introduced by F78), fixed:** the fallback warning fired for every one-line inline root inside a block that the block
+  fragmenter splits (`<div style="height:1200px">text</div>` after a `<p>`), where the PDF is right. Fork `e073b6b`:
+  `paragraph_lines_for_page` warns only when the paragraph has more than one line and the measured page holds some of them
+  (`measured_cut_is_partial`). Red first: `crates/htmltopdf/tests/fallback_warning.rs` (one-line and three-line leaf blocks must not warn,
+  a `break-inside: avoid` paragraph of 2500 words must, naming `word00000`). `leaf.html`, `near1020.html`, `wr_abs.html`, `fixh_short.html`,
+  `nb1040.html`, `j7-inline-block.html`: 0 warnings (were 2 each); `pbi_normal.html`: still 7 (F83). Fixtures 01-11 `cmp` byte-identical.
+- **L2** (image-to-text offset varies by up to 2.1 pt across the pages of a paragraph with inline images, `im/middle_1.3.html`) is the
+  `recalculate_paragraph_line_boxes` risk of §6; filed as F84 together with the image 1.8 pt above the content top on continuation pages.
+- Findings filed or extended from the reviews: F30d (multicol, HIGH), F83 (`break-inside: avoid`, HIGH), F30g (abspos), F30f (inline-block / overflow),
+  F30c (widows), F84, a note under F20.
