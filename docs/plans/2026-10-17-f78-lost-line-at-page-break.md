@@ -1,6 +1,6 @@
 # F78 — A long paragraph loses a line at a page break
 
-Date: 2026-10-17. Finding: F78 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/fulgur`
+Date: 2026-10-17. Finding: F78 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours`, carried via `[patch.crates-io]`.
 
 ## 1. Problem
@@ -101,4 +101,78 @@ derivations).
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed on branch `f78-lost-line-at-page-break`; fulgur fork `htmltopdf/srgb-colours` `8993bd5` (fragmenters record
+`LineSlice`s, `line_slices_tile`, output-neutral) and `412f902` (renderer paints the slices, fallback warning); the Blitz
+fork is unchanged (`52b22ef`). `Cargo.lock` pins `412f902`.
+
+**Step 1, the model held** (`fulgur` CLI with a scratch dump in `fragment_inline_root` and `paragraph_lines_for_page`,
+removed again; N = 12 000, Inter, A4, `--margin 15`): 33 pages, 1709 lines both in the fragmenter's metrics and in
+`entry.lines`; fragment heights 980, 999, 999, 999, 1000, ...; fragment tops `top(first_k) - top(0)` are integers (979,
+1978, 2976, ...); `consumed` (Σ fragment heights) minus Σ `ShapedLine.height` of the planned lines = 0.8 px at k = 1,
+8.2 at k = 10, 18.6 at k = 24, 20.2 at k = 25 (the plan's numbers); the renderer's start index equals the planned one up
+to k = 24 and is planned + 1 at k = 25 (1300 against 1299); line box (-1, 19) = 20 px against `line_height` 14.4 pt =
+19.2 px; `pdftotext`: 11 993 of 12 000 words, which is what `htmltopdf` printed too.
+
+**Red before** (the same tests, fork at `20cb647`): `long_paragraph_pages.rs` 4 of 4 red (`body > p` 12 000 and 20 000
+words: 11 993 and 19 986 printed, first missing `word09095`; `div > p`: 11 993; `td > p`: 11 993; page counts 33, 55,
+33, 33 are asserted after the words); fork unit tests (a) and (b) red (the first line of page 1 sits 0.75 pt above where
+line 0 sits on page 0; for the mirror case the page holds a different number of lines than planned); (d) red: 698 lines
+painted, fewer than the paragraph has (the `render_smoke` twin: `pdftotext` finds 6980 of 7000 words, the loss F70 saw); (c) did not compile
+(no `LineSlice`).
+
+**After:**
+
+| Check | Result |
+|---|---|
+| `long_paragraph_pages.rs` | 4/4: every word once, in order, none below the content box, none above its top, page counts 33 / 55 / 33 / 33 unchanged |
+| `long_paragraph.rs` | back on A4 with the default margins (guard only), green |
+| fork `--lib` | 2037 passed (new: 2 tiling/recording tests, `line_slices_tile`, nested slices, (a), (b), fallback, (d)) |
+| fork `render_smoke` | 249 passed (new: 7000 words over A4 in Noto Sans, 6980 -> 7000 words) |
+| fork other test binaries | every `crates/fulgur/tests/*.rs` run one by one, all green |
+| fork `fulgur-vrt` | all green, goldens byte-identical (none has a split paragraph with non-tiling boxes) |
+| fork `examples_determinism` | 10 of 11; `committed_svg_matches_rendered` fails as before (environment, stale `examples/svg/index.pdf`) |
+| fork examples | all 21 example PDFs rendered with the debug CLI before and after (`mise` recipe, bundled fontconfig): byte-identical, nothing re-blessed |
+| fork fmt, `clippy --workspace --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked` | green except the two `nested_paragraph_split` tests below, which now pass with the adjusted slack; `fmt`, `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-11 | `cmp` byte-identical to the render before the lock bump (11 of 11), so 06 and 08 did not move; `compare.py` numbers identical: 4.4, 10.2/11.4/9.8, 5.7, 5.7, 21.6, 15.9/11.8, 7.2/7.1, 13.2/12.1, 5.1/4.9/0.7, 5.9/1.5, 6.9 %; page counts unchanged |
+
+The repro in pictures (`out/scratch/f78/sbs-p25-26-before-before-after-after.png`, git-ignored; input `p12000.html` next to it): pages 25 and 26 of the 12 000-word document, before (page 25 ends
+at `word09094` after a blank band, page 26 starts at `word09102`) and after (page 25 is full, page 26 starts at
+`word09095`); 12 000 of 12 000 words, 33 pages.
+
+Timing (wall clock, CLI start-up included, median of 7 runs, the two binaries run one after the other, not alternated):
+
+| Document | before | after |
+|---|---|---|
+| fixture 02 | 56 ms | 53 ms |
+| 800 paragraphs of 60 words, 160 pages (byte-identical output) | 368 ms | 354 ms |
+| one `<p>` of 20 000 words, 55 pages | 2517 ms | 2446 ms |
+| one `<p>` of 52 700 words, 145 pages | 16 187 ms | 16 456 ms |
+
+No change beyond noise. The last row is slow before and after (F82).
+
+Deviations from the plan:
+
+- **`line_slices` is recorded for every paragraph the two fragmenters emit**, also when it ends up as one fragment (the
+  plan said "empty unless the node was split by line"); the renderer ignores slices unless the node is split. The fixed /
+  absolute emitters that replace a node's fragments clear its slices too. `fragment_inline_root` became `pub(crate)` so the
+  render tests can drive it.
+- **The fallback warning is per paragraph and page, not once**, and names the paragraph by its first 40 characters
+  (`paragraph_lines_for_page` knows no node id). It did not fire in any fixture, nor in probes with inline-block,
+  multicol, direct-text `<td>` and inline-image paragraphs; only the unit test reaches it.
+- **`nested_paragraph_split.rs`: `SLACK_PT` 5.0 -> 6.0.** Two tests (direct text in a bordered div, in a flex-column item;
+  `.box` has `line-height: normal`, so its boxes do not tile) failed by 0.75 pt: `Line0104` ends at 805.1 pt, the limit was
+  804.4. The first page of that box is unchanged and already ends at 804.4 (the 5 pt of slack is exactly that overflow,
+  F80); the continuation pages used to drift up by 1 to 2 px per page (first line at 54.3, 52.8, 51.3, 49.8 pt ...) and
+  now start at 54.3 pt on every page like the first, their last lines 0 or 1 px below the first page's. That is the
+  "toward the fragmenter's position" move the plan allowed for non-tiling goldens, here in a test limit, not a golden.
+- (d) reads each line's text from its glyphs' `text_range`s: a run's `text` is the whole paragraph.
+- Not in the plan, found on the way: F80 (box overflow), F81 (`normal` = 1.2 against Chrome), F82 (superlinear single
+  paragraph); see the findings.
+
+Not verified here: `vrt-validator` and `pdf-reviewer` (run by the owner's agent); veraPDF; Chrome's positions for the 12 000-word
+document (it breaks lines differently because of F81, so there is no line-for-line reference); paragraphs reworked by
+`recalculate_paragraph_line_boxes` over many pages beyond one probe (a `<p>` and a `div > p` of 1500 words each with 37
+inline 14 px images, 9 pages: the same words on every page before and after, 148 images; the PDF differs, the first line
+of every continuation page is at 42.1 pt like the others where it drifted between 39.9 and 41.4 pt before, and the images
+stay in their lines on the pages looked at (page 4, top and bottom)).
