@@ -57,3 +57,9 @@ The check uses the same map, so generic-only lists now pass strict mode when the
 - Found by `vrt-validator` on PR #4 and fixed: the entity-attribute case above (previously counted as mapped), and a
   rule whose selector starts like a declaration (`font:hover { … }`) hiding every later rule from the scan.
 - `<link>` stylesheets and `@import`ed sheets are not seen (as for F7).
+- Since F70 (`2026-10-17-f70-ua-monospace.md`) the engine resolves the six generics Stylo parses (`serif`, `sans-serif`,
+  `monospace`, `cursive`, `fantasy`, `system-ui`) itself from the same map, so the user-agent sheet's `monospace` and sources
+  this rewrite never sees (`<link>`, `@import`, attributes with character references) work. The rewrite stays (it is the only
+  thing that resolves `ui-*`, `math`, `emoji`, `fangsong`, which Stylo reads as names), and an alias left in an attribute
+  with a character reference (`ui-*`, `math`, `emoji`, `fangsong`) is still checked as a name. Author `monospace` that the rewrite
+  turns into a family name misses Stylo's 13 px keyword-size rule (F74).

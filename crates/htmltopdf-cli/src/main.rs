@@ -49,7 +49,8 @@ enum Cmd {
         #[arg(long)]
         tagged: bool,
         /// Fail (exit 1) when any font-family list in the CSS or document matches no bundled font,
-        /// instead of warning. Use for templates you control; see RendererBuilder::strict_fonts.
+        /// or when text ends up with no font face, instead of warning. Use for templates you
+        /// control; see RendererBuilder::strict_fonts.
         #[arg(long)]
         strict_fonts: bool,
         /// Fail (exit 1) when an <img> names no bundled image or a bundled image does not decode,
