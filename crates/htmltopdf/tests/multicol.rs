@@ -397,3 +397,26 @@ fn many_paragraphs_in_two_columns_flow_over_the_pages() {
     assert!((4..=6).contains(&pages), "{pages} pages, Chrome prints 5");
     assert_filled_and_balanced("30 paragraphs", &found, pages);
 }
+
+#[test]
+fn a_paragraph_over_64_kib_in_columns_keeps_its_text_layer() {
+    // Parley keeps the offset of a cluster in its run as a `u16`: in a paragraph over 65 535 bytes the text ranges
+    // of the later glyphs wrapped and the text layer repeated earlier words in place of them (13 000 words: a few
+    // thousand duplicated, out of order), while the page looked right. 13 000 words are 130 KB.
+    for (what, body) in [
+        (
+            "64 KiB <p> in columns",
+            format!(
+                "<div style=\"column-count:2\"><p style=\"margin:0\">{}</p></div>",
+                words(0, 13_000)
+            ),
+        ),
+        (
+            "64 KiB bare text in columns",
+            format!("<div style=\"column-count:2\">{}</div>", words(0, 13_000)),
+        ),
+    ] {
+        let pdf = render(&body);
+        assert_every_word_once(what, &printed_words(&pdf), 0, 13_000);
+    }
+}
