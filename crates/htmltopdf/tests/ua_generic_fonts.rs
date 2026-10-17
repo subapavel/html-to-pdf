@@ -85,6 +85,29 @@ fn ua_monospace_renders_with_no_caller_font_at_all() {
     assert!(has_jetbrains(&pdf));
 }
 
+/// Blitz's UA sheet spells its monospace `-moz-fixed` (Stylo's alias of the keyword), and an author may too: the
+/// engine draws it with the mapped face, so the static check must not call it unresolved.
+#[test]
+fn moz_fixed_is_monospace_for_the_static_check_too() {
+    let r = Renderer::builder()
+        .font_bytes(inter())
+        .unwrap()
+        .strict_fonts(true)
+        .build();
+    let pdf = r
+        .render(
+            r#"<p style="font-family:-moz-fixed">UAMOZ13</p><p style="font-family:'Nope', -MOZ-FIXED">UAMOZ14</p>"#,
+            &RenderOptions::default(),
+        )
+        .expect("`-moz-fixed` is a generic family");
+    let text = pdftotext(&pdf);
+    assert!(
+        text.contains("UAMOZ13") && text.contains("UAMOZ14"),
+        "{text:?}"
+    );
+    assert!(has_jetbrains(&pdf));
+}
+
 /// A6, a probe: controls inherit the document family and have no family of their own in the UA sheet, so a
 /// button label and the options of a `<select>` are drawn. The text of `<textarea>` and `<input>` is not
 /// painted by the engine at all, with any font (F76), so it is not asserted here.

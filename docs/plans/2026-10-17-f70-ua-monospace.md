@@ -154,3 +154,26 @@ Not done / not verified: margin boxes (`@page`) are not checked by the runtime c
 the 13 px keyword-size rule is observed (UA `pre` / `code` 58.5 pt for ten characters, author `monospace` 72 pt) but Chrome was
 not re-rendered for it (F74); bold `monospace` is still Regular (ADR-0002); `vrt-validator` and `pdf-reviewer` were not run by
 the author. Filed: F74 (author `monospace` size), F75 (named-family last-resort fallback), F76 (`<textarea>` / `<input>` text).
+
+### Review follow-up (PR #29: `vrt-validator`, `pdf-reviewer`)
+
+fulgur fork `20cb647`; both reviews said merge, these were fixed first:
+
+1. **Paragraphs over 64 KiB were reported as text without a font.** Cause found: Parley's `ClusterData::text_offset` is `u16` (`layout/data.rs:35`), so
+   every cluster range in a run longer than 65 535 bytes wraps. Glyphs were drawn right, but the text layer repeated the head for the tail (`pdftotext` of a 7000-word paragraph:
+   6555 distinct words) and the check took the tail for uncovered text (`lim.html`: warning, exit 1 under `--strict-fonts`; `p5-wrap`, `q1-body-wrap`, `q2-box-wrap` went
+   from rc 0 to rc 1). The fork now restores the ranges (`ClusterUnwrap`: clusters tile the text in order, so a start is the smallest position congruent to the wrapped one
+   that is not before the previous end) for left-to-right text; glyph text ranges and the check both use them, so the text layer is right too. For right-to-left runs the
+   trick is not safe: the check asks only whether a glyph run exists, the text layer stays wrong (F79). Tests: `long_paragraph.rs` (70 000 and 140 000 bytes, strict, every word once in order),
+   three `render_smoke` cases (also a dropped `<code>` after 64 KiB found alone, and a long RTL paragraph not reported), `ClusterUnwrap` unit test. After: `lim.html` rc 0, no
+   repeated word; the three `val` files rc 0.
+2. **Quadratic dedupe.** `DroppedTexts` (ordered list plus `BTreeSet`) replaces `Vec::contains`: `drop40k.html` 8355 ms -> 525 ms (baseline 456 ms).
+3. **Unbounded error.** `Error::TextWithoutFont` names 20 entries and "... and N more" (fulgur and ours; `dropv.html`: 409 KB of stderr -> 721 bytes), the vector keeps all.
+4. **Static scan.** `-moz-fixed` counts as `monospace` (not rewritten, so the engine's own handling and size rule stay): `sysfont.html` no longer fails on it (it still fails, correctly,
+   on `-webkit-body`, `-apple-system`, `-webkit-pictograph` and `'monospace'`).
+5. **Docs** say "no glyph run was produced" and that `.notdef` glyphs (F44) and margin-box text are not covered (`Error::TextWithoutFont`, `strict_fonts`, `strict_text`, CLI help).
+
+Filed: F77 (Inter `->` loses `>` in the text layer), F78 (a line lost at a page break with Noto Sans, not from F70), F79 (RTL over 64 KiB); extended F6 (`@page { size }` ignored; raised to
+medium-high), F20 (`<pre>` / bare `<div>` / cell text outside marked content), F71 (tabs in bare `<pre>` reachable; `.notdef` is a PDF/A blocker). Fixtures 01-11 byte-identical to the previous head again.
+Also found: Parley draws a `<code>` (UA `monospace`) inside a paragraph with an explicit `font-size` even when no generic is mapped, while the same `<code>` at the default size is dropped; not investigated, it
+only affects tests that rely on an unmapped generic.

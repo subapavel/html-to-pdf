@@ -51,11 +51,13 @@ pub enum Error {
     /// the PDF. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
     #[error("font-family has no bundled face: {}", join_unresolved(.0))]
     UnresolvedFontFamilies(Vec<UnresolvedFamily>),
-    /// Text that no bundled face covers, so the engine left it out of the PDF: `element: excerpt` for each.
-    /// Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged. Unlike
+    /// Text for which the engine produced no glyph run, so it is left out of the PDF: `<element> "excerpt"` for
+    /// each. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged. Unlike
     /// [`Error::UnresolvedFontFamilies`] this is what actually happened to a rendered document, so it also
     /// catches families the static scan cannot see (a custom property that differs where it is used).
-    #[error("text without a font, left out of the PDF: {}", .0.join("; "))]
+    /// Not covered: a character its face has no glyph for (it gets a run, drawn as `.notdef`, F44) and the text
+    /// of `@page` margin boxes. The message names at most 20 entries; the vector has all of them.
+    #[error("text without a font, left out of the PDF: {}", join_capped(.0))]
     TextWithoutFont(Vec<String>),
     /// The rendering engine panicked (a bug in it, not in the document). The message is the panic's.
     #[error("the rendering engine failed: {0}")]
@@ -114,6 +116,22 @@ fn join_images(list: &[ImageProblem]) -> String {
 
 /// `Ok(Some(why))`: drawn although damaged (a JPEG); `Err(why)`: not drawn.
 type ImageVerdict = std::result::Result<Option<String>, String>;
+
+/// Entries of a list-valued error named in its message; a document can have thousands.
+const MAX_IN_MESSAGE: usize = 20;
+
+fn join_capped(list: &[String]) -> String {
+    let mut out = list
+        .iter()
+        .take(MAX_IN_MESSAGE)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("; ");
+    if list.len() > MAX_IN_MESSAGE {
+        out.push_str(&format!("; ... and {} more", list.len() - MAX_IN_MESSAGE));
+    }
+    out
+}
 
 fn join_unresolved(list: &[UnresolvedFamily]) -> String {
     list.iter()
@@ -472,11 +490,12 @@ impl RendererBuilder {
     /// block trips it too. That is why strict mode is opt-in — use it for fixtures, tests and CI,
     /// where every declaration is under your control, not for arbitrary customer templates.
     ///
-    /// The same switch makes *text that no face covers* an error ([`Error::TextWithoutFont`]): after layout the
-    /// engine knows which pieces of text got no glyph run, whatever the cascade made of the `font-family`
-    /// lists, and says so (logged without strict mode). That catches what the static scan cannot see, such
-    /// as a custom property that names an unbundled family where it is used and a bundled one elsewhere.
-    /// Only the document body is checked, not `@page` margin boxes.
+    /// The same switch makes *text for which no glyph run was produced* an error ([`Error::TextWithoutFont`]):
+    /// after layout the engine knows which pieces of text got none, whatever the cascade made of the
+    /// `font-family` lists, and says so (logged without strict mode). That catches what the static scan cannot
+    /// see, such as a custom property that names an unbundled family where it is used and a bundled one
+    /// elsewhere. Not covered: a character the chosen face has no glyph for (a run is produced and the glyph
+    /// is `.notdef`, F44) and the text of `@page` margin boxes.
     pub fn strict_fonts(mut self, strict: bool) -> Self {
         self.strict_fonts = strict;
         self
@@ -591,6 +610,15 @@ mod tests {
             .render("<p>hello</p>", &RenderOptions::default())
             .expect("render");
         assert!(pdf.starts_with(b"%PDF-"), "output is not a PDF");
+    }
+
+    #[test]
+    fn text_without_font_message_is_capped() {
+        let many: Vec<String> = (0..5000).map(|i| format!("<p> \"t{i}\"")).collect();
+        let msg = Error::TextWithoutFont(many).to_string();
+        assert!(msg.contains("t19\"") && !msg.contains("t20\""), "{msg}");
+        assert!(msg.ends_with("; ... and 4980 more"), "{msg}");
+        assert!(msg.len() < 1000, "{} bytes", msg.len());
     }
 
     #[test]

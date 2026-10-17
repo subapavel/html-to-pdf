@@ -404,6 +404,11 @@ fn parse_list(p: &mut Parser<'_, '_>, spans: &mut Vec<GenericSpan>) -> Vec<Entry
                 let id = &c.idents[0];
                 if CSS_WIDE.iter().any(|k| k.eq_ignore_ascii_case(id)) {
                     Entry::CssWide
+                } else if id.eq_ignore_ascii_case("-moz-fixed") {
+                    // Stylo's alias of `monospace` (the engine's UA sheet writes it). The engine resolves it
+                    // with the rest of the generics, so it counts as mapped; it is not rewritten, as it
+                    // names the generic the engine rescales the font size for.
+                    Entry::Generic(GenericFamily::Monospace)
                 } else if let Some(g) = GenericFamily::from_keyword(id) {
                     if let Some(span) = c.span {
                         spans.push((span, g));
@@ -1015,6 +1020,34 @@ mod tests {
             m("@media print{p{font-family:cursive}}"),
             "@media print{p{font-family:Inter}}"
         );
+    }
+
+    #[test]
+    fn moz_fixed_counts_as_monospace_and_is_not_rewritten() {
+        let m = map();
+        let reg = registered(&["Inter", BUILTIN_MONO_FAMILY]);
+        for css in [
+            "p{font-family:-moz-fixed}",
+            "p{font-family:'Nope', -MOZ-FIXED}",
+            "p{font:12px -moz-fixed}",
+        ] {
+            let bad = check_font_families(
+                &scan_css(css, Origin::Stylesheet),
+                &Scan::default(),
+                &reg,
+                &m,
+            );
+            assert!(bad.is_empty(), "{css}: {bad:?}");
+            assert_eq!(map_generics(css, &m), css, "{css}");
+        }
+        // Unmapped (no mono face registered): unresolved like `monospace` itself.
+        let bad = check_font_families(
+            &scan_css("p{font-family:-moz-fixed}", Origin::Stylesheet),
+            &Scan::default(),
+            &registered(&["Inter"]),
+            &m,
+        );
+        assert_eq!(bad.len(), 1);
     }
 
     #[test]
