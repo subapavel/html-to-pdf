@@ -14,8 +14,12 @@ use htmltopdf::{RenderOptions, Renderer};
 /// A4 height in pt and the default 15 mm page margin the renderer applies.
 const PAGE_H_PT: f32 = 841.89;
 const MARGIN_PT: f32 = 15.0 / 25.4 * 72.0;
-/// A glyph box (ascent + descent) may stick out of its line box by a few pt.
-const SLACK_PT: f32 = 5.0;
+/// A glyph box (ascent + descent) may stick out of its line box by a few pt. 5 pt is what the last line of a
+/// bordered direct-text box sticks out below the content box on the first page (F80, measured, unchanged by F78);
+/// the sixth is one CSS px (0.75 pt): the `.box` lines have `line-height: normal`, which Parley advances by 19.2 px
+/// while the quantised line boxes are 20 px, so since F78 a continuation page paints its lines where the fragmenter
+/// put them, up to 1 px below where the first page's lines sit (before, they drifted up by 1 to 2 px per page).
+const SLACK_PT: f32 = 6.0;
 /// Content height of one A4 page in CSS px (see `consecutive_tables.rs`).
 const CONTENT_PX: usize = 1009;
 

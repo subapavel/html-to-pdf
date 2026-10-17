@@ -24,12 +24,12 @@ fn a_paragraph_over_64_kib_renders_strict_with_every_word_once_in_order() {
         .unwrap()
         .strict_fonts(true)
         .build();
-    // 70 000 and 140 000 bytes: one and two wraps of the offsets. One tall page: a paragraph that spans many
-    // pages can lose a line at a page break (F78), which is not what this test is about.
+    // 70 000 and 140 000 bytes: one and two wraps of the offsets, on A4 with the default margins. An integer
+    // line-height keeps the line boxes tiling, so this is a guard for the text layer; the page-break line loss of
+    // F78 is covered by `long_paragraph_pages.rs`.
     for n in [10_000usize, 20_000] {
         let html = format!(
-            "<!doctype html><html><head><style>@page{{size:210mm 3000mm;margin:0}} \
-             p{{margin:0;font-size:7px;line-height:8px}}</style></head>\
+            "<!doctype html><html><head><style>p{{margin:0;font-size:7px;line-height:8px}}</style></head>\
              <body style=\"font-family:Inter\"><p>{}</p></body></html>",
             words(n)
         );
