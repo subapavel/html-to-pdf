@@ -2,6 +2,7 @@
 //! Asserts: output is a PDF, render is byte-deterministic, text survives into the PDF.
 //! Pixel comparison against Chrome is scripts/compare.py (needs poppler), not a cargo test.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use htmltopdf::{RenderOptions, Renderer};
@@ -18,6 +19,8 @@ fn renderer() -> Renderer {
     // Fixtures are under our control, so every font-family they mention must resolve: strict.
     let mut b = Renderer::builder()
         .strict_fonts(true)
+        // Every `<img>` of a fixture must name a bundled image that decodes (F32a).
+        .strict_images(true)
         .css_file(root.join("fixtures/tailwind/tailwind.css"))
         .expect("tailwind.css");
     let fonts = std::fs::read_dir(root.join("fixtures/fonts"))
@@ -35,6 +38,28 @@ fn renderer() -> Renderer {
     );
     for f in fonts {
         b = b.font_file(f).unwrap();
+    }
+    // The images next to each fixture's `index.html`, by file name (as `scripts/render-fixtures.sh`
+    // registers them).
+    let mut images = BTreeMap::new();
+    for dir in fixtures() {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "png" || x == "jpg"))
+            .collect();
+        files.sort();
+        for f in files {
+            let name = f.file_name().unwrap().to_string_lossy().into_owned();
+            let bytes = std::fs::read(&f).unwrap();
+            if let Some(other) = images.insert(name.clone(), bytes.clone()) {
+                assert_eq!(other, bytes, "two fixtures have a different `{name}`");
+            }
+        }
+    }
+    for (name, bytes) in images {
+        b = b.image(name, bytes);
     }
     b.build()
 }
