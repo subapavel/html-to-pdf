@@ -305,6 +305,34 @@ fn an_avoid_paragraph_that_fits_a_page_still_moves_whole() {
     );
 }
 
+#[test]
+fn an_avoid_box_taller_than_a_page_only_by_height_still_spans_pages_two_and_three() {
+    // F83c: three lines in a 1500 px box. The lines fit a page, so `avoid` holds (the box is not relaxed to `auto`):
+    // it moves to page 2 and its frame spans pages 2 and 3, as on main and in Chrome (3 pages, the words on page 2 at
+    // the top of the content box).
+    let body = format!(
+        "<p>before</p><div style=\"height:1500px;background:#eee;break-inside:avoid\">{}</div>",
+        "word00000<br>word00001<br>word00002"
+    );
+    let pdf = render(&body);
+    assert_eq!(page_count(&pdf), 3, "pages");
+    let found = printed_words(&pdf);
+    assert_eq!(found.len(), 3);
+    assert!(found.iter().all(|w| w.page == 2), "all on page 2");
+    assert!(
+        (found[0].y_min - MARGIN_PT).abs() < 6.0,
+        "{} starts at {:.1}pt, at the top of the content box ({MARGIN_PT:.1}pt)",
+        found[0].text,
+        found[0].y_min
+    );
+    // Without anything before it the box starts on page 1 and spans pages 1 and 2.
+    let pdf = render(
+        "<div style=\"height:1500px;background:#eee;break-inside:avoid\">word00000<br>word00001<br>word00002</div>",
+    );
+    assert_eq!(page_count(&pdf), 2, "pages");
+    assert!(printed_words(&pdf).iter().all(|w| w.page == 1));
+}
+
 fn temp(pdf: &[u8]) -> std::path::PathBuf {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

@@ -167,7 +167,7 @@ Pixel diff: fixtures 01–12 `cmp` byte-identical. Compare numbers unchanged (as
 
 ## 7. Result
 
-Landed on branch `f83-break-inside-avoid`; fulgur fork `htmltopdf/srgb-colours` **`ebd78f5`** (on top of `ab9fe07`); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `ebd78f5`.
+Landed on branch `f83-break-inside-avoid`; fulgur fork `htmltopdf/srgb-colours` **`752df13`** (on top of `ab9fe07`; `ebd78f5` was the first version, see §7.1); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `752df13`.
 Status: **done**.
 
 **Step 1, the model held** (our CLI built against the local fork with a temporary log in the strip slicer, removed again; `pbi_normal.html`, 2500 words, Inter, A4, 15 mm,
@@ -236,3 +236,21 @@ and is cut at the bottom of page 1 without its remainder (one page; no text lost
 
 Not verified here: `vrt-validator` (not run); `pdf-reviewer` (not required, `render.rs` unchanged); the spec citations (§2, from memory, `css-spec-researcher` not run); a transformed avoid paragraph taller than a page
 (§6 risk, no probe); `avoid` paragraphs with inline boxes (`<img>`, `inline-block`) across the cut (the code path is `fragment_inline_root`'s F32a one, no avoid-specific test); right-to-left text; timing (not measured after the change: the line path is the one an `auto` paragraph already takes; `pbi_normal.html` took 55 ms before).
+
+### 7.1 F83c resolved in F83 (coordinator's decision, fork `752df13`)
+
+The first version (`ebd78f5`) relaxed `avoid` by the box height (`child_h`), as §3 said. Step 1's `height:1500px` probe showed that this regressed a shape that matched Chrome: an `avoid` box taller than a page only
+through `height` (three lines inside) went from "page 2, frame spanning pages 2-3" to "cut at the bottom of page 1". Rule now: **`avoid` is relaxed only when the box's lines do not fit a page**, measured by the line
+extent (bottom of the last line box minus top of the first, `collect_inline_line_metrics`), not `child_h`. A box taller only through `height`, padding or `min-height` keeps its lines on one page, so `avoid` holds
+and it takes the path it always had. `avoid_inside_holds` is unchanged; its call site passes the line extent.
+
+- Fork lib: new `avoid_box_taller_than_a_page_only_by_height_keeps_the_strip_path` (3 fragments, no slices, moved to page index 1 after `<p>before</p>`); not run red on `ebd78f5` (the previous
+  build rendered these shapes as one page, verified with the CLI); the other 4 `avoid_` tests and the unit test unchanged and green.
+- Ours: new guard `an_avoid_box_taller_than_a_page_only_by_height_still_spans_pages_two_and_three` (3 pages, the words on page 2 at the content top; without `before`: 2 pages, words on page 1).
+- Probes against main's binary (`htmltopdf-base`): `height:1500px` after `<p>before</p>`, as the first child, `padding:700px 0` and `min-height:1500px`: **byte-identical to main** (3 / 2 / 3 / 3 pages). Chrome:
+  the same page counts and words on page 2 (for the padding box Chrome puts two words on page 2 and one on page 3, as does main: unchanged). The F83 probes (cases 1-3, `g_*`, `keep200`) are
+  byte-identical to the `ebd78f5` build.
+- Checks, same table as above: fork `--lib` 2042 passed + the same 13 failures on crates.io Blitz (2055 passed, 0 failed with the local Blitz); `render_smoke` 250 + 3 (253 + 0); all 42 test binaries green; `fulgur-vrt`
+  green, no golden changed; 21 examples byte-identical; fmt and `clippy --all-targets -D warnings` clean; ours `cargo test --release --locked` 325 passed, 0 failed, fmt / clippy clean; fixtures 01-12 `cmp`
+  byte-identical to main's binary, fixture 13 byte-identical to the `ebd78f5` build, `compare.py` numbers unchanged (13: 1.9 / 11.7 / 1.9 %).
+- The "Filed: F83c ... visible regression" paragraph above is superseded: nothing regresses.
