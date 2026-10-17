@@ -22,6 +22,8 @@ fn renderer(strict: bool) -> Renderer {
         // The file ends inside the pixel data.
         .image("bad.png", DOT[..DOT.len() / 2].to_vec())
         .image("garbage.png", b"not an image at all".to_vec())
+        // Decodes leniently: embedded although damaged, so not a problem.
+        .image("cut.jpg", JPEG[..JPEG.len() * 3 / 4].to_vec())
         .build()
 }
 
@@ -38,6 +40,9 @@ fn problem(src: &str, kind: ImageProblemKind) -> ImageProblem {
         kind,
     }
 }
+
+/// A 64 x 64 JPEG.
+const JPEG: &[u8] = include_bytes!("data/gradient64.jpg");
 
 const BROKEN: &str = r#"
     <img src="ok.png">
@@ -102,6 +107,8 @@ fn strict_images_ignores_srcless_commented_and_unreferenced_images() {
         <script>var s = '<img src="nope.png">';</script>
         <title><img src="nope.png"></title>
         <style>/* <img src="nope.png"> */</style>
+        <template><img src="nope.png"><img src="bad.png"></template>
+        <noscript><img src="nope.png"></noscript>
         <img src="ok.png">
         <p>bad.png and garbage.png are registered but nothing refers to them</p>"#;
     render(&renderer(true), body).expect("nothing in the document is a broken image");
@@ -120,4 +127,11 @@ fn strict_images_is_independent_of_strict_fonts() {
     // Strict fonts alone does not turn a broken image into an error, and vice versa.
     let r = Renderer::builder().strict_fonts(true).build();
     render(&r, "<img src=nope.png>").expect("strict_fonts does not check images");
+}
+
+#[test]
+fn a_damaged_jpeg_that_decodes_is_not_a_strict_problem() {
+    // Truncated JPEGs are drawn as Chrome draws them; strict mode reports only what is refused.
+    render(&renderer(true), r#"<img src="cut.jpg"><img src="ok.png">"#)
+        .expect("a truncated JPEG is embedded, not an error");
 }

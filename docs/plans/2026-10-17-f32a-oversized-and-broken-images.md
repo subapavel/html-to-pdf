@@ -57,9 +57,9 @@ Latent: once (1) is fixed, `huge.png` (IHDR 20000×20000, tiny IDAT) will be pai
 | Item | Where | Change |
 |---|---|---|
 | (1) | Layer found in step 2: Parley 0.6 `greedy.rs` (emergency branch + trailing line), Blitz `layout/inline.rs`, or fulgur `paragraph.rs` / `pagination_layout.rs` | One line box for an over-wide unbreakable box; the box keeps its position and is drawn. If it is Parley, a fork `subapavel/parley` is needed (the owner creates forks; standing decision, F1 postmortem). **Not** "break lines at the min-content width" (that widens every text line next to the image, test 5). |
-| (2) | fulgur `image.rs` | `pub fn validate(data: &[u8]) -> Result<AssetKind, ImageError>`: a full decode with the crates Krilla uses (`png`, `zune-jpeg`, `gif`, at Krilla's lockfile versions so verdicts cannot drift); SVG via `usvg::Tree::from_data` without a fontdb. `ImageError { Unsupported, TooLarge { w, h }, Corrupt(String) }`. `MAX_IMAGE_PIXELS = 64 Mi`, checked from the header **before** decoding (no GB allocations on untrusted input; an A4 scan at 600 dpi is 35 Mpx). |
+| (2) | fulgur `image.rs` | `pub fn validate(data: &[u8]) -> Result<AssetKind, ImageError>`: a full decode with the crates Krilla uses (`png`, `zune-jpeg`, `gif`, at Krilla's lockfile versions so verdicts cannot drift); SVG via `usvg::Tree::from_data` without a fontdb. `ImageError { Unsupported, TooLarge { w, h }, Corrupt(String) }`. `MAX_IMAGE_PIXELS = 128 Mi` (first written as 64 Mi, raised after review, §7), checked from the header **before** decoding (no GB allocations on untrusted input; an A4 scan at 600 dpi is 35 Mpx, A3 70 Mpx). |
 | (2) | fulgur `render.rs`, `background.rs`, `paragraph.rs` | One choke point `fn krilla_image(cache: &mut ImageCache, data: &Arc<Vec<u8>>, format: ImageFormat) -> Option<krilla::image::Image>`; `ImageCache` on `Canvas`, keyed by `Arc` pointer, lookup-only (cannot affect byte order). An image that fails validation is not drawn (`log::debug!`; ours warns). The layout box stays (F9 seeding already took the header size; Chrome keeps it for truncated data). Valid images go through `Image::from_png/jpeg/gif` as today — bytes unchanged. |
-| (2)(3) | ours `crates/htmltopdf/src/lib.rs`, `fonts.rs` | Statuses computed once at `build()`: `BTreeMap<String, Result<(), String>>` from `fulgur::image::validate` (one decode per `Renderer`). `Renderer::check_images(&self, html) -> Result<()>` like `check_fonts`: `walk_html` also reports `<img src>` (entity-decoded), looked up with `AssetBundle::get_image`'s key rule; reports an unregistered or empty `src` and a referenced undecodable image. Default `log::warn!` per problem in document order; strict: `Error::Images(Vec<ImageProblem>)`. `<img>` without `src` and images inside comments / raw-text elements are ignored. |
+| (2)(3) | ours `crates/htmltopdf/src/lib.rs`, `fonts.rs` | (As first planned; since review the verdicts are computed lazily, §7 M3.) Statuses computed once at `build()`: `BTreeMap<String, Result<(), String>>` from `fulgur::image::validate` (one decode per `Renderer`). `Renderer::check_images(&self, html) -> Result<()>` like `check_fonts`: `walk_html` also reports `<img src>` (entity-decoded), looked up with `AssetBundle::get_image`'s key rule; reports an unregistered or empty `src` and a referenced undecodable image. Default `log::warn!` per problem in document order; strict: `Error::Images(Vec<ImageProblem>)`. `<img>` without `src` and images inside comments / raw-text elements are ignored. |
 | strict | ours + CLI | `RendererBuilder::strict_images(bool)` and `--strict-images` (separate from `strict_fonts`). `ImageProblem { src: String, kind: ImageProblemKind::{Unregistered, Undecodable(String)} }`. |
 
 No px/pt arithmetic anywhere in this change.
@@ -76,7 +76,7 @@ XObjects counted with `pdfimages -list`; a blue 10 px `div` after the image is t
 5. `text_beside_a_wide_img_wraps_at_the_content_box`: rightmost dark text pixel ≤ 738. Green guard.
 6. `truncated_png_does_not_fail_the_render`: half-IDAT PNG → `Ok`, blue marker painted, 0 XObjects. **Red (Err).**
 7. `truncated_png_keeps_its_layout_box`: blue top equals the intact image's ±1. **Red.**
-8. `truncated_jpeg_is_not_embedded`: 0 XObjects. **Red (1 today).**
+8. ~~`truncated_jpeg_is_not_embedded`~~ flipped in review (§7, M1): `truncated_jpeg_is_embedded_as_main_and_chrome_do`, 1 XObject, `Ok`, one warning (`image_warnings.rs`).
 9. `header_only_garbage_and_empty_images_render_nothing`: `Ok`, nothing painted. Green guard.
 10. `huge_declared_png_is_refused_without_decoding` (`style="width:100px"`): `Ok` in < 2 s, 0 XObjects. **Red.**
 11. `broken_img_with_size_attributes_keeps_its_box`: `width=120 height=36` → blue top ≥ 36. Guard.
@@ -115,13 +115,13 @@ template's preflight `max-width:100%` prevents (1), and (2)/(3) need broken inpu
 
 ## 6. Risks and non-goals
 
-- Every PNG/GIF/JPEG is decoded twice (`validate` once per `Renderer`, Krilla once per render); the step-5 PR states
+- Every PNG/GIF used by a document is decoded three times in a one-shot render (`validate` once per `Renderer` and per render, Krilla once; F32m); the step-5 PR states
   the cost for a 2000×1000 PNG and fixture 03's render time.
 - A `validate` verdict that differs from Krilla's turns into a failure again: same crate versions, and a smoke test
   feeds every probe image through a full render.
 - The fix for (1) changes the height of a paragraph that held an over-wide box (fulgur goldens may move; name them).
   Wide images now paint into the page margin and can overlap `@page` margin boxes, as in Chrome.
-- Images over 64 Mpx are refused (Chrome decodes them); header-only PNGs keep their header-sized box where Chrome shows
+- Images over 128 Mpx are refused (Chrome decodes them); header-only PNGs keep their header-sized box where Chrome shows
   a broken icon. Both deliberate.
 - Non-goals kept in F32: **F32b** an image taller than a page is drawn whole on the last page; **F32c** inline images
   do not grow the line box; **F32d** `object-fit` / SVG `preserveAspectRatio`; **F32e** ratio rules (both axes,
@@ -193,6 +193,8 @@ that needs it should set `max-width: 100%` (Tailwind's preflight does).
 | `subapavel/fulgur` `htmltopdf/srgb-colours` | `02de1c0` | multi-line paragraphs record their inline boxes' geometry |
 | | `4b3f0ea` | test: an image wider than the line takes one line (2 tests) |
 | | `ce66eb1` | `image::validate`, `krilla_image`, `ImageCache`; `png`, `gif`, `zune-jpeg` direct dependencies (versions already locked) |
+| | `1c5b22b` | review fixes: stray JPEG header bytes, pixel limit 128 Mi |
+| | `0af5d9b`, `9647154`, `f757f56` | M1 damaged JPEGs pass through (`validate_detailed`), M2 JPEG decode limit 16 Mpx, `<br>` test, clippy fix |
 | ours | `c1f4863` | lock bump, `strict_images`, `Error::Images`, CLI `--strict-images`, tests |
 
 ### Tests
@@ -221,13 +223,72 @@ that needs it should set `max-width: 100%` (Tailwind's preflight does).
   about 23 ms after (+8 ms): the image is now fully decoded three times in a one-shot CLI run (`validate` in
   `build()`, `validate` in the fork's `krilla_image`, Krilla's own decode), about 3-4 ms each. A `Renderer` that is
   reused pays the `build()` one once. A way to share the verdict (a fork API taking a pre-validated set) is not built.
-- Strict zune-jpeg: `set_strict_mode(true)` is what notices a truncated scan, and it also rejects JPEGs with stray
-  bytes between header segments, which viewers accept. Such a file is now skipped with a warning (and an error under
-  `strict_images`) where it was embedded before; progressive, grayscale, CMYK, subsampled and optimised JPEGs from
-  PIL pass.
+- Strict zune-jpeg: `set_strict_mode(true)` is what notices a truncated scan. Its refusal of padding between header
+  segments is repaired (see "After `pdf-reviewer`"); progressive, grayscale, CMYK, subsampled and optimised JPEGs from PIL
+  pass. A JPEG without EOI and one with `0xFF` fill bytes are separate findings (F61, F60).
+
+### After `pdf-reviewer` (PR #25)
+
+- **D1 (stray header bytes), then M1 (damaged JPEGs) — superseded design.** zune-jpeg strict mode refuses padding between
+  header segments (`"[strict-mode]: Extra bytes between headers"`, reviewer's `stray.jpg`, `stray_app.jpg`); fork `1c5b22b`
+  repaired that one error by cutting the padding out and decoding strictly again, keeping truncation fatal. `vrt-validator`
+  then showed the premise was wrong for JPEG: main passed JPEGs through after a header parse and Chrome draws 40-99 % of a
+  truncated one and a JPEG without EOI, so refusing them is a regression, and the repair code was removed. **Decision (M1):**
+  a JPEG is refused only when `zune-jpeg` cannot decode it even non-strictly (a garbage header, an unsupported coding;
+  Krilla's own header read already refuses a bad header). When the non-strict decode succeeds and the strict one fails
+  (stray bytes, truncation, no EOI) the bytes are passed through unchanged, as on main, and `Renderer` logs one warning per
+  `<img>` ("embedded although damaged: <zune's reason>"); `--strict-images` reports a JPEG only if it is refused.
+  `fulgur::image::validate_detailed` returns `Validation { kind, damaged }`; `validate` is its `kind`. Chrome and main parity
+  beats strictness here; `qpdf --check` may note invalid DCT data in such a file (recorded with F61 / F62). PNG and GIF
+  truncation stays refused: Krilla would fail the document, and partial rows are F32l. Tests: fork
+  `damaged_jpegs_are_passed_through_like_krilla_does` (stray bytes 3/6/40, cuts at 99 % / 50 %, progressive cut, no EOI),
+  `jpegs_that_do_not_decode_at_all_are_refused`, `validate_detailed_says_when_a_jpeg_is_embedded_although_damaged`; ours
+  `truncated_jpeg_is_embedded_as_main_and_chrome_do` (test 8 flipped; the previous assertion, 0 XObjects, was green on
+  `ce66eb1` / `1c5b22b`, so the flip is red against them), `jpeg_with_stray_bytes_between_headers_is_still_embedded`,
+  `image_warnings.rs` (exactly one warning for a cut JPEG, none for an intact one, two for a broken and an unregistered
+  one), `image_strict.rs` `a_damaged_jpeg_that_decodes_is_not_a_strict_problem`. The reviewer's `stray.jpg` and
+  `stray_app.jpg` give 1 XObject each through the CLI with `--strict-images`; "Corrupt Adobe App14 segment" is not in
+  zune-jpeg 0.5.15 (Krilla's version; the reviewer read 0.4.21).
+- **M2, a JPEG above the pixel limit.** The limit bounds *our* decode; Krilla needs none for a JPEG. With the limit at
+  128 Mi the validator's 9000 x 8000 JPEG (72 Mpx) would still have been decoded (430 ms, 226 MB against main's 11 ms,
+  21 MB), so JPEG has its own, lower, decode limit `MAX_JPEG_VALIDATION_PIXELS = 16 Mi`: above it the header is
+  all that is read and the bytes are passed through. PNG and GIF above 128 Mi stay refused (Krilla must decode them).
+  Tests: fork `a_large_jpeg_is_checked_by_header_only` (a cut JPEG whose header claims 4000², 5000², 12000²: damaged only
+  where it is decoded), ours `jpeg_over_the_pixel_cap_is_embedded_by_header_check_only`. Deviation from the decision as
+  worded (cap = the PNG limit): same intent, a cap that actually keeps the validator's probe at main's cost.
+- **M3, decode lazily.** `build()` no longer decodes anything. `Renderer::check_images` validates an image when a document
+  refers to it, once per `Renderer`: `Mutex<BTreeMap<String, Result<Option<String>, String>>>` keyed by the looked-up name,
+  decoded outside the lock (two threads may decode the same image once each, with the same result, so output cannot depend
+  on order). An asset library on a long-lived `Renderer` costs nothing until used; unused SVGs no longer emit usvg warnings.
+  Test `warnings_name_the_images_that_are_missing_or_damaged_and_only_those` registers a broken image no document
+  refers to and expects no message. Timings (release CLI, 5 runs, `out/scratch/f32a/perf`, the 50 PNGs generated by a PIL loop, 50 PNGs of 2000 x 1000 registered):
+  trivial document `p0` main 10 ms / F32a at `b361992` (validator) 1150 ms / now 8 ms; one image drawn 50 times `p1` main
+  271 ms / now 25 ms (the `ImageCache`); 50 distinct images used `p50` main 263 ms / now 520 ms (validate + Krilla, F32m); 72 Mpx
+  JPEG `j72` main 12 ms 21 MB / now 13 ms 22 MB.
+- **L1 (template / noscript).** `walk_html` tracks open `<template>` and `<noscript>` elements and reports no `<img src>`
+  inside them (inert, like comments and `<script>`); CSS inside them is still scanned. Tests `img_srcs_skips_inert_template_and_noscript_content`
+  and in `image_strict.rs`.
+- **L2 (`<br>` after an overflowing box).** `revert()` in the Blitz `break_lines` also takes back the empty line after an
+  overflowing line that ends with `<br>` (`<img wide><br>` and `<img wide><br><br>` are one line, not two or three). That is
+  closer to Chrome, where a `<br>` ends its line and makes none, and it is kept; a text line after the `<br>` is not touched.
+  Pinned by fork test `a_br_after_an_overflowing_img_adds_no_line`.
+- **Changed probes of the validator** (`changed2.txt`, 486 entries; main vs F32a head, `out/scratch/f32a/cmp_changed.py`, rendered with all
+  images of their directory, Inter, Tailwind when `class=` appears): 435 identical PDFs, 43 differ, 6 render where main
+  failed (truncated PNGs `fmt_trunc2_png`, `tr`, `p7`; `p6`, a 20000 x 20000 header), 2 fail on both (`vrt-f10/c1`, `vrt-f28/dp`, missing
+  inputs / pre-existing). The 43: the wide-image probes (`ov_*`, `sz_*`, `ov2`, in both directories) 0 -> 1 XObject (painted);
+  `e_pct` 0 -> 3 and `e_clip` 2 -> 3 (images in multi-line paragraphs now drawn); `q1` 0 -> 1; `fmt_big_png` 0 -> 1;
+  `fmt_huge_png`, `fmt_huge2_png`, `fmt_hugejpg_jpg`, `q2` 0 -> 0 with different bytes (layout of the refused / kept boxes;
+  `q2` is an inline-block, text painted); `vrt-f28/fc` (1499 inline-block "ItemNNNN" words: main painted 0, now 1499 =
+  Chrome's 1499). No probe lost content.
+
+- **L1 of the first review (pixel limit), 64 Mi -> 128 Mi.** 8193 x 8192 and a 600 dpi A3 scan (69.6 Mpx) were embedded by main. Still refuses
+  a 20000 x 20000 header (400 Mpx) before allocating. Cost: a valid image near the limit makes `validate` allocate its
+  output buffer (up to 1 GiB for 16-bit RGBA, 400 MB for 8-bit RGB), once per `Renderer` and once per render, as Krilla
+  does. Test `the_pixel_limit_admits_a_600_dpi_a3_scan` (header check only; no 67 Mpx image is decoded in a test).
+- Findings F60-F65 and the extension of F20 record the pre-existing issues of the review.
 
 ### Not verified
 
 `pdf-reviewer` and `vrt-validator` (run by the caller). The `<img>` in `@page` margin boxes (built with no assets), animated
-or CMYK/16-bit PNG edge cases beyond the test images, and large valid rasters near the 64 Mpx limit (memory of the
+or CMYK/16-bit PNG edge cases beyond the test images, and large valid rasters near the 128 Mpx limit (memory of the
 two decodes) were not exercised. `render_smoke` tests were not run against the old fulgur.

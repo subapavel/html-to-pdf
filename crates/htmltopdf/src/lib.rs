@@ -28,6 +28,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
 
@@ -105,6 +106,9 @@ fn join_images(list: &[ImageProblem]) -> String {
         .join("; ")
 }
 
+/// `Ok(Some(why))`: drawn although damaged (a JPEG); `Err(why)`: not drawn.
+type ImageVerdict = std::result::Result<Option<String>, String>;
+
 fn join_unresolved(list: &[UnresolvedFamily]) -> String {
     list.iter()
         .map(|u| u.to_string())
@@ -173,9 +177,10 @@ pub struct Renderer {
     registered: FamilySet,
     generics: GenericMap,
     strict_fonts: bool,
-    /// Whether each bundled image decodes (`Err` carries the reason), by the name it was registered
-    /// under; decoded once in `build()`.
-    image_status: BTreeMap<String, std::result::Result<(), String>>,
+    /// What decoding each bundled image showed, by the name it was looked up under. Filled lazily by
+    /// `check_images`, so only images a document refers to are ever decoded, each once per `Renderer`;
+    /// the verdict is a pure function of the bytes, so the order documents arrive in cannot matter.
+    image_verdicts: Mutex<BTreeMap<String, ImageVerdict>>,
     strict_images: bool,
     /// Whether a generated `@property` defaults layer was added to the bundled CSS.
     property_defaults: bool,
@@ -292,18 +297,32 @@ impl Renderer {
     /// Static check that every `<img src>` names a bundled image that decodes. Nothing is ever fetched,
     /// so an unregistered name is a missing logo, and an image that does not decode is not drawn (its
     /// box stays); without this nobody would learn of either. `src` is looked up under the name the
-    /// image was registered with, after dropping a leading `./`, as the engine does.
+    /// image was registered with, after dropping a leading `./`, as the engine does. Only the images the
+    /// document refers to are decoded, once per `Renderer`.
+    ///
+    /// A JPEG that is damaged but decodes (truncated, no end marker, stray header bytes) is embedded as
+    /// Chrome draws it, and logged; it is not an error even in strict mode.
     fn check_images(&self, html: &str) -> Result<()> {
         let mut problems = Vec::new();
         for src in fonts::img_srcs(html) {
             let key = src.strip_prefix("./").unwrap_or(&src);
-            let kind = match self.image_status.get(key) {
-                _ if src.is_empty() => ImageProblemKind::Unregistered,
-                None => ImageProblemKind::Unregistered,
-                Some(Err(why)) => ImageProblemKind::Undecodable(why.clone()),
-                Some(Ok(())) => continue,
+            let Some(data) = self.assets.get_image(&src).filter(|_| !src.is_empty()) else {
+                problems.push(ImageProblem {
+                    src,
+                    kind: ImageProblemKind::Unregistered,
+                });
+                continue;
             };
-            problems.push(ImageProblem { src, kind });
+            match self.image_verdict(key, data) {
+                Ok(None) => {}
+                Ok(Some(why)) => {
+                    log::warn!("<img src=\"{src}\"> is embedded although damaged: {why}")
+                }
+                Err(why) => problems.push(ImageProblem {
+                    src,
+                    kind: ImageProblemKind::Undecodable(why),
+                }),
+            }
         }
         if problems.is_empty() {
             return Ok(());
@@ -315,6 +334,22 @@ impl Renderer {
             log::warn!("{p}, so nothing is drawn for it");
         }
         Ok(())
+    }
+
+    fn image_verdict(&self, key: &str, data: &[u8]) -> ImageVerdict {
+        let lock = || {
+            self.image_verdicts
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+        };
+        if let Some(known) = lock().get(key) {
+            return known.clone();
+        }
+        // Decoded outside the lock: another thread may do the same, with the same result.
+        let verdict = fulgur::image::validate_detailed(data)
+            .map(|v| v.damaged)
+            .map_err(|e| e.to_string());
+        lock().entry(key.to_string()).or_insert(verdict).clone()
     }
 
     fn engine(&self, opts: &RenderOptions) -> Engine {
@@ -507,24 +542,13 @@ impl RendererBuilder {
                 .add_font_bytes(fonts::BUILTIN_MONO.to_vec())
                 .expect("built-in font is a valid TTF");
         }
-        // One full decode per bundled image per `Renderer`; the verdicts are looked up per render.
-        let image_status = assets
-            .images
-            .iter()
-            .map(|(name, data)| {
-                let verdict = fulgur::image::validate(data)
-                    .map(|_| ())
-                    .map_err(|e| e.to_string());
-                (name.clone(), verdict)
-            })
-            .collect();
         Renderer {
             assets,
             css_scan: self.css_scan,
             registered,
             generics,
             strict_fonts: self.strict_fonts,
-            image_status,
+            image_verdicts: Mutex::default(),
             strict_images: self.strict_images,
             property_defaults,
         }

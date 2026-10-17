@@ -193,20 +193,62 @@ fn truncated_png_keeps_its_layout_box() {
 }
 
 #[test]
-fn truncated_jpeg_is_not_embedded() {
+fn truncated_jpeg_is_embedded_as_main_and_chrome_do() {
+    // Krilla never decodes a JPEG and Chrome draws what is there (40-99 % of a truncated file), so a
+    // damaged JPEG that still decodes leniently is embedded, with a warning (`image_warnings.rs`).
+    // Only one that cannot be decoded at all is refused.
     let sos = JPEG.windows(2).position(|w| w == [0xff, 0xda]).unwrap();
-    let cut_at = sos + (JPEG.len() - sos) / 2;
+    for (what, bytes) in [
+        (
+            "cut in the scan",
+            JPEG[..sos + (JPEG.len() - sos) / 2].to_vec(),
+        ),
+        ("cut near the end", JPEG[..JPEG.len() - 30].to_vec()),
+        ("no EOI", JPEG[..JPEG.len() - 2].to_vec()),
+        ("intact", JPEG.to_vec()),
+    ] {
+        let pdf = render(
+            &[("t.jpg", bytes)],
+            r#"<img src="t.jpg"><div class="m"></div>"#,
+        );
+        assert_eq!(xobjects(&pdf), 1, "{what}");
+    }
+}
+
+#[test]
+fn jpeg_over_the_pixel_cap_is_embedded_by_header_check_only() {
+    // 12000 x 12000 (144 Mpx, over the 128 Mi limit that bounds our own decode) in the SOF header. Krilla
+    // passes a JPEG through undecoded, so main embedded it; a PNG of that size is refused.
+    let mut jpeg = JPEG.to_vec();
+    let sof = jpeg.windows(2).position(|w| w == [0xff, 0xc0]).unwrap();
+    jpeg[sof + 5..sof + 9].copy_from_slice(&[0x2e, 0xe0, 0x2e, 0xe0]);
     let pdf = render(
-        &[("t.jpg", JPEG[..cut_at].to_vec())],
-        r#"<img src="t.jpg"><div class="m"></div>"#,
+        &[("big.jpg", jpeg)],
+        r#"<img src="big.jpg" style="width:100px"><div class="m"></div>"#,
     );
-    assert_eq!(xobjects(&pdf), 0, "truncated scan data is not embedded");
-    // And the intact one is, so the count above means something.
-    let pdf = render(
-        &[("t.jpg", JPEG.to_vec())],
-        r#"<img src="t.jpg"><div class="m"></div>"#,
-    );
-    assert_eq!(xobjects(&pdf), 1, "the intact JPEG is embedded");
+    assert_eq!(xobjects(&pdf), 1);
+}
+
+/// `JPEG` with `n` zero bytes between its first (APP0) segment and the next marker: stray bytes between
+/// header segments, which libjpeg skips with a warning and every viewer draws.
+fn jpeg_with_stray_bytes(n: usize) -> Vec<u8> {
+    let app0_end = 2 + 2 + usize::from(u16::from_be_bytes([JPEG[4], JPEG[5]]));
+    let mut out = JPEG[..app0_end].to_vec();
+    out.extend(std::iter::repeat_n(0u8, n));
+    out.extend_from_slice(&JPEG[app0_end..]);
+    out
+}
+
+#[test]
+fn jpeg_with_stray_bytes_between_headers_is_still_embedded() {
+    // zune-jpeg's strict mode refuses these; main embedded them and viewers draw them, so they are.
+    for n in [3, 6] {
+        let pdf = render(
+            &[("s.jpg", jpeg_with_stray_bytes(n))],
+            r#"<img src="s.jpg"><div class="m"></div>"#,
+        );
+        assert_eq!(xobjects(&pdf), 1, "{n} stray bytes");
+    }
 }
 
 #[test]
@@ -217,6 +259,11 @@ fn header_only_garbage_and_empty_images_render_nothing() {
         ("garbage", b"not an image at all".repeat(10)),
         ("empty", Vec::new()),
         ("10-byte JPEG", JPEG[..10].to_vec()),
+        ("JPEG with a broken header", {
+            let mut j = JPEG.to_vec();
+            j[2..30].fill(0x11);
+            j
+        }),
     ] {
         let name = if what.contains("JPEG") {
             "x.jpg"

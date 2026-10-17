@@ -597,6 +597,10 @@ enum HtmlSite {
 fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
     let bytes = html.as_bytes();
     let mut i = 0;
+    // Open `<template>` and `<noscript>` elements: their content is inert (it is never rendered, here
+    // there is no scripting), so images in it are not images of the document. CSS in them is still
+    // reported, like CSS anywhere else, because the engine's style handling does not know about them.
+    let mut inert = 0usize;
     while let Some(off) = html[i..].find('<') {
         i += off;
         let rest = &html[i..];
@@ -607,6 +611,9 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
         let next = bytes.get(i + 1).copied().unwrap_or(0);
         if !next.is_ascii_alphabetic() {
             // `</x>`, `<!doctype>`, `<?xml?>` or a stray `<`.
+            if is_end_tag(rest, "template") || is_end_tag(rest, "noscript") {
+                inert = inert.saturating_sub(1);
+            }
             i += rest.find('>').map_or(rest.len(), |e| e + 1);
             continue;
         }
@@ -616,6 +623,9 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
             j += 1;
         }
         let tag = html[i + 1..j].to_ascii_lowercase();
+        if matches!(tag.as_str(), "template" | "noscript") {
+            inert += 1;
+        }
         loop {
             while j < bytes.len() && (bytes[j].is_ascii_whitespace() || bytes[j] == b'/') {
                 j += 1;
@@ -663,7 +673,7 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
             }
             if name == "style" {
                 found(HtmlSite::Attribute(value));
-            } else if name == "src" && tag == "img" {
+            } else if name == "src" && tag == "img" && inert == 0 {
                 found(HtmlSite::ImgSrc(value));
             }
         }
@@ -676,6 +686,16 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
             i += end;
         }
     }
+}
+
+/// Whether `rest` starts with the end tag `</tag` (ASCII case-insensitive, followed by a delimiter).
+fn is_end_tag(rest: &str, tag: &str) -> bool {
+    let b = rest.as_bytes();
+    b.starts_with(b"</")
+        && b.get(2..2 + tag.len())
+            .is_some_and(|n| n.eq_ignore_ascii_case(tag.as_bytes()))
+        && b.get(2 + tag.len())
+            .is_none_or(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/'))
 }
 
 /// Offset of the first `</tag` (ASCII case-insensitive) in `rest`, or `rest.len()`.
@@ -912,6 +932,13 @@ mod tests {
         let html = r#"<IMG SRC="a.png"><p>x</p><img src='b&amp;c.png' alt=x><img alt=y src=d.png>
             <img src=""><img src><img><img data-src="e.png"><img alt="src=f.png">"#;
         assert_eq!(img_srcs(html), ["a.png", "b&c.png", "d.png", "", ""]);
+    }
+
+    #[test]
+    fn img_srcs_skips_inert_template_and_noscript_content() {
+        let html = r#"<img src="a.png"><template><img src="b.png"><template><img src="c.png"></template><img src="d.png"></template>
+            <NOSCRIPT><img src="e.png"></NOSCRIPT><img src="f.png"><noscripts><img src="g.png">"#;
+        assert_eq!(img_srcs(html), ["a.png", "f.png", "g.png"]);
     }
 
     #[test]
