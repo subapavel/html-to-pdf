@@ -51,6 +51,14 @@ pub enum Error {
     /// the PDF. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
     #[error("font-family has no bundled face: {}", join_unresolved(.0))]
     UnresolvedFontFamilies(Vec<UnresolvedFamily>),
+    /// Text for which the engine produced no glyph run, so it is left out of the PDF: `<element> "excerpt"` for
+    /// each. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged. Unlike
+    /// [`Error::UnresolvedFontFamilies`] this is what actually happened to a rendered document, so it also
+    /// catches families the static scan cannot see (a custom property that differs where it is used).
+    /// Not covered: a character its face has no glyph for (it gets a run, drawn as `.notdef`, F44) and the text
+    /// of `@page` margin boxes. The message names at most 20 entries; the vector has all of them.
+    #[error("text without a font, left out of the PDF: {}", join_capped(.0))]
+    TextWithoutFont(Vec<String>),
     /// The rendering engine panicked (a bug in it, not in the document). The message is the panic's.
     #[error("the rendering engine failed: {0}")]
     EnginePanic(String),
@@ -108,6 +116,22 @@ fn join_images(list: &[ImageProblem]) -> String {
 
 /// `Ok(Some(why))`: drawn although damaged (a JPEG); `Err(why)`: not drawn.
 type ImageVerdict = std::result::Result<Option<String>, String>;
+
+/// Entries of a list-valued error named in its message; a document can have thousands.
+const MAX_IN_MESSAGE: usize = 20;
+
+fn join_capped(list: &[String]) -> String {
+    let mut out = list
+        .iter()
+        .take(MAX_IN_MESSAGE)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("; ");
+    if list.len() > MAX_IN_MESSAGE {
+        out.push_str(&format!("; ... and {} more", list.len() - MAX_IN_MESSAGE));
+    }
+    out
+}
 
 fn join_unresolved(list: &[UnresolvedFamily]) -> String {
     list.iter()
@@ -243,6 +267,9 @@ impl Renderer {
     /// engine, so nothing it left half-done is reused.
     fn run<T>(&self, f: impl FnOnce() -> std::result::Result<T, fulgur::Error>) -> Result<T> {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+            Ok(Err(fulgur::Error::TextWithoutFont(found))) => Err(Error::TextWithoutFont(
+                found.iter().map(|d| d.to_string()).collect(),
+            )),
             Ok(r) => Ok(r?),
             Err(payload) => Err(Error::EnginePanic(
                 payload
@@ -359,6 +386,9 @@ impl Renderer {
             // Determinism: never consult host fonts. Every font must be bundled.
             .system_fonts(false)
             .assets(self.assets.clone())
+            // Text no face covers is what the static check cannot see (F70): an error exactly when
+            // `strict_fonts` makes the static findings errors.
+            .strict_text(self.strict_fonts)
             .tagged(opts.tagged);
         if let Some(t) = &opts.title {
             b = b.title(t.clone());
@@ -459,6 +489,13 @@ impl RendererBuilder {
     /// cascade: an unused rule (`.never-used { font-family: Georgia, serif }`) or a `@media screen`
     /// block trips it too. That is why strict mode is opt-in — use it for fixtures, tests and CI,
     /// where every declaration is under your control, not for arbitrary customer templates.
+    ///
+    /// The same switch makes *text for which no glyph run was produced* an error ([`Error::TextWithoutFont`]):
+    /// after layout the engine knows which pieces of text got none, whatever the cascade made of the
+    /// `font-family` lists, and says so (logged without strict mode). That catches what the static scan cannot
+    /// see, such as a custom property that names an unbundled family where it is used and a bundled one
+    /// elsewhere. Not covered: a character the chosen face has no glyph for (a run is produced and the glyph
+    /// is `.notdef`, F44) and the text of `@page` margin boxes.
     pub fn strict_fonts(mut self, strict: bool) -> Self {
         self.strict_fonts = strict;
         self
@@ -520,6 +557,13 @@ impl RendererBuilder {
                 *css = mapped;
             }
         }
+        // The rewrite above reaches only CSS that passes through us. The engine's own user-agent sheet gives
+        // `pre`, `code`, `kbd`, `samp`, `tt` (and `xmp`, `listing`, `plaintext`) `font-family: monospace`, and
+        // `<link>`ed sheets and attributes with character references are not rewritten either, so the engine
+        // resolves the generics itself from the same map (F70).
+        for (generic, family) in &generics {
+            assets.set_generic_family(generic.keyword(), family.as_str());
+        }
         assets.css.insert(
             0,
             format!(
@@ -566,6 +610,15 @@ mod tests {
             .render("<p>hello</p>", &RenderOptions::default())
             .expect("render");
         assert!(pdf.starts_with(b"%PDF-"), "output is not a PDF");
+    }
+
+    #[test]
+    fn text_without_font_message_is_capped() {
+        let many: Vec<String> = (0..5000).map(|i| format!("<p> \"t{i}\"")).collect();
+        let msg = Error::TextWithoutFont(many).to_string();
+        assert!(msg.contains("t19\"") && !msg.contains("t20\""), "{msg}");
+        assert!(msg.ends_with("; ... and 4980 more"), "{msg}");
+        assert!(msg.len() < 1000, "{} bytes", msg.len());
     }
 
     #[test]

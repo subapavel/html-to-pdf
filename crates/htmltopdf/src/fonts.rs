@@ -79,6 +79,22 @@ impl GenericFamily {
         }
     }
 
+    /// Whether the engine's CSS parser reads the keyword as a generic family. Those six are resolved by the
+    /// engine itself, through the map `RendererBuilder::build` hands it (F70), wherever they come from:
+    /// the user-agent sheet, a `<link>`ed sheet, an attribute we leave unrewritten. `ui-*`, `math`, `emoji`
+    /// and `fangsong` are plain family names to it, and only our keyword rewrite makes them resolve.
+    pub(crate) fn is_engine_generic(self) -> bool {
+        matches!(
+            self,
+            GenericFamily::Serif
+                | GenericFamily::SansSerif
+                | GenericFamily::Monospace
+                | GenericFamily::Cursive
+                | GenericFamily::Fantasy
+                | GenericFamily::SystemUi
+        )
+    }
+
     fn from_keyword(s: &str) -> Option<Self> {
         Self::ALL
             .into_iter()
@@ -202,13 +218,16 @@ pub(crate) struct Scan {
 }
 
 impl Scan {
-    /// The same scan with every generic keyword turned into a family name of that spelling, for CSS whose
+    /// The same scan with every generic keyword that the engine does not resolve itself (see
+    /// [`GenericFamily::is_engine_generic`]) turned into a family name of that spelling, for CSS whose
     /// keywords are not rewritten to bundled families.
     fn with_generics_unmapped(mut self) -> Scan {
         fn unmap(entries: &mut [Entry]) {
             for e in entries {
                 match e {
-                    Entry::Generic(g) => *e = Entry::Name(g.keyword().to_string()),
+                    Entry::Generic(g) if !g.is_engine_generic() => {
+                        *e = Entry::Name(g.keyword().to_string())
+                    }
                     Entry::Var { fallback, .. } => unmap(fallback),
                     _ => {}
                 }
@@ -385,6 +404,11 @@ fn parse_list(p: &mut Parser<'_, '_>, spans: &mut Vec<GenericSpan>) -> Vec<Entry
                 let id = &c.idents[0];
                 if CSS_WIDE.iter().any(|k| k.eq_ignore_ascii_case(id)) {
                     Entry::CssWide
+                } else if id.eq_ignore_ascii_case("-moz-fixed") {
+                    // Stylo's alias of `monospace` (the engine's UA sheet writes it). The engine resolves it
+                    // with the rest of the generics, so it counts as mapped; it is not rewritten, as it
+                    // names the generic the engine rescales the font size for.
+                    Entry::Generic(GenericFamily::Monospace)
                 } else if let Some(g) = GenericFamily::from_keyword(id) {
                     if let Some(span) = c.span {
                         spans.push((span, g));
@@ -544,8 +568,9 @@ pub(crate) fn scan_html(html: &str) -> Scan {
                 &decode_entities(&html[range.clone()]),
                 Origin::StyleAttribute,
             );
-            // `map_generics_in_html` leaves attributes with character references alone, so their
-            // generic keywords still resolve to nothing: check them as plain names.
+            // `map_generics_in_html` leaves attributes with character references alone. The six generics
+            // the engine parses resolve through its own map anyway (F70); `ui-*` and the others would be
+            // plain names there and match nothing: check those as names.
             scan.extend(if html[range].contains('&') {
                 attr.with_generics_unmapped()
             } else {
@@ -998,6 +1023,34 @@ mod tests {
     }
 
     #[test]
+    fn moz_fixed_counts_as_monospace_and_is_not_rewritten() {
+        let m = map();
+        let reg = registered(&["Inter", BUILTIN_MONO_FAMILY]);
+        for css in [
+            "p{font-family:-moz-fixed}",
+            "p{font-family:'Nope', -MOZ-FIXED}",
+            "p{font:12px -moz-fixed}",
+        ] {
+            let bad = check_font_families(
+                &scan_css(css, Origin::Stylesheet),
+                &Scan::default(),
+                &reg,
+                &m,
+            );
+            assert!(bad.is_empty(), "{css}: {bad:?}");
+            assert_eq!(map_generics(css, &m), css, "{css}");
+        }
+        // Unmapped (no mono face registered): unresolved like `monospace` itself.
+        let bad = check_font_families(
+            &scan_css("p{font-family:-moz-fixed}", Origin::Stylesheet),
+            &Scan::default(),
+            &registered(&["Inter"]),
+            &m,
+        );
+        assert_eq!(bad.len(), 1);
+    }
+
+    #[test]
     fn a_rule_whose_selector_looks_like_a_declaration_does_not_hide_later_rules() {
         assert_eq!(
             map_generics("font:hover{color:red}.x{font-family:monospace}", &map()),
@@ -1006,9 +1059,10 @@ mod tests {
     }
 
     #[test]
-    fn generics_in_attributes_left_unmapped_are_checked_as_names() {
-        // The rewrite skips attributes with character references, so the check must not count the
-        // keyword as mapped (text would be dropped silently).
+    fn generics_in_attributes_left_unmapped_are_checked_by_what_the_engine_resolves() {
+        // The rewrite skips attributes with character references. The six generics the engine parses
+        // still resolve, through its own map (F70); `ui-monospace` would be a plain name there, matching
+        // nothing, so the check must not count it as mapped.
         let check = |html: &str| {
             check_font_families(
                 &Scan::default(),
@@ -1018,10 +1072,29 @@ mod tests {
             )
         };
         assert!(check(r#"<p style="font-family:monospace">x</p>"#).is_empty());
+        assert!(
+            check(r#"<p style="font-family:monospace;content:&#39;x&#39;">x</p>"#).is_empty(),
+            "monospace resolves in the engine whether or not we rewrite it"
+        );
+        for g in ["serif", "sans-serif", "cursive", "fantasy", "system-ui"] {
+            let html = format!(r#"<p style="font-family:{g};content:&#39;x&#39;">x</p>"#);
+            assert!(check(&html).is_empty(), "{g}");
+        }
         assert_eq!(
-            check(r#"<p style="font-family:monospace;content:&#39;x&#39;">x</p>"#).len(),
+            check(r#"<p style="font-family:ui-monospace;content:&#39;x&#39;">x</p>"#).len(),
             1
         );
+        for g in [
+            "ui-serif",
+            "ui-sans-serif",
+            "ui-rounded",
+            "math",
+            "emoji",
+            "fangsong",
+        ] {
+            let html = format!(r#"<p style="font-family:{g};content:&#39;x&#39;">x</p>"#);
+            assert_eq!(check(&html).len(), 1, "{g}");
+        }
     }
 
     #[test]
