@@ -539,7 +539,7 @@ fn parse_font_shorthand(
 pub(crate) fn scan_html(html: &str) -> Scan {
     let mut scan = Scan::default();
     walk_html(html, |site| match site {
-        CssSite::Attribute(range) => {
+        HtmlSite::Attribute(range) => {
             let attr = scan_css(
                 &decode_entities(&html[range.clone()]),
                 Origin::StyleAttribute,
@@ -552,7 +552,8 @@ pub(crate) fn scan_html(html: &str) -> Scan {
                 attr
             })
         }
-        CssSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
+        HtmlSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
+        HtmlSite::ImgSrc(_) => {}
     });
     scan
 }
@@ -561,23 +562,39 @@ pub(crate) fn scan_html(html: &str) -> Scan {
 pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
     let mut ranges = Vec::new();
     walk_html(html, |site| {
-        if let CssSite::Element(range) = site {
+        if let HtmlSite::Element(range) = site {
             ranges.push(range);
         }
     });
     ranges
 }
 
-/// Where [`walk_html`] found CSS.
-enum CssSite {
+/// The `src` of every `<img>` that has the attribute, entity-decoded, in document order. An `<img>`
+/// without `src`, and anything inside a comment or a raw-text element (`<style>`, `<script>`,
+/// `<textarea>`, `<title>`), is not an image of the document and is not reported.
+pub(crate) fn img_srcs(html: &str) -> Vec<String> {
+    let mut srcs = Vec::new();
+    walk_html(html, |site| {
+        if let HtmlSite::ImgSrc(range) = site {
+            srcs.push(decode_entities(&html[range]));
+        }
+    });
+    srcs
+}
+
+/// What [`walk_html`] reports, in document order: CSS, and the `src` of images.
+enum HtmlSite {
     /// The byte range of a `style=""` attribute's raw (entity-encoded) value.
     Attribute(std::ops::Range<usize>),
     /// The byte range of a `<style>` element's contents.
     Element(std::ops::Range<usize>),
+    /// The byte range of the raw (entity-encoded) value of an `<img>`'s `src` attribute; empty for
+    /// `src=""` and a bare `src`.
+    ImgSrc(std::ops::Range<usize>),
 }
 
 /// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order.
-fn walk_html(html: &str, mut found: impl FnMut(CssSite)) {
+fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
     let bytes = html.as_bytes();
     let mut i = 0;
     while let Some(off) = html[i..].find('<') {
@@ -645,14 +662,16 @@ fn walk_html(html: &str, mut found: impl FnMut(CssSite)) {
                 }
             }
             if name == "style" {
-                found(CssSite::Attribute(value));
+                found(HtmlSite::Attribute(value));
+            } else if name == "src" && tag == "img" {
+                found(HtmlSite::ImgSrc(value));
             }
         }
         i = j;
         if matches!(tag.as_str(), "style" | "script" | "textarea" | "title") {
             let end = find_end_tag(&html[i..], &tag);
             if tag == "style" {
-                found(CssSite::Element(i..i + end));
+                found(HtmlSite::Element(i..i + end));
             }
             i += end;
         }
@@ -737,9 +756,9 @@ fn rewrite_sites<'a>(
     let mut last = 0;
     walk_html(html, |site| {
         let range = match site {
-            CssSite::Element(r) => r,
-            CssSite::Attribute(r) if attributes && !html[r.clone()].contains('&') => r,
-            CssSite::Attribute(_) => return,
+            HtmlSite::Element(r) => r,
+            HtmlSite::Attribute(r) if attributes && !html[r.clone()].contains('&') => r,
+            HtmlSite::Attribute(_) | HtmlSite::ImgSrc(_) => return,
         };
         if let Cow::Owned(css) = rewrite(&html[range.clone()]) {
             out.push_str(&html[last..range.start]);
@@ -887,6 +906,20 @@ pub(crate) fn check_font_families(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn img_srcs_reads_every_attribute_syntax_in_document_order() {
+        let html = r#"<IMG SRC="a.png"><p>x</p><img src='b&amp;c.png' alt=x><img alt=y src=d.png>
+            <img src=""><img src><img><img data-src="e.png"><img alt="src=f.png">"#;
+        assert_eq!(img_srcs(html), ["a.png", "b&c.png", "d.png", "", ""]);
+    }
+
+    #[test]
+    fn img_srcs_skips_comments_and_raw_text_elements() {
+        let html = r#"<!-- <img src="a.png"> --><style>x{}</style><script>"<img src='b.png'>"</script>
+            <textarea><img src="c.png"></textarea><title><img src="d.png"></title><img src="e.png">"#;
+        assert_eq!(img_srcs(html), ["e.png"]);
+    }
 
     fn registered(names: &[&str]) -> FamilySet {
         names.iter().map(|n| fold(n)).collect()

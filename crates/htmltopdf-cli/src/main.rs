@@ -52,6 +52,10 @@ enum Cmd {
         /// instead of warning. Use for templates you control; see RendererBuilder::strict_fonts.
         #[arg(long)]
         strict_fonts: bool,
+        /// Fail (exit 1) when an <img> names no bundled image or a bundled image does not decode,
+        /// instead of warning and drawing nothing. See RendererBuilder::strict_images.
+        #[arg(long)]
+        strict_images: bool,
     },
 }
 
@@ -79,11 +83,14 @@ fn main() -> Result<()> {
             lang,
             tagged,
             strict_fonts,
+            strict_images,
         } => {
             let html = std::fs::read_to_string(&input)
                 .with_context(|| format!("reading {}", input.display()))?;
 
-            let mut b = Renderer::builder().strict_fonts(strict_fonts);
+            let mut b = Renderer::builder()
+                .strict_fonts(strict_fonts)
+                .strict_images(strict_images);
             for c in &css {
                 b = b.css_file(c)?;
             }

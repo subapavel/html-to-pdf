@@ -25,6 +25,8 @@
 //! ```
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use fulgur::{AssetBundle, Engine, Margin, PageSize};
@@ -51,12 +53,56 @@ pub enum Error {
     /// The rendering engine panicked (a bug in it, not in the document). The message is the panic's.
     #[error("the rendering engine failed: {0}")]
     EnginePanic(String),
+    /// `<img>` elements that cannot be drawn: no bundled image under their `src`, or an image that does
+    /// not decode. Returned only with [`RendererBuilder::strict_images`]`(true)`; otherwise logged.
+    #[error("images that cannot be drawn: {}", join_images(.0))]
+    Images(Vec<ImageProblem>),
     #[error("asset `{path}`: {source}")]
     Asset {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
+}
+
+/// An `<img>` that cannot be drawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageProblem {
+    /// The `src` attribute, entity-decoded; empty for `src=""`.
+    pub src: String,
+    pub kind: ImageProblemKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImageProblemKind {
+    /// No image was registered under this name (nothing is ever fetched), or the `src` is empty.
+    Unregistered,
+    /// The image is registered but its data is not a PNG, JPEG, GIF or SVG that decodes (or is over
+    /// the pixel limit). The reason is the decoder's.
+    Undecodable(String),
+}
+
+impl fmt::Display for ImageProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            ImageProblemKind::Unregistered if self.src.is_empty() => {
+                write!(f, "<img src=\"\"> has an empty src")
+            }
+            ImageProblemKind::Unregistered => {
+                write!(f, "<img src=\"{}\"> is not a bundled image", self.src)
+            }
+            ImageProblemKind::Undecodable(why) => {
+                write!(f, "<img src=\"{}\"> cannot be decoded: {why}", self.src)
+            }
+        }
+    }
+}
+
+fn join_images(list: &[ImageProblem]) -> String {
+    list.iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn join_unresolved(list: &[UnresolvedFamily]) -> String {
@@ -127,6 +173,10 @@ pub struct Renderer {
     registered: FamilySet,
     generics: GenericMap,
     strict_fonts: bool,
+    /// Whether each bundled image decodes (`Err` carries the reason), by the name it was registered
+    /// under; decoded once in `build()`.
+    image_status: BTreeMap<String, std::result::Result<(), String>>,
+    strict_images: bool,
     /// Whether a generated `@property` defaults layer was added to the bundled CSS.
     property_defaults: bool,
 }
@@ -141,12 +191,14 @@ impl Renderer {
             default_family: None,
             generic_overrides: GenericMap::new(),
             strict_fonts: false,
+            strict_images: false,
         }
     }
 
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
         self.check_fonts(html)?;
+        self.check_images(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
         let html = self.prepare(html);
@@ -161,6 +213,7 @@ impl Renderer {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         self.check_fonts(html)?;
+        self.check_images(html)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
         let html = self.prepare(html);
@@ -236,6 +289,34 @@ impl Renderer {
         Ok(())
     }
 
+    /// Static check that every `<img src>` names a bundled image that decodes. Nothing is ever fetched,
+    /// so an unregistered name is a missing logo, and an image that does not decode is not drawn (its
+    /// box stays); without this nobody would learn of either. `src` is looked up under the name the
+    /// image was registered with, after dropping a leading `./`, as the engine does.
+    fn check_images(&self, html: &str) -> Result<()> {
+        let mut problems = Vec::new();
+        for src in fonts::img_srcs(html) {
+            let key = src.strip_prefix("./").unwrap_or(&src);
+            let kind = match self.image_status.get(key) {
+                _ if src.is_empty() => ImageProblemKind::Unregistered,
+                None => ImageProblemKind::Unregistered,
+                Some(Err(why)) => ImageProblemKind::Undecodable(why.clone()),
+                Some(Ok(())) => continue,
+            };
+            problems.push(ImageProblem { src, kind });
+        }
+        if problems.is_empty() {
+            return Ok(());
+        }
+        if self.strict_images {
+            return Err(Error::Images(problems));
+        }
+        for p in &problems {
+            log::warn!("{p}, so nothing is drawn for it");
+        }
+        Ok(())
+    }
+
     fn engine(&self, opts: &RenderOptions) -> Engine {
         let mut b = Engine::builder()
             .page_size(PageSize::custom(opts.page.width_mm, opts.page.height_mm))
@@ -280,6 +361,7 @@ pub struct RendererBuilder {
     /// Generic families the caller mapped explicitly (`generic_family`).
     generic_overrides: GenericMap,
     strict_fonts: bool,
+    strict_images: bool,
 }
 
 impl RendererBuilder {
@@ -344,6 +426,19 @@ impl RendererBuilder {
     /// where every declaration is under your control, not for arbitrary customer templates.
     pub fn strict_fonts(mut self, strict: bool) -> Self {
         self.strict_fonts = strict;
+        self
+    }
+
+    /// Whether an `<img>` that cannot be drawn is an error, or only logged with `log::warn!` (the
+    /// default). That is an `<img src>` naming no bundled image (an empty `src` too), and a bundled image
+    /// that is not a PNG, JPEG, GIF or SVG that decodes in full. Either way the image is not drawn; an
+    /// undecodable one keeps its layout box. Independent of [`strict_fonts`](Self::strict_fonts).
+    ///
+    /// Like the font check this is a static scan of the document's `<img>` tags, not of the page: an
+    /// `<img>` that CSS hides is still checked, and `<img>` without `src`, inside comments or raw-text
+    /// elements are not. CSS `url()` images are not checked.
+    pub fn strict_images(mut self, strict: bool) -> Self {
+        self.strict_images = strict;
         self
     }
 
@@ -412,12 +507,25 @@ impl RendererBuilder {
                 .add_font_bytes(fonts::BUILTIN_MONO.to_vec())
                 .expect("built-in font is a valid TTF");
         }
+        // One full decode per bundled image per `Renderer`; the verdicts are looked up per render.
+        let image_status = assets
+            .images
+            .iter()
+            .map(|(name, data)| {
+                let verdict = fulgur::image::validate(data)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string());
+                (name.clone(), verdict)
+            })
+            .collect();
         Renderer {
             assets,
             css_scan: self.css_scan,
             registered,
             generics,
             strict_fonts: self.strict_fonts,
+            image_status,
+            strict_images: self.strict_images,
             property_defaults,
         }
     }

@@ -22,7 +22,7 @@ for n in "${names[@]}"; do
   for img in "$dir"/*.png "$dir"/*.jpg; do [ -f "$img" ] && IMAGES+=(--image "$(basename "$img")=$img"); done
   "$BIN" render "$dir/index.html" -o "$out/htmltopdf.pdf" \
       --css fixtures/tailwind/tailwind.css "${FONTS[@]}" "${IMAGES[@]}" \
-      --title "$n" --lang cs --strict-fonts
+      --title "$n" --lang cs --strict-fonts --strict-images
   rm -f "$out"/htmltopdf-p*.png
   pdftoppm -r 96 -png "$out/htmltopdf.pdf" "$out/htmltopdf-p"
   if [ $update = 1 ]; then

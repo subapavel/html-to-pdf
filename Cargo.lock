@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#b5f9df3b6c85774684017384bb4193ecb238ffb9"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#070045404d4118f20c9c8f8a689f00eb36bf3ac9"
 dependencies = [
  "accesskit",
  "app_units",
@@ -957,13 +957,14 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#e81629c24cfe0b40b14af9825089894ab3a85063"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#ce66eb10176283bf19b8096c8e7b4cd460856a64"
 dependencies = [
  "blitz-dom",
  "blitz-html",
  "blitz-traits",
  "cssparser 0.37.0",
  "getrandom",
+ "gif",
  "image",
  "krilla",
  "krilla-svg",
@@ -971,6 +972,7 @@ dependencies = [
  "lopdf",
  "minijinja",
  "parley",
+ "png",
  "serde",
  "serde_json",
  "skrifa 0.44.0",
@@ -981,6 +983,7 @@ dependencies = [
  "unicode-segmentation",
  "usvg",
  "woff2-patched",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
