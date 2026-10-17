@@ -1,6 +1,6 @@
 # F59 — A `colspan` wider than the table breaks the column widths
 
-Date: 2026-10-17. Finding: F59 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/blitz`
+Date: 2026-10-17. Finding: F59 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/blitz`
 `htmltopdf/blitz-dom-0.2.4` (`packages/blitz-dom/src/layout/table.rs`), carried via `[patch.crates-io]`; no fulgur
 change.
 
@@ -129,3 +129,50 @@ the Chrome reference; threshold = worst page after the fix + 1 point.
 - `grid.row` is still `u16` cast to `i16`: a table over 32 767 rows is unchecked (file a finding if it panics).
 - Non-goals (F15): dividing a spanning first-row cell's width over its columns, `rowspan`, `<col>` widths, `min-width`,
   sharing extra width by max-content, fixed layout ignoring content.
+
+## 7. As landed
+
+- Blitz fork `htmltopdf/blitz-dom-0.2.4`: `ee5477b` (one commit; the plan's steps 2-4 were verified in that order but not
+  committed separately: with every column as a track the 01-10 PDFs were `cmp`-identical to main, then the auto-layout
+  switch went in). `GridBuilder.col` is a `u32`, `push_cell_item` records a `CellPlacement`, `build_table_context` places
+  the cells from `track_columns` / `grid_column` once every row is known, first-row widths are a `BTreeMap` keyed by the
+  start column, `uses_fixed_algorithm` = `table-layout: fixed` and a table `width` that is not `auto`. Our `Cargo.lock`
+  moves only the blitz-dom source. No fulgur change.
+- Tests: `crates/htmltopdf/tests/table_spans.rs` 17 tests, **8 red before the fix** (colspan 4 / 5 / 99 / 1000 at the
+  three positions, shrink-to-fit with a 60-character cell, header idiom, inner span-only column, rows that all span,
+  20 x `colspan=1000`, nested, and the 40-cell `X39` right of `X38`, e.g. `colspan=4: B1 at 163.3 pt, twin 195.5 pt`);
+  9 green before and after. Blitz: 10 new unit tests in `layout/table.rs` (37 in `blitz-dom`). Ours `cargo test
+  --release --locked --no-fail-fast`: 272 passed, 0 failed, 2 ignored. Against our Blitz: `fulgur --lib` 2006,
+  `render_smoke` 240, `fulgur-vrt` goldens byte-identical.
+- Fixtures 01-10: PDFs byte-identical to main (`cmp`). Fixture 11 added with a Chrome reference: 1 / 1 page, **8.1 % before
+  -> 6.9 %** (threshold 7.9 %). Before, the description column collapsed to a few words per line and the header row
+  stopped at 405 px; now the headers MNOŽ. / CENA / CELKEM start at x = 322.3 / 382.3 / 466.3 pt, Chrome 322.5 / 382.5 / 466.5
+  (`pdftotext -bbox`). What is left is text drift, rows 1-2 px taller than Chrome's and the cell rules (Blitz #386).
+- Probes (`out/scratch/f59/`, `xMin` in pt, Chrome / ours-before / ours-after; no preflight, `table{width:600px}`):
+  P1 `colspan` 4 / 5 / 99 / 1000, B1 196 / 165, 145, 72, 69 / **196**, C1 344 / 282, 244, 97, 90 / **346** (the 2 pt is the
+  extra width shared equally instead of by max-content, the same as for `colspan=3`); full row first and last the same.
+  P2 shrink-to-fit with a 60-character cell, B1 165 / 68 / **165**. P3 inner span-only column: Chrome merges it
+  (`Y` 270, equal to the twin), also with `border-spacing: 10px` (274); ours 339 / **271**; `border-spacing` itself is still
+  not mapped (X 54 / 46). Mixed spans, B1 195 / 163 / 196. Header idiom c1 315 / 153 / 313. P4 spanning first row with widths
+  below: 129 / 286, unchanged (it was right by coincidence of the old misaligned vector). P5 rows spanning 5, 3 and 4 + 1,
+  R3b 269 / 390 / 271; a table whose only row is one cell renders. P6 `table-layout: fixed`: with `width:100%` Chrome divides
+  equally (B1 302), with `width: auto` it is automatic (B1 205, TAIL 84 for a span row; ours 205 / 84 after the
+  `uses_fixed_algorithm` rule) - **Chrome uses automatic layout for `fixed; width: auto`**, so P6 decided for the width
+  test. `fixw99`: TAIL 493 / 465 / 465 (Chrome 207 pt right of C1, ours 179: both keep the span-only columns; the
+  difference is fixed layout dividing equally, F15). P8 `<colgroup>` of 5 `<col>`: Chrome 195 / 342, the empty `<col>`s get
+  no width either (ours merges them, 196 / 346; Blitz skips `<col>`). P9 nested B1 194 / 69 / 196, inner b1 196 / 72 / 200.
+  P10 `many17` and `many20`: Chrome 20 content-sized columns; ours before shared the last four (c16..c19 at 472), after
+  within 1 pt of Chrome (c19 472 / 472).
+- Timing, a 2000-row, five-column table (72 pages), best of 5 on the same host: before 289 / 303 ms, after 267 / 285 ms;
+  PDFs byte-identical.
+- Deviations from the plan: (1) one Blitz commit instead of three (see above). (2) Acceptance test 7, "`TAIL` x > `C1` x +
+  200 pt" for the `fixw99` shape, is `> 100 pt` in the test: with the test CSS ours puts `TAIL` 179 pt right of `C1` before
+  and after (Chrome 207), because fixed layout does not divide the width equally (F15); 100 pt still separates "kept" from
+  "merged" (about 20 pt). (3) The 40-cell test uses `font-size: 5px`: without it the 40 columns overflow the page and
+  `X39` is not printed. (4) The plan said later rows widen the column they start in "as today"; the exact condition is that
+  the cell starts inside the first row's raw columns (`first_row_width`), which is today's `col < columns.len()` for a first
+  row without spans. (5) A table with no cell at all gets no `grid_template_columns` (as before, `resize(0)`). (6) Commit
+  trailer: the session's attribution reminder names `Claude Sonnet 5.5`; the earlier commits of this series say `Claude Opus
+  5.5`.
+- Not verified: the HTML §4.9.12.1 / css-tables-3 wording (`css-spec-researcher` not run, behaviour taken from Chrome probes);
+  Firefox and WebKit; a table over 32 767 rows (`grid.row` is still `i16`); `rowspan` interplay; `vrt-validator`.
