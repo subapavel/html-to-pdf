@@ -237,6 +237,46 @@ fn nowrap_text_in_a_later_row_widens_the_column_of_a_header_width() {
     );
 }
 
+/// R1 of the second review: a column with a *percentage* width is as wide as its cells' min-content at least, too. A
+/// `nowrap` price in a `10%` (Tailwind `w-1/6` is `calc(1/6 * 100%)`) cell of a 400 px table spilled over the next
+/// cell. Chrome: the text ends at 170, the red `b` starts at 173.
+fn percent_row(width: &str, table_style: &str) -> (Vec<Row>, Vec<Row>) {
+    let pdf = render(&format!(
+        r#"<table style="{table_style}"><tr><td style="width:{width};white-space:nowrap">12 345 678,00 Kč</td>
+           <td style="color:rgb(200,0,0)">b</td></tr></table>"#
+    ));
+    (rows(&pdf), red_rows(&pdf))
+}
+
+#[test]
+fn percentage_width_below_nowrap_text_widens_the_column() {
+    for width in ["10%", "calc(1/6 * 100%)", "calc(1/4 * 100%)"] {
+        let (dark, red) = percent_row(width, "width:400px");
+        assert_eq!(dark.len(), 1, "{width}: the text wrapped: {dark:?}");
+        assert!(dark[0].right.abs_diff(170) <= 2, "{width}: {dark:?}");
+        assert!(
+            red[0].left.abs_diff(173) <= 2,
+            "{width}: `b` starts at {}, Chrome has 173 (the text spills over it)",
+            red[0].left
+        );
+    }
+}
+
+#[test]
+fn percentage_width_above_the_min_content_is_kept() {
+    // Guard: 50 % of 400 px is 200 px and the text needs 4 px less: `b` at 258 (Chrome).
+    let (_, red) = percent_row("50%", "width:400px");
+    assert!(red[0].left.abs_diff(258) <= 2, "`b` at {}", red[0].left);
+}
+
+#[test]
+fn percentage_width_of_an_indefinite_table_is_left_alone() {
+    // Guard: a table without a width has nothing to take a percentage of; it is as wide as its content, like Chrome's
+    // (`b` at 173).
+    let (_, red) = percent_row("10%", "");
+    assert!(red[0].left.abs_diff(173) <= 2, "`b` at {}", red[0].left);
+}
+
 // -- helpers --------------------------------------------------------------------------------------
 
 #[derive(Debug)]

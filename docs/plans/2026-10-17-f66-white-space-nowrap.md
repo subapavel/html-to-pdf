@@ -239,3 +239,24 @@ the margin but not the page, a transparent box; strict images do not turn it int
 **Not verified (follow-up):** `<table>` inside flex / grid items with explicit widths; a colspan cell wider than its column
 (not measured, as designed); cells below the first row that have a length `width` in a column past the first row's width (their `width`
 is now ignored while measuring); whether the page warning fires for content under `position: fixed` / `absolute`.
+
+### Second review follow-up (`vrt-validator` round 2 on PR #28)
+
+**R1, percentage column widths (fixed).** `widen_explicit_columns` (Blitz `52b22ef`) now measures percentage columns as well: the
+percentage is taken of the table's content-box width computed from the table's own layout inputs (`table_content_width`: known size, else
+the inherent preferred size, clamped by `min-width` / `max-width`, less padding and border), and a column whose cells need more than that gets a
+fixed track of their min-content. With an indefinite table width nothing is done (Taffy treats the percentage as `auto`). Tailwind's `w-1/6`
+is a plain percentage after Stylo's simplification (`calc(1/6*100%)`), so it takes the same path. The `minmax(min-content, P%)` track suggested
+in the review was not used, for the reason given in the H1 section (free space is shared equally, so percentage columns would not reach their share).
+- Chrome vs ours (`out/scratch/f66/r1a-r1h`, x of the red `b`; table 400 px): `10%` 173 / 172 (before 97), `calc(1/6*100%)` 173 / 172 (before 124),
+  `calc(1/4*100%)` 173 / 172 (before 157), `50%` short text 258 / 257 (guard), auto-width table 173 / 172 (guard, unchanged), unbreakable words in
+  `5%` and `20%` cells (`r1e`, the pre-existing case) 260 / 260 (before 157), a length-and-percentage row `r1f` 349 / 354 (before 317),
+  percentages summing to 120 % with `nowrap` text (`r1d`) 449 / 537 (unchanged, F15).
+- **Red before** (against `204c4c2` / `bf81b0c`): ours `percentage_width_below_nowrap_text_widens_the_column` (three widths; 97 px for `10%`);
+  guards `percentage_width_above_the_min_content_is_kept`, `percentage_width_of_an_indefinite_table_is_left_alone`; fork
+  `percentage_cell_width_never_goes_below_the_min_content` (red without the Blitz commit: a 40 px cell for 128 px of text).
+- **Fixtures:** 01-11 byte-identical to the branch head before this change (`cmp`), compare numbers unchanged. `fulgur-vrt` goldens identical.
+  Fork: lib 2018, `render_smoke` 241, `blitz-dom` 37, clippy and fmt clean.
+- Left open and noted in F15: `a6` (`colspan` cell with width and `nowrap`: not measured, only single-column cells are), R2 (`k3`, cell `min-width`
+  / `max-width` with a table width). Side finding in F6 (`@page` margin overridden by the 15 mm default). F66g got the `left: 9999px` quirk.
+
