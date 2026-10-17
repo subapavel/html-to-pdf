@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0011</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0011</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 29. 10. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<!-- Šablona se "záhlavními" řádky přes celou tabulku: <td colspan="99"> (starší šablony nepočítají sloupce) -->
+<table class="w-full border-collapse text-sm mb-6">
+  <thead>
+    <tr class="bg-gray-900 text-white text-left text-xs uppercase tracking-wider">
+      <th class="border border-gray-300 px-3 py-2 font-semibold">Popis</th>
+      <th class="border border-gray-300 px-3 py-2 font-semibold w-20">Množ.</th>
+      <th class="border border-gray-300 px-3 py-2 font-semibold w-28">Cena</th>
+      <th class="border border-gray-300 px-3 py-2 font-semibold w-32">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td colspan="99" class="border border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Služby</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Vývoj iFlow pro příjem objednávek včetně mapování a validace</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">12 h</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">2 200,00</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">26 400,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Testování rozhraní</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">8 h</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">2 200,00</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">17 600,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Konzultace</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">3 h</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">2 200,00</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">6 600,00</td>
+    </tr>
+    <tr>
+      <td colspan="99" class="border border-gray-300 bg-gray-100 px-3 py-2 font-semibold">Licence a materiál</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Licence Integration Suite, roční předplatné</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">48 000,00</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">48 000,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Hardwarový token</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">2 ks</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">1 450,00</td>
+      <td class="border border-gray-300 px-3 py-2 tabular-nums">2 900,00</td>
+    </tr>
+    <tr>
+      <td colspan="99" class="border border-gray-300 bg-gray-50 px-3 py-2 text-right text-gray-600">Základ daně: 101 500,00 Kč · DPH 21 %: 21 315,00 Kč</td>
+    </tr>
+    <tr>
+      <td colspan="99" class="border border-gray-300 px-3 py-2 text-right font-bold">Celkem k úhradě 122 815,00 Kč</td>
+    </tr>
+    <tr>
+      <td colspan="99" class="border border-gray-300 px-3 py-2 text-xs text-gray-500 leading-relaxed">Poznámka: faktura je splatná převodem na účet 123456789/0100, variabilní symbol 20260011. Při prodlení s úhradou účtujeme smluvní úrok z prodlení ve výši 0,05 % z dlužné částky za každý započatý den prodlení. Zboží zůstává do úplného zaplacení majetkem dodavatele.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-sm text-gray-600 mt-6">Děkujeme za spolupráci.</p>
+
+</body>
+</html>

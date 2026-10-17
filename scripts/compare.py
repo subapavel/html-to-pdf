@@ -70,6 +70,12 @@ THRESHOLDS = {
     #     cards) and the card separator lines Chrome paints as `<tr>` borders and we do not (Blitz #386, F22).
     #     Worst page + 1 point.
     "10-stacked-items": 0.069,
+    # 11: new in F59 (section, VAT, total and notes rows are `<td colspan="99">` in a four-column items table). 6.9 %
+    #     (before F59: 8.1 %, the description column collapsed and the header row stopped at 405 px): the columns
+    #     now stand within 0.25 pt of Chrome's and the page count matches. The rest is text drift, rows that come out
+    #     1-2 px taller than Chrome's (they add up over 9 rows) and the cell rules Chrome paints as collapsed borders
+    #     (Blitz #386, F22). Worst page + 1 point.
+    "11-full-width-rows": 0.079,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

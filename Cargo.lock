@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#070045404d4118f20c9c8f8a689f00eb36bf3ac9"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#ee5477b3009d792f1645ce0de8ed7d915c0ef63e"
 dependencies = [
  "accesskit",
  "app_units",
