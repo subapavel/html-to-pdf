@@ -76,6 +76,13 @@ THRESHOLDS = {
     #     1-2 px taller than Chrome's (they add up over 9 rows) and the cell rules Chrome paints as collapsed borders
     #     (Blitz #386, F22). Worst page + 1 point.
     "11-full-width-rows": 0.079,
+    # 12: new in F30d (a two-column terms block, `columns:2` with `<h3>` / `<p>` children, 1.3 pages tall under the items
+    #     table). 14.6 / 7.2 %: before F30d the block printed no text (every column was one slice taller than a page and
+    #     the renderer skipped it). Both pages hold the same clauses in the same columns as Chrome up to the last page's
+    #     column split, where Chrome keeps clause 21 together (widows / orphans = 2 in columns, F30d-b) and we cut it
+    #     after a line. The rest is the text drift every fixture has (headings and rows about 3 px lower than Chrome's).
+    #     Worst page + 1 point.
+    "12-terms-columns": 0.156,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
