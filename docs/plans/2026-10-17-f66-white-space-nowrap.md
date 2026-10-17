@@ -1,6 +1,6 @@
 # F66 — `white-space: pre` / `nowrap` still wrap
 
-Date: 2026-10-17. Finding: F66 in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/blitz`
+Date: 2026-10-17. Finding: F66 in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/blitz`
 `htmltopdf/blitz-dom-0.2.4` (`layout/inline.rs`, `layout/construct.rs`, `node/element.rs`, `stylo_to_parley.rs`,
 `assets/default.css`). No fulgur, Parley or Stylo change.
 
@@ -107,6 +107,86 @@ rebuild).
   `text-wrap` shorthand (Tailwind `text-nowrap`; polyfillable in `htmltopdf` like F8 by rewriting to `text-wrap-mode`);
   `break-spaces` hanging rules; the trailing space before a `pre-line` newline.
 
-## 7. Result
+## 7. As landed
 
-(Filled in at landing.)
+### Chrome probes (step 0), A4, `@page { size: A4; margin: 15mm }`, Inter 14 px / 20 px, `out/scratch/f66/p*.html`
+
+(The first run without `size: A4` gave Letter pages; the numbers below are A4.) Rows are clusters of dark pixels at 96 dpi,
+x in px from the page edge; the content box starts at 57. Ours is the final binary.
+
+| Probe | Chrome 141 | Ours before | Ours after |
+|---|---|---|---|
+| P1 `nowrap` 300 px box, 418 px text | 1 row, x 57-475 | 2 rows, 57-352 / 57-173 | 1 row, 57-475 |
+| P2 table 400 px, long sentence + `nowrap` IBAN (red) | IBAN 1 row, 233-455 | 2 rows, 277-425 / 277-345 | 1 row, 232-454 |
+| P3 `<pre>` long line + `short` | 2 rows, 57-475 / 58-90 | 3 rows | 2 rows, 57-475 / 57-89 |
+| P4 `pre-wrap` | 3 rows, first ends 352 | same | same (guard) |
+| P5 `pre-line` `"\n    Firma s.r.o.\n    Ulice 1\n"` | 2 rows, left 58 / 58 (the leading newline is an empty line) | left 73 / 73 | left 58 / 58; marker 20 px lower than Chrome (F66f) |
+| P6 `truncate` | 1 row, ends 347 with `…` | 2 rows | 1 row, ends 352, no ellipsis (F66c) |
+| P7 `<td nowrap>` | as P2 | as P2 before | as P2 after |
+| P8 `a<br>b` nowrap / `a\nb` pre | 2 rows | 2 rows | 2 rows |
+| P9 `text-align: right` + `nowrap`, overflowing | 1 row, 57-475 (start-aligned, CSS Text 3 §7.1) | wraps | 1 row, 57-475 |
+| P10 `truncate` + `max-width: 100px` on a `td` of an auto table | clipped at the cell, ellipsis | clipped, wrapped | clipped, no ellipsis |
+| P11 `text-wrap: nowrap` | 1 row | 2 rows | 2 rows (F66d) |
+| P12 `overflow: hidden` + `nowrap` | 1 row, ends 352 | 2 rows | 1 row, ends 352 |
+| P13 plain `truncate` cell (no `max-width`), auto table | the column widens to the text: red 319-736 | clipped | still clipped at about 295 px (F66e) |
+| P14 same, `width: 400px` | the table grows to about 500 px, red 134-552 | clipped | clipped at 160 px (F66e) |
+| P15 `pre` `"a\nb\n"`, P16 `a<br>b<br>` | 2 rows, marker at y 97 | marker at y 117 | marker at y 117 (F66f, pre-existing) |
+
+P10 and P13 answer the plan's question (clip or widen): Chrome widens a `truncate` cell unless it has a `max-width`; we clip
+(F66e), as predicted in §6. The pre-line left edge in Chrome is 58, not 57 (the bearing of `F` and `U`), so test 5 asserts
+58 +- 1 instead of the plan's 57 +- 1.
+
+### Commits
+
+| Repo | Commit | What |
+|---|---|---|
+| `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` | `aebe118` | `TextLayout::nowrap`, unbounded break width, min = max under `nowrap`, `pre-line` collapse with explicit newlines, `td[nowrap]`; one commit (steps 3-5 share `construct.rs`) |
+| `subapavel/fulgur` `htmltopdf/srgb-colours` | `f7e3104` | tests only: 4 in `blitz_adapter.rs` |
+| ours | this branch | `white_space.rs`, lock bump to both, docs |
+
+### Design as built
+
+- `nowrap` is `TextLayout::nowrap` (`node/element.rs`), set in `build_inline_layout_into` from the inline root's computed
+  `text-wrap-mode` (`stylo_to_parley::text_wrap_nowrap`), before `collapse_mode` consumes the style. `TextLayout` derives
+  `Default`, so `TextLayout::new` needed no change; the flag is rebuilt on every construction, so a cached layout cannot go stale.
+- `compute_inline_layout`: `break_lines(layout, width, nowrap)` uses `f32::MAX` when set (the width still sizes the box and
+  aligns with `align_when_overflowing: false`, so an overflowing line is start-aligned, P9). F32a's revert check never
+  fires then. `calculate_content_widths().min` is replaced by `.max` under `nowrap`; `TextLayout::content_widths()` (unused
+  by layout, kept consistent) does the same.
+- `pre-line`: `white_space_collapse(PreserveBreaks)` now maps to Collapse. A text node whose parent is `PreserveBreaks` is
+  split at `'\n'`; each newline goes through `push_forced_break` (the `<br>` path, now shared). A trailing space before the
+  newline is kept (the plan's non-goal); the indentation after it is trimmed by Parley because the text before ends in
+  whitespace. `BreakSpaces` is still Preserve.
+- Plan deviation: nothing in `crates/htmltopdf` or fulgur proper changed; as the plan said.
+
+### Tests
+
+- Ours `white_space.rs`: 9 tests, **7 red before** (against `ee5477b`/`f5ef832`): 1, 2, 3, 5, 6, 7 and the added
+  `nowrap_long_lines_on_both_sides_of_a_br_stay_two_rows` (the plan's test 8 asserts only `a<br>b` and `a\nb`, which already
+  passed, so the two-long-lines case is a separate red test); **green guards** 4 (`pre-wrap`) and 8. The test file builds its own
+  Inter renderer from `fixtures/fonts` (as `font_family.rs`) and rasterises with `pdftoppm`.
+- Fork (`blitz_adapter.rs`): lib 2010 -> 2014; all four new tests red without the Blitz commit (the three planned plus
+  `nowrap_attribute_on_a_cell_does_not_wrap`, which pins the UA rule: red with only `default.css` reverted). They use bundled Noto Sans
+  (`examples/.fonts`), not host fonts. `render_smoke` 241, `fulgur-vrt` green with **no golden changed**, `clippy --workspace
+  --all-targets -D warnings` and `fmt` clean. Blitz: `cargo test -p blitz-dom` 37 passed, fmt clean, clippy has only its 3
+  existing warnings (none in touched lines).
+- Ours: `cargo test --release --locked --no-fail-fast` green (every suite ok; 16 min wall, mostly the cold test build),
+  `cargo fmt --check`, `cargo clippy --release --locked --all-targets -- -D warnings` clean.
+
+### Numbers
+
+- Fixtures 01-11: `scripts/render-fixtures.sh`, every PDF `cmp`-identical to the one rendered by the previous binary.
+  `compare.py` unchanged: 4.4, 10.2/11.4/9.8, 5.7, 5.7, 21.6, 15.9/11.8, 7.2/7.1, 13.2/12.1, 5.1/4.9/0.7, 5.9/1.5, 6.9 %;
+  pages 1,3,1,1,1,2,2,2,3,2,1 as before. No threshold touched.
+- Time (release CLI, 12 interleaved runs, sorted, ms): fixture 02 before 42-67 (median 52), after 43-68 (median 51); a
+  144-page text document (660 paragraphs) before 372-426 (median 408), after 343-434 (median 410), the two PDFs byte-identical.
+  The `nowrap` check costs nothing measurable.
+
+### Not verified
+
+`vrt-validator` and `pdf-reviewer` (the caller runs them). A `nowrap` inline-block / flex item / grid item beyond the
+`inline-block` unit test; `nowrap` inside list items, `::before` / `::after` content and `display: contents`; a very wide
+`nowrap` line past the page edge (it paints into the margin, as designed); pagination of a `nowrap` line wider than the
+page. The `white-space` keywords other than the ones probed (`break-spaces`). `css-spec-researcher` was not run; the spec
+section references are from memory. The Stylo parse noise `ERROR: Unexpected token` printed by the fork tests is not from
+these changes (not investigated).
