@@ -106,6 +106,7 @@ target/release/htmltopdf render fixtures/invoices/01-basic/index.html -o out/01.
   --css fixtures/tailwind/tailwind.css --font fixtures/fonts/Inter-Regular.ttf …   # see scripts/render-fixtures.sh
 scripts/render-fixtures.sh                               # all fixtures → out/
 python3 scripts/compare.py                               # fulgur vs Chrome → out/compare/*.png + summary
+python3 scripts/bench.py [--check]                       # render time table / speed guard, see docs/benchmarks.md
 ```
 
 ## Upstream

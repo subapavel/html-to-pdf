@@ -26,3 +26,14 @@ jobs:
             out/compare/
             out/*/htmltopdf.pdf
           retention-days: 14
+      # Speed guard (docs/benchmarks.md, plan 2026-10-18-b1-benchmark.md): hard budgets only on CI hardware until
+      # bench/baseline-ci.json exists. About a minute; the table is uploaded so the CI numbers can be read off.
+      - run: python3 scripts/bench.py --check --runs 5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench
+          path: |
+            out/bench/table.txt
+            out/bench/results.json
+          retention-days: 14
