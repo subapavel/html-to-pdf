@@ -566,6 +566,94 @@ fn an_abspos_box_without_insets_follows_a_sibling_that_moved_to_the_next_page() 
 
 // ── A10: position: fixed is not fragmented ────────────────────────────────────────────────────────────────────────
 
+/// Pages of `pdf` with no printed word on them.
+fn blank_pages(pdf: &[u8]) -> Vec<usize> {
+    let printed = printed_words(pdf);
+    (1..=page_count(pdf))
+        .filter(|p| !printed.iter().any(|w| w.page == *p))
+        .collect()
+}
+
+// A clipping or transformed ancestor above the containing block: the renderer clips (or transforms) the geometry it
+// has, so a flow built from the start only added blank pages. Such boxes stay as main drew them: the page count of
+// main and of Chrome (1 page) and no blank page. Repros of the F30g validator.
+
+#[test]
+fn an_abspos_box_under_a_clip_above_its_cb_adds_no_pages() {
+    // `clip_above_cb`: main 1 page, Chrome 1, the first F30g build 5.
+    let pdf = render(&format!(
+        "<div style=\"overflow:hidden;height:400px\"><div style=\"position:relative\">\
+         <div style=\"position:absolute;top:50px;left:0\">{}</div></div></div>",
+        words(0, 600)
+    ));
+    assert_eq!(page_count(&pdf), 1);
+    assert!(blank_pages(&pdf).is_empty());
+}
+
+#[test]
+fn a_short_abspos_box_under_a_clip_above_its_cb_adds_no_pages() {
+    // `clip_above_cb_short`: main 1, the first F30g build 2.
+    let pdf = render(&format!(
+        "<div style=\"overflow:hidden\"><div style=\"position:relative\"><p>head</p>\
+         <p style=\"position:absolute;top:900px;left:0\">{}</p></div></div>",
+        words(0, 200)
+    ));
+    assert_eq!(page_count(&pdf), 1);
+    assert!(blank_pages(&pdf).is_empty());
+}
+
+#[test]
+fn a_very_long_abspos_box_under_a_clip_does_not_multiply_pages() {
+    // 20 000 words at `width:100px` made 398 pages.
+    let pdf = render(&format!(
+        "<div style=\"overflow:hidden;height:400px\"><div style=\"position:relative\">\
+         <div style=\"position:absolute;top:0;left:0;width:100px\">{}</div></div></div>",
+        words(0, 20_000)
+    ));
+    assert_eq!(page_count(&pdf), 1);
+}
+
+#[test]
+fn an_abspos_wrapper_with_a_nested_abspos_box_under_a_clip_adds_no_pages() {
+    // 13 pages, 12 of them blank, in the first F30g build.
+    let pdf = render(&format!(
+        "<div style=\"overflow:hidden;height:400px\"><div style=\"position:relative\">\
+         <div style=\"position:absolute;top:0;left:0\"><p>{}</p>\
+         <div style=\"position:absolute;top:30px;left:50px;width:200px\">{}</div></div></div></div>",
+        words(0, 300),
+        words(300, 2000)
+    ));
+    assert_eq!(page_count(&pdf), 1);
+    assert!(blank_pages(&pdf).is_empty());
+}
+
+#[test]
+fn an_abspos_box_under_a_transform_above_its_cb_adds_no_pages() {
+    // `xform_above_cb`: Chrome 9 pages (it fragments), main 1; the first F30g build had 9 with pages 2-9 empty.
+    let pdf = render(&format!(
+        "<div style=\"transform:translateX(3px)\"><div style=\"position:relative\"><p>{}</p>\
+         <div style=\"position:absolute;top:100px;left:0\">{}</div></div></div>",
+        words(9000, 9040),
+        words(0, 2500)
+    ));
+    assert_eq!(page_count(&pdf), 1);
+    assert!(blank_pages(&pdf).is_empty());
+}
+
+#[test]
+fn a_clip_on_body_does_not_stop_an_abspos_flow() {
+    // The clip of `<body>` goes to the viewport and clips nothing on the page.
+    let pdf = render_with(
+        &format!("{HEAD}body{{overflow:hidden}}"),
+        &format!(
+            "<div style=\"position:relative\"><p style=\"position:absolute;top:0;left:0\">{}</p></div>",
+            words(0, 2000)
+        ),
+    );
+    assert_every_word_once("body clip", &pdf, 2000);
+    assert!(page_count(&pdf) > 1);
+}
+
 #[test]
 fn a_fixed_box_is_still_repeated_whole_on_every_page() {
     // Guard (CSS 2.1 §9.6.1): `Strana` once per page over 9 pages of flow.
