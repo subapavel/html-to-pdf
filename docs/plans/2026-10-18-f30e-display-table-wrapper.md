@@ -1,6 +1,6 @@
 # F30e — A paragraph in a `display: table` wrapper loses its lines
 
-Date: 2026-10-18. Finding: F30e in `2026-10-15-m0-findings.md` (with the F30f update). Status: **planned**.
+Date: 2026-10-18. Finding: F30e in `2026-10-15-m0-findings.md` (with the F30f update). Status: **done** (§7).
 
 - **Fix:** goes on `subapavel/fulgur` `htmltopdf/srgb-colours`, after `48aad32`, carried via `[patch.crates-io]`.
 - **Fork refs:** at `48aad32`, in `crates/fulgur/src/pagination_layout.rs` unless another file is named.
@@ -272,4 +272,70 @@ pub fn is_anonymous_table_cell(table: &Node, child: &Node) -> bool
 
 ## 7. Result
 
-(Filled in at landing: step 1 numbers per probe, the red and green lists, the checks table and deviations, as in F30f §7.)
+Landed on branch `f30e-display-table-wrapper`; fulgur fork `htmltopdf/srgb-colours` **`7c1389b`** (two commits on top of `48aad32`: `a013184` `is_anonymous_table_cell` and its unit test, output-neutral; `7c1389b` the fix and the fork tests). The Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `7c1389b` (`cargo update -p fulgur` changed that one entry). Status: **done**.
+
+**Step 1 (gate), no stop.** Scratch: `/tmp/claude-0/vrt-f30e/` (`probe.py`, `forkcheck.sh`). Chrome m141, A4, 15 mm, Inter, 120 lines of 20 px (`line-height:20px` on `body`, so 50 per page), the binary of main `d532069`.
+- **R0 prints every line on main** (3 pages, 50 / 50 / 20, no warning): the finding's repro was fixed by F50, as §1 argued. Not verified: the pre-F50 binary (optional step, not built), so "0 lines before F50" rests on reading.
+- **Not every "red" shape is fixed by F50**, so F30e does not close as "fixed by F50": the shapes below that print less than Chrome on main are real.
+- **Causes**, from a temporary `eprintln!` at the `split_barrier` return in the fork's debug CLI on local Blitz (removed): P1t and P2a: `parent` a `display:table` box, `child` an anonymous block (`display: inline`) -> `TablePart`; P3c / P3rc: `table-cell` child of a non-table (or of an orphan row) -> `TablePart`; P4t / P4s: parent `inline-table` -> `AtomicNotFlowRoot`; P4 (`<p>` in an inline-table): the walk parent of the `<p>` is the anonymous cell, so `None` (it already split on main); P4c / P4h: `None` too, but the carrier had no line slices (F30f cause 6), so lines 1-49 were printed on no page. B11 (P7c) is green on main with its geometry right: the paint-path stop condition does not apply.
+
+| Probe | Chrome | main | F30e |
+|---|---|---|---|
+| R0 `display:table > p` | 3 pp, 50/50/20 | same (F50) | same, guard |
+| P1t text / P1i `<span>` / P1w `.table.w-full` text | 3 pp, 50/50/20 | 1 p, 53 lines, warning "in a `display: table` box" | 3 pp, 50/50/20 |
+| P1w_p `.table.w-full > p`, P2 `table > cell > p` / cell text / row > cell | 3 pp | 3 pp | same, guards |
+| P1b `display:table` + 2 px border, 8 px padding | 3 pp (50/50/20) | 2 pp, 53 lines | 3 pp, 49/50/21 (frame closed on every page, F96) |
+| P1m 900 px spacer, then P1t | 4 pp, 5 lines on page 1 | 1 p, 8 lines | 4 pp, 5/50/50/15, like Chrome |
+| P2a `display:table > table-row` text | 3 pp | 1 p, 53 | 3 pp |
+| P3 orphan `display:table-row > p` | 3 pp | 3 pp | same, guard |
+| P3c orphan cell text / P3rc orphan row > cell | 3 pp | 1 p, 53 | 3 pp |
+| P4 `inline-table` width 100 % `> p` | 3 pp, 51/51/19 (line on both pages) | 3 pp, 50/50/20 (already) | same |
+| P4t / P4tbl (`<table style="display:inline-table">`) text | 3 pp, sliced | 1 p, 53 / 53 | 3 pp, 50/50/20 each, every line once |
+| P4c / P4ct (bordered carrier) | 4 pp (box moved to page 2, empty frame on page 1) | P4c: 71 of 120 lines (1-49 on no page); P4ct 1 p, 52 | 3 pp, 49/50/21, every line once (ADR-0004) |
+| P4h / P4ht (after `<h1>`) | 4 pp | P4h: 71 of 120; P4ht 1 p, 52 | 3 pp, every line once, `Podmínky` once on page 1 |
+| P4one / P4onet (10 lines, one page) | 1 p | 1 p, all 10 | same: **`inline-table` renders its text** (F15's "renders nothing" no longer holds) |
+| P4s `inline-table` sharing its line | sliced, 3 pp | 1 p, 53, warning | unchanged, the warning names it (F30f-b) |
+| P5 caption `<div display:table-caption>` + `<p>` | caption above, 48/50/22 | lines all there (50/50/20), **caption missing** | unchanged (F30e-b) |
+| P5t `<table><caption>` | 3 pp | 3 pp, caption once | same, guard |
+| P6 nested `display:table` | 3 pp | 3 pp | same |
+| P6t `display:table` around 60 rows / P6n `<td>` around 60 rows | 2 pp, 50 + 10 | 2 pp, all 60 rows | same, guards: **the nested-table gap does not reproduce at 60 rows**, no F30e-b for it |
+| P7 `table > tr > td > p`, P7c clipped table with a block `td` | 3 pp | 3 pp | same, guards |
+| P8 label / value CSS table, 30 articles in the value cell | 4 pp | 4 pp, 30 of 30 | same: **no fixture** (the plan's condition, main loses nothing on that markup) |
+
+PNGs of P1b, P4c (ours and Chrome) were read at the breaks: lines continue, the frame closes on each page.
+
+**Red before:** ours `table_wrapper_split.rs` 10 of 20 (`direct_text_in_a_display_table_box_keeps_every_line`, `spans_in_a_display_table_box_keep_every_line`, `a_bordered_display_table_box_reserves_its_bottom_inset`, `a_display_table_box_that_is_not_first_on_its_page_starts_where_it_is`, `a_tailwind_table_box_keeps_every_line`, `direct_text_in_a_display_table_row_keeps_every_line`, `a_table_cell_outside_a_table_keeps_every_line`, `an_inline_table_alone_on_its_line_keeps_every_line`, `an_inline_table_in_a_bordered_frame_keeps_every_line`, `an_inline_table_below_a_heading_keeps_every_line`) and `unsplit_paragraph_warning.rs`'s one test; the 10 green are the guards and the unchanged shapes. Fork lib: 7 (`direct_text_in_a_table_box_splits_in_its_anonymous_cell`, `direct_text_in_a_table_row_splits_in_its_anonymous_cell`, `a_table_cell_outside_a_table_is_split`, `an_inline_table_alone_on_its_line_is_split`, `the_carrier_line_of_an_inline_table_is_on_the_page_where_it_starts`, `split_barrier_looks_through_anonymous_and_orphan_cells`, the extended `alone_on_its_line_wants_one_line_with_only_the_box_on_it`); the guards (`...non_cell_child_of_a_table_box_splits_in_its_anonymous_cell`, `an_inline_table_sharing_its_line_keeps_its_paragraph_whole`, `is_anonymous_table_cell`'s test) were green. Fork `render_smoke`: the three new ones (`render_smoke_display_table_direct_text_spans_pages`, `render_smoke_orphan_table_cell_spans_pages`, `render_smoke_inline_table_paragraph_spans_pages`). **Green after:** all of them.
+
+**What was built** (fork): `blitz_adapter::is_anonymous_table_cell` (`layout_parent` is the table, not its `::before` / `::after`); in `pagination_layout.rs` `split_barrier` counts an anonymous cell as a cell of its table and drops the "cell outside a table" clause (`TablePart` is left for a table's pseudo boxes and direct calls), `is_inline_block_or_table`, `alone_on_its_line` / `box_barrier` accept `inline-table`, the `LineBarrier` descriptions and docs. `record_carrier_slices_after`, `render.rs` and the gates are unchanged, as §3 D predicted.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib`, crates.io Blitz | 2131 passed, 20 failed: the same 13 as at `48aad32`, plus 7 new tests that need Blitz's F50 anonymous cells, like their sibling `a_paragraph_that_is_a_non_cell_child_of_a_table_box_splits_in_its_anonymous_cell` |
+| fork `--lib`, local Blitz (`/home/user/blitz`, `52b22ef`) | 2151 passed, 0 failed (2143 before) |
+| fork `render_smoke` | crates.io Blitz 257 passed, 5 failed (the same 3 plus `render_smoke_display_table_direct_text_spans_pages` and `render_smoke_inline_table_paragraph_spans_pages`, F50-dependent); local Blitz: no failure |
+| fork other test binaries | all 42 `tests/*.rs` one by one (local Blitz): 0 failing |
+| fork `fulgur-vrt` (`fonts-noinInter.conf`) | 31 passed, goldens untouched |
+| fork 21 examples (debug CLI against the F30f outputs, `/tmp/claude-0/vrt-f30f/ex-before`) | byte-identical, 21 of 21 |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked --no-fail-fast` | 442 passed, 0 failed, 3 ignored (20 new in `table_wrapper_split.rs` plus one ignored, the F30e-b caption); fmt and `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-16 | `cmp` byte-identical to the render of main's binary (`/tmp/claude-0/htmltopdf-main-d532069`): 16 of 16; `compare.py` numbers unchanged (16: 16.6 / 20.8 %) |
+| `scripts/bench.py --check` (after merging main with B1) | ok; render time 01 / 02, 25 runs, median: 20.2 / 57.6 ms on main, 19.3 / 53.3 ms now: noise |
+| `--tagged` renders of P1t, P2a and P4c | succeed, 3 pages each |
+
+Extra probes (12 small documents, `/tmp/claude-0/vrt-f30e/x/`, main's binary against the new one): short table text, short orphan cell, short `inline-table`, two cells side by side, text between cells, an `inline-table` that shares its line with a `<p>` or a block in it, an `inline-table` around a real `<table>`: byte-identical to main. Two differ, both better: `display:table` text followed by `<p>AFTER</p>` (main 53 of 100 lines, AFTER on page 2; now 100 lines, AFTER on page 3 like Chrome) and two orphan cells side by side (see below).
+
+**Deviations from the plan:**
+
+1. **Step 3 was a commit of the function and its unit test only** (nothing calls it, so there is nothing to check for output): the full fork battery ran once, on the final code, not after step 3 and again after steps 4 and 5. Steps 4 and 5 are one commit (`7c1389b`), the unit tests having been written red first.
+2. **`split_barrier_names_each_arm` is untouched**; the new arms (anonymous cells have no `id`) are in `split_barrier_looks_through_anonymous_and_orphan_cells`, which finds the anonymous cell as the first layout child of its table. The "table part" case there still returns `TablePart`.
+3. **The crates.io-Blitz `--lib` count is 20 failures, not 13**: seven new fork tests assert on F50's anonymous cells. They pass on local Blitz, as their sibling does.
+4. **The `inline-table` smoke test also covers direct text and a frame**, because `inline-table > p` already printed on main (P4); the red case is direct text.
+5. **B1 / B2 / B3 / B7 expectations**: bordered shapes assert 3 pages (ours), not Chrome's 50 / 50 / 20 split (the frame is closed on every page, F96); the frame / `<h1>` cases accept 3 or 4 pages (Chrome 4, ADR-0004).
+6. **The plan's `table_fixup.rs`, `fixed_height_cells.rs`, `nested_paragraph_split.rs`, `wrapper_line_split.rs`** stayed green in the full run; no expectation of an existing test changed apart from the warning text.
+7. **`vrt-validator` and `pdf-reviewer` were not run by the implementer** (merge policy items 2 and 5 are open for the caller; `pdf-reviewer` is not required by the plan).
+
+**Filed:** F30e-b (findings): a `display: table-caption` box that is not a `<caption>` is dropped (P5); `::before` / `::after` on a `display:table` box with direct cell children or text panics in Blitz (`layout/table.rs:1020`, index out of bounds; on main too, F50-adjacent); two orphan cells side by side with the taller one split put the short one on page 2 (Chrome keeps it beside, F50b / F30h-like); text in an anonymous cell has no structure element when tagged (`walk_semantics` walks the DOM; pre-existing, more pages carry it now).
+
+Not verified: the pre-F50 behaviour of R0 (no binary built); the spec citations of §2 (from memory; Chrome probes stand in); the structure tree of a tagged render beyond "succeeds" and MCID counts; a split `inline-table` under a transform, an opacity group or a clip (the F30f continuation walks are keyed on the box, not its display, and are exercised for `inline-block` only); an `inline-table` inside multicol, flex or grid; `display:table` with `border-collapse` or `table-layout` styling on the same box; right-to-left and vertical writing modes; `line-height: normal` (all probes use 20 px lines).
