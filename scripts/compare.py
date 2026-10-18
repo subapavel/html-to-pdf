@@ -103,6 +103,13 @@ THRESHOLDS = {
     #     drift every fixture has, the totals table starting about 20 px above Chrome's and the `border-t-2` Chrome paints
     #     on the total's `<tr>` (Blitz #386, F22). Worst page + 1 point.
     "15-paid-stamp": 0.097,
+    # 16: new in F30f (an `overflow-hidden rounded-lg border` card whose one long paragraph is a direct child and crosses the
+    #     page break, the shape of 06 with the clip added). 16.6 / 20.8 %, 2 pages like Chrome's: on main's binary the paragraph
+    #     was placed whole, its tail was lost (the warning says 307 px below the content box), the payment block moved to a
+    #     third page: 3 pages, 11.4 / 25.0 / 0.9 %. The diff is dense text: ours repeats the card's top border and padding
+    #     on page 2 (`box-decoration-break: slice` is not implemented, F96), so every line of page 2 sits about 20 px lower
+    #     than Chrome's, and the drift every fixture has. Worst page + 1 point; F96 brings it down.
+    "16-terms-card": 0.218,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
