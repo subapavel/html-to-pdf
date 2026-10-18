@@ -126,3 +126,9 @@ Deviations from the plan:
 
 Not verified: any CI hardware number; the speed guard's false-positive rate over days (one VM, a handful of runs). `cargo fmt --all -- --check`
 and `cargo clippy --workspace --all-targets -- -D warnings` pass (no Rust file changed).
+7. First CI run (`34c0a5d`, run 39136604484): green, so every gated document met its hard budget on the GitHub runner. The
+   `bench` artifact and the job log cannot be downloaded from the cloud agent environment (the proxy refuses the Actions blob
+   storage host), so `bench/baseline-ci.json` was not written and CI keeps checking the hard budgets only. Whoever has the
+   artifact (GitHub UI, run 39136604484, `bench`) can commit the file; until then the relative 30 % guard runs on the dev VM
+   only (`python3 scripts/bench.py --check` before a merge that touches the engine, as the `vrt-validator` does).
+
