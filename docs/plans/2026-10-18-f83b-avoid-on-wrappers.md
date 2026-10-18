@@ -317,7 +317,7 @@ The moved box's top margin is truncated (§5.2), and a test pins it.
 
 ## 7. Result
 
-Landed on branch `f83b-avoid-on-wrappers`; fulgur fork `htmltopdf/srgb-colours` **`906d05f`** (on top of `659affe`); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `906d05f` (`cargo update -p fulgur` changed
+Landed on branch `f83b-avoid-on-wrappers`; fulgur fork `htmltopdf/srgb-colours` **`906d05f`** (on top of `659affe`; after `vrt-validator` the branch ends at **`9e92b24`**, §7.1); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `906d05f` (`cargo update -p fulgur` changed
 that one entry). Status: **done**.
 
 **Step 1, the model held, no stop.** Our CLI (debug) built against the local fork with temporary `eprintln!`s at the body gate, the F28 pre-advance and the nested gate (removed again, `git checkout`):
@@ -398,3 +398,55 @@ Not verified here: `vrt-validator`; `pdf-reviewer` (not required, writer, fonts 
 (no probe; `starts_with_relaxed_avoid` and `avoid_keeps_whole` do not look at them); an avoid box inside a `display: contents` or anonymous-wrapper chain beyond the `layout_children` walk; `line-height: normal` for cases 5 to 10 of
 §4 (only the Chrome side was probed for `c1`, `c3`-`c9`; our tests use 20 px); the 13 crates.io-Blitz failures were counted, not diffed name by name against `659affe`; `avoid` combined with repeated table headers (F12) or multicol containers
 nested in an avoid wrapper (the helper returns "not relaxed" for multicol, no probe); right-to-left text; the fork examples were compared with the debug CLI, not the release one.
+
+### 7.1 After `vrt-validator` (fork `906d05f` to `9e92b24`)
+
+The validator found 3 high and 1 medium finding on `906d05f`. All are fixed on the same branches; each has a red-then-green fork lib test and an `avoid_wrappers.rs` test. Chrome numbers are Chromium m141, A4, 15 mm, Inter, 20 px lines
+(validator repros in `/tmp/claude-0/vrt-f83b-val/repro/`).
+
+| Finding | Cause | Fix (fork) | Result on the repro (Chrome / main / now) |
+|---|---|---|---|
+| **H1** blank page 1 with a padded or bordered parent (`r1`, `r1b`) | the nested `keeps_whole` counted the parent's padding and border and the child's margin as content above the child | `keeps_whole` uses `content_above_child` (a previous sibling, or content above the parent on its entry page) and the child must also sit below the strip top (`movable`) | 48 words on page 1 / 48 / 48 |
+| **H2** forced break at the start of an avoid box (`r3`) | `avoid_piece_size` returned 0 (the break is at offset 0), so F28 did not move the box | a break at the start is skipped: the piece is the one after it (`forced_break_offsets`) | all words on page 2 / page 2 / page 2 |
+| **H3a** relaxed padded box leaves a blank page (`r2`) | the first child was cut again to a page of its own | no cut of a first child that only insets precede, inside an avoid box (`in_avoid_box`) | page 2 inked, 2 pages / 2 / 3 (Chrome slices the leaf; ours overflows it by 4 px, F83h) |
+| **H3b** nested relaxed box overflows the bottom (`r5`) | children fit the strip but the frame does not, and the gate did not enter the box | `frame_is_content_sized`: a relaxed `auto` height box is entered (`relaxed_frame`); the last child of a box leaves room for its parents' bottom padding and border (`leaf_tail`) and the frame closes below it | 48 words on page 2, 2 on page 3, no overflow / same / same |
+| **M1** forced break in a box taller than a page only through it (`r4`) | `starts_with_relaxed_avoid` measured the whole extent | `avoid_measure` = min(extent, piece before the first forced break) everywhere `avoid` is measured | 31 words on page 1, 30 on page 2 / same / same |
+
+The validator's harness (`gen1`-`gen7`, `run1`, `run3`, `run4`) and a second, wider run found more shapes of the same family, each reduced and fixed with a test:
+- stub chain (gen1 `A_k50_*_d2_p1`): `leading_block_size(above)` counts an avoid box whole only when it fits a page together with the inset above it, and only for a child that can move;
+- parents' bottom inset (gen1 `A_k49_*_d2_p1`): a box that does not fit with its parents' bottom padding and border below it, first on its strip, is entered (`tail_over_at`); `avoid_keeps_whole` takes the tail;
+- fuzz `Z1_59` (lost 26 words): a flush first child is not movable;
+- fuzz `Z1_198`: `starts_with_relaxed_avoid` stops at `break-before: page`;
+- fuzz `Z1_549`: the no-cut guard holds for any parent inside an avoid box;
+- fuzz `Z2_320`: the avoid-aware first row only for a child that can move (body level and nested);
+- fuzz `Z2_34`: the body gate enters a relaxed content-sized box (`relaxed_frame`);
+- gen6 `M_k50_*` (two shapes): the strip cut of a kept-whole child has the same 1 px of slack as the fit test, and the fit test counts the full tail (the parents' bottom padding), so a box that fills the room but not the padding below it is entered and its last line moves on;
+- fuzz `Z1_234`: a forced break before the first child of a moved padded box fires only when something precedes it (generic, in block flow; fulgur VRT and the 21 examples did not move).
+
+**Harness counts** (final build, ours on fork `074e4b6`; the harness compares the new binary with main's):
+
+| | cases | new | main |
+|---|---|---|---|
+| `gen1`-`gen7` (2904 documents) + fuzz 1 and 2 (1200) | 4104 | | |
+| blank pages | | 79 | 99 (0 cases worse) |
+| cases with lost or duplicated words or out of order | | 262 | 268 (0 cases worse; the 262 are `out`-metric cases at page tops with `line-height: normal` / `17.3px`, and the same on main) |
+| cases with ink beyond the content box | | 1119 | 1318 |
+| overflow larger than main's by more than 1 pt | | 7 (all fuzz) | |
+| `run4` fuzz_small (2000 documents, text and blank only) | 2000 | 0 flagged | |
+| harness "farther from Chrome" (words per page) on `gen1`-`gen7` | | 5 documents: 3 images taller than a page (F83g), 2 `twn_n5_*_mt-6_pad` (F83g) | |
+
+The harness's own "WORSE-than-main" score is 0 on `gen1`-`gen3`, `gen4_czech`, `gen4_tailwind` (apart from 2 cases below), `gen5_pages_cfg`, `gen6`, `gen7`; 85 on `gen4_lhcases` / `gen5_odd` are its `out` metric at the top of the extra page tops (a glyph box at 41.4 pt for a 17.3 px line,
+38.6 pt for a heading; main has the same at its page tops), no word outside the content box by more than a glyph box. `run3` (fuzz 1 and 2, 600 documents each, with Chrome) flags no `TEXT` and no `BLANK` regression in the final run (it flagged 1 `TEXT` and 4 + 6 `BLANK` before the last fixes; two of the blank ones, `Z1_234` and `Z2_34`, were shapes where Chrome also moves a box away from an empty padded `div`, the rest were real and are fixed). Its remaining flags are `PAGES` / `WDIFF` (words per page farther from Chrome's than main's, on random documents of 10-50 pages).
+
+The 7 documents with more overflow than main (all in the fuzz sets): five end in an atomic leaf (a `height` spacer) first in an avoid box that does not fit below the box's inset: main cuts the leaf to the next page and leaves a stub page of frames, the branch leaves it
+(no blank page, page counts like Chrome's) and it overflows by the inset (Chrome slices the spacer): filed as F83h. Two (`Z1_541`, `Z2_193`) have the same words per page as Chrome and a frame that overflows (17.5 pt on the reduced `Z1_541`).
+
+**Checks after the fixes** (fork `9e92b24`): fork `--lib` crates.io Blitz 2078 passed, 13 failed (the same 13), local Blitz 2091 passed, 0 failed; `render_smoke` 251 + 3 (the same) and 254 + 0; the 42 `tests/*.rs` green; `fulgur-vrt` 31 green and goldens identical;
+the 21 examples byte-identical; fork fmt and `clippy --all-targets -D warnings` clean. Ours: `cargo test --release --locked --no-fail-fast` 368 passed, 0 failed (`avoid_wrappers.rs` now 18 tests, 7 new for the review, 5 of them red before); `cargo fmt --check` and `clippy --release --locked --all-targets -D warnings` clean; fixtures 01-13 `cmp` byte-identical to main's binary, fixture 14 byte-identical to the build before the review fixes, `compare.py` numbers unchanged (14: 7.5 / 1.6 %). The two harness-shape tests (`padded_parents_around_an_avoid_box_that_fills_a_page_leave_no_stub_behind`, `an_avoid_box_that_fits_without_its_parents_bottom_inset_closes_inside_the_page`) were checked against Chrome (`s50`, `t49`) but not run against the previous fork build.
+
+**Recorded, not fixed** (findings):
+- **M2** deep avoid chains are 1.5-1.7x slower than main and still superlinear (400 levels of 100 children: 6.6 s against 3.9 s on main): the avoid rules walk a subtree per level (`avoid_measure`, `starts_with_relaxed_avoid`, `leading_block_size`, `frame_is_content_sized`). Filed as **F83f**.
+- **LOW** a box 0.7 px taller than the room moves where Chrome fits it (line metrics, F81): gen4 `twn_n5_*_mt-6_pad`, section 5 of 7 moves to page 2. **F83g**.
+- **LOW** an avoid wrapper that holds an image taller than a page adds a page (gen2 `F_img_s0_h1100`: 4 pages, main 3, Chrome 1). **F83g**.
+- an atomic leaf first in an avoid box overflows instead of leaving a stub page (above). **F83h**.
+

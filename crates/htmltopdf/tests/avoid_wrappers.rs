@@ -415,6 +415,138 @@ fn table_rows_with_avoid_stay_whole_and_the_table_pages_as_without() {
     }
 }
 
+/// `<div>wordNNNNN</div>` lines of 20 px, `word<from> … word<to - 1>`.
+fn word_lines(from: usize, to: usize) -> String {
+    (from..to)
+        .map(|i| format!("<div>word{i:05}</div>"))
+        .collect()
+}
+
+// The next five are the vrt-validator findings of F83b (H1, H2, H3, M1); every expectation was measured with
+// Chromium m141 on the validator's repros first.
+
+#[test]
+fn padding_border_and_margin_above_an_avoid_box_do_not_make_it_move() {
+    // H1: `<div padding><div avoid mt-24>` of 49 lines (980 px) at the top of the document. Nothing precedes the
+    // box but the parent's inset and the box's own margin, so there is no better break point: it starts on page 1
+    // and breaks there (Chrome: 48 words on page 1, 2 on page 2). It used to move to page 2 and leave page 1 blank.
+    for (how, parent_style, child_style) in [
+        ("padding", "padding:8px", "margin-top:24px"),
+        (
+            "border",
+            "padding:20px;border:2px solid #900",
+            "margin-top:0",
+        ),
+    ] {
+        let pdf = render(&format!(
+            "<div style=\"{parent_style}\"><div style=\"{AVOID_STYLE};{child_style}\">{}</div></div><p>word90000</p>",
+            word_lines(0, 49)
+        ));
+        assert_eq!(page_of(&pdf, "word00000"), 1, "{how}");
+        assert!(
+            page_of(&pdf, "word00040") == 1,
+            "{how}: the box starts on page 1"
+        );
+        assert!(page_count(&pdf) <= 2, "{how}: no stub page");
+    }
+}
+
+#[test]
+fn a_forced_break_at_the_start_of_an_avoid_box_moves_the_box_whole() {
+    // H2: the first child has `break-before: page`. A break before the box in effect: every word is on page 2
+    // (Chrome); the first line used to stay at the bottom of page 1, in the margin.
+    let pdf = render(&format!(
+        "<div style=\"height:1000px\"></div><div style=\"{AVOID_STYLE}\">\
+         <div style=\"break-before:page\">{}</div>{}</div>",
+        word_lines(0, 5),
+        word_lines(5, 10)
+    ));
+    assert_every_word_once("forced break at the start", &pdf, 10);
+    assert!(
+        printed_words(&pdf)
+            .iter()
+            .filter(|w| w.text.starts_with("word"))
+            .all(|w| w.page == 2),
+        "all ten words on page 2"
+    );
+}
+
+#[test]
+fn a_relaxed_padded_avoid_box_after_content_leaves_no_blank_page() {
+    // H3: a padded avoid box taller than a page (1005 px of red inside 8 px of padding) after a one-line box starts
+    // the next page, and its content starts there too: page 2 is inked (Chrome: the page is inked and a stub follows).
+    let pdf = render(&format!(
+        "<div style=\"{AVOID_STYLE}\"><div>word00000</div></div>\
+         <div style=\"{AVOID_STYLE};padding:8px\"><div style=\"height:1005px;background:#e00\"></div></div>"
+    ));
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+    assert!(red_pixels(&pdf, 2) > 1000, "page 2 holds the red block");
+    assert_eq!(red_pixels(&pdf, 1), 0, "page 1 has none of it");
+}
+
+#[test]
+fn a_nested_relaxed_box_at_a_page_top_closes_inside_the_page() {
+    // H3: `<div><spacer 20px><div avoid padding:15px border:3px>` of 49 lines: the box starts page 2 and the last
+    // line moves on when the box's bottom padding and border would not fit below it (Chrome: 48 words on page 2,
+    // the rest on page 3). The frame used to cross the content bottom by 7 px.
+    let pdf = render(&format!(
+        "<div><div style=\"height:20px\"></div><div style=\"{AVOID_STYLE};padding:15px;border:3px solid #333\">{}</div></div>\
+         <p>word90000</p>",
+        word_lines(0, 49)
+    ));
+    assert_eq!(page_of(&pdf, "word00000"), 2);
+    assert_eq!(page_of(&pdf, "word00047"), 2);
+    assert_eq!(
+        page_of(&pdf, "word00048"),
+        3,
+        "the last line closes the frame on page 3"
+    );
+}
+
+#[test]
+fn a_forced_break_inside_a_too_tall_avoid_box_keeps_the_first_piece_in_place() {
+    // M1: 30 lines, a forced break, 30 more: the box is taller than a page only because of the break. The first
+    // piece fits the room below `word90005` and stays there (Chrome: 31 words on page 1, 30 on page 2).
+    let pdf = render(&format!(
+        "<div>word90005</div><div style=\"{AVOID_STYLE}\">{}<div style=\"break-before:page\">{}</div></div>",
+        word_lines(0, 30),
+        word_lines(30, 60)
+    ));
+    assert_eq!(page_of(&pdf, "word00000"), 1);
+    assert_eq!(page_of(&pdf, "word00029"), 1);
+    assert_eq!(page_of(&pdf, "word00030"), 2);
+    assert_eq!(page_count(&pdf), 2);
+}
+
+#[test]
+fn padded_parents_around_an_avoid_box_that_fills_a_page_leave_no_stub_behind() {
+    // Harness `A_k50_*_d2_p1`: 1000 px of spacer, two padded and bordered parents (red) around an avoid box of 50 lines
+    // (1000 px, a whole page). The chain cannot be kept together, so it starts page 2 and page 1 holds the spacer only
+    // (Chrome: words 0-48 on page 2, 49 and the rest on page 3). A top inset used to stay on page 1 as a red stub.
+    let o = "<div style=\"padding:12px;border:2px solid #e00\">";
+    let pdf = render(&format!(
+        "<div style=\"height:1000px;background:#cde\"></div>{o}{o}<div style=\"{AVOID_STYLE}\">{}</div></div></div>\
+         <div>word90000</div>",
+        word_lines(0, 50)
+    ));
+    assert_eq!(page_of(&pdf, "word00000"), 2);
+    assert_eq!(red_pixels(&pdf, 1), 0, "no frame stub on page 1");
+}
+
+#[test]
+fn an_avoid_box_that_fits_without_its_parents_bottom_inset_closes_inside_the_page() {
+    // Harness `A_k49_*_d2_p1`: two padded and bordered parents around an avoid box of 49 lines at the top of the
+    // document: 980 px fit, the 48 px of insets around them do not. Chrome puts 48 words on page 1 and the last one on
+    // page 2; the frames used to cross the content bottom.
+    let o = "<div style=\"padding:12px;border:2px solid #e00\">";
+    let pdf = render(&format!(
+        "{o}{o}<div style=\"{AVOID_STYLE}\">{}</div></div></div><div>word90000</div>",
+        word_lines(0, 49)
+    ));
+    assert_eq!(page_of(&pdf, "word00047"), 1);
+    assert_eq!(page_of(&pdf, "word00048"), 2);
+}
+
 /// Number of strongly red pixels on 1-based `page` (rendered at 48 dpi), read from the binary PPM poppler writes.
 fn red_pixels(pdf: &[u8], page: usize) -> usize {
     let path = temp(pdf);
