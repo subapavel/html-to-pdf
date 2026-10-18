@@ -1,0 +1,146 @@
+{
+  "machine": "4x Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "runs": 7,
+  "slow_runs": 1,
+  "startup_ms": 3.1,
+  "documents": {
+    "01-basic": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 21.1,
+      "median_ms": 22.1
+    },
+    "02-long": {
+      "kind": "fixture",
+      "pages": 3,
+      "min_ms": 53.8,
+      "median_ms": 57.0
+    },
+    "03-logo-qr": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 23.7,
+      "median_ms": 27.8
+    },
+    "04-bilingual-vat": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 23.1,
+      "median_ms": 25.7
+    },
+    "05-fancy": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 24.3,
+      "median_ms": 29.1
+    },
+    "06-long-notes": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 23.6,
+      "median_ms": 25.8
+    },
+    "07-heading-margin": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 21.8,
+      "median_ms": 25.0
+    },
+    "08-terms-grid": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 29.7,
+      "median_ms": 32.8
+    },
+    "09-fixed-row-height": {
+      "kind": "fixture",
+      "pages": 3,
+      "min_ms": 23.3,
+      "median_ms": 25.6
+    },
+    "10-stacked-items": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 19.9,
+      "median_ms": 21.4
+    },
+    "11-full-width-rows": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 17.1,
+      "median_ms": 17.9
+    },
+    "12-terms-columns": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 25.6,
+      "median_ms": 27.9
+    },
+    "13-terms-keep-together": {
+      "kind": "fixture",
+      "pages": 3,
+      "min_ms": 27.0,
+      "median_ms": 28.2
+    },
+    "14-totals-keep-together": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 19.3,
+      "median_ms": 21.2
+    },
+    "15-paid-stamp": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 20.4,
+      "median_ms": 22.0
+    },
+    "16-terms-card": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 22.7,
+      "median_ms": 25.1
+    },
+    "b200-items": {
+      "kind": "b200",
+      "pages": 200,
+      "min_ms": 2357.0,
+      "median_ms": 2433.0
+    },
+    "b200-text": {
+      "kind": "b200",
+      "pages": 200,
+      "min_ms": 1114.1,
+      "median_ms": 1123.0
+    },
+    "b200-mixed": {
+      "kind": "b200",
+      "pages": 201,
+      "min_ms": 1032.3,
+      "median_ms": 1083.5
+    },
+    "slow-paragraph": {
+      "kind": "slow",
+      "pages": 59,
+      "min_ms": 3777.2,
+      "median_ms": 3777.2
+    },
+    "slow-multicol": {
+      "kind": "slow",
+      "pages": 21,
+      "min_ms": 2460.3,
+      "median_ms": 2460.3
+    },
+    "slow-breaks": {
+      "kind": "slow",
+      "pages": 17,
+      "min_ms": 2808.9,
+      "median_ms": 2808.9
+    },
+    "slow-avoid": {
+      "kind": "slow",
+      "pages": 399,
+      "min_ms": 1246.9,
+      "median_ms": 1246.9
+    }
+  }
+}
