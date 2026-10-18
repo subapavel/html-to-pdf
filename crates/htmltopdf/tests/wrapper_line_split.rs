@@ -18,7 +18,7 @@
 //! The page is A4 with 15 mm margins (content box 1009.1 px) and 20 px lines unless a test says otherwise. Words are
 //! found with `pdftotext -bbox`.
 
-use htmltopdf::{RenderOptions, Renderer};
+use htmltopdf::{Page, RenderOptions, Renderer};
 
 /// A4 height in pt and the 15 mm page margin.
 const PAGE_H_PT: f32 = 841.89;
@@ -46,6 +46,10 @@ fn render(body: &str) -> Vec<u8> {
 }
 
 fn render_with(head_style: &str, body: &str) -> Vec<u8> {
+    render_on(head_style, body, RenderOptions::default())
+}
+
+fn render_on(head_style: &str, body: &str, options: RenderOptions) -> Vec<u8> {
     let tailwind = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/tailwind/tailwind.css");
     Renderer::builder()
@@ -59,7 +63,7 @@ fn render_with(head_style: &str, body: &str) -> Vec<u8> {
             &format!(
                 "<!doctype html><html><head><style>{head_style}</style></head><body>{body}</body></html>"
             ),
-            &RenderOptions::default(),
+            &options,
         )
         .expect("render")
 }
@@ -556,16 +560,238 @@ fn an_inline_block_in_a_clipping_card_keeps_every_word() {
     assert!(blank_pages(&pdf).is_empty());
 }
 
+// ── Validator round 1: ancestors that paint their descendants themselves ─────────────────────────────────────────────
+
+/// Every `wordNNNNN` of the raw text layer, each once (`pdftotext -raw`, which reads rotated text that `-bbox` misses),
+/// and the pages with none.
+fn raw_words_and_blank_pages(pdf: &[u8]) -> (Vec<String>, Vec<usize>) {
+    let path = temp(pdf);
+    let out = std::process::Command::new("pdftotext")
+        .arg("-raw")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let pages: Vec<&str> = text.split('\x0c').collect();
+    let blank = (1..=page_count(pdf))
+        .filter(|p| !pages.get(p - 1).is_some_and(|t| t.contains("word")))
+        .collect();
+    let mut words: Vec<String> = text
+        .split_whitespace()
+        .filter(|w| w.starts_with("word"))
+        .map(str::to_string)
+        .collect();
+    words.sort();
+    words.dedup();
+    (words, blank)
+}
+
+#[test]
+fn a_split_inline_block_under_a_transformed_ancestor_keeps_every_word() {
+    // H1: the box is painted from the transform's own walk (`draw_under_transform`), which skipped it after its first
+    // page: main printed page 1 with a warning, the first F30f build 1 page of text and blank pages (a debug build
+    // panicked). Chrome prints all of it. Shapes: the wrapper of the box, the carrier of a box with direct text, and the
+    // transform further up.
+    let cases = [
+        format!(
+            "<div style=\"transform:translateY(10px)\"><div style=\"{IB}\"><p>{}</p></div></div>",
+            w()
+        ),
+        format!(
+            "<div style=\"transform:translateY(10px)\"><span style=\"{IB}\">{}</span></div>",
+            w()
+        ),
+        format!(
+            "<div style=\"transform:translateX(3px)\"><div><div style=\"{IB}\"><p>{}</p></div></div></div>",
+            w()
+        ),
+        format!(
+            "<div><div style=\"{IB};transform:translateY(5px)\"><p>{}</p></div></div>",
+            w()
+        ),
+    ];
+    for (k, body) in cases.iter().enumerate() {
+        let pdf = render(body);
+        assert_every_word_once(&format!("transform case {k}"), &pdf, 4000);
+        assert!(blank_pages(&pdf).is_empty(), "transform case {k}");
+    }
+    // Rotated text, read from the raw layer (poppler drops words of text rotated by a degree or more, main's too).
+    let pdf = render(&format!(
+        "<div style=\"transform:rotate(0.3deg)\"><div style=\"{IB}\"><p>{}</p></div></div>",
+        w()
+    ));
+    let (found, blank) = raw_words_and_blank_pages(&pdf);
+    assert_eq!(found.len(), 4000, "rotate");
+    assert!(blank.is_empty(), "rotate: blank pages {blank:?}");
+}
+
+#[test]
+fn nested_inline_blocks_in_clip_boxes_keep_every_word() {
+    // H2: `clip > inline-block > clip > inline-block`: the inner box's carrier is a descendant of the outer box,
+    // which has no line on the later pages, and the box is no descendant of the outer one (its own subtree is
+    // recorded under its own key): nothing painted pages 2 and 3 (main: 1 page and a warning).
+    let pdf = render(&format!(
+        "<div style=\"overflow:hidden;border:1px solid\"><div style=\"{IB}\"><div style=\"overflow:hidden\">\
+         <div style=\"{IB}\">{}</div></div></div></div>",
+        w()
+    ));
+    assert_every_word_once("H2", &pdf, 4000);
+    assert!(blank_pages(&pdf).is_empty());
+    // The same with a paragraph in the inner box, and a box in a clipping card inside a box.
+    for body in [
+        format!(
+            "<div style=\"overflow:hidden;border:1px solid\"><div style=\"{IB}\"><div style=\"overflow:hidden\">\
+             <div style=\"{IB}\"><p>{}</p></div></div></div></div>",
+            w()
+        ),
+        format!(
+            "<div><div style=\"{IB}\"><div style=\"overflow:hidden;border:1px solid\"><p>{}</p></div></div></div>",
+            w()
+        ),
+    ] {
+        let pdf = render(&body);
+        assert_every_word_once("H2 variant", &pdf, 4000);
+        assert!(blank_pages(&pdf).is_empty());
+    }
+}
+
+/// The darkest value (0 black, 255 white) of any pixel of `page` at 96 dpi.
+fn darkest_pixel(pdf: &[u8], page: usize) -> u8 {
+    let (_, _, data) = page_pixels_at(pdf, page, 96);
+    data.chunks_exact(3)
+        .map(|px| px[0].min(px[1]).min(px[2]))
+        .min()
+        .unwrap_or(255)
+}
+
+#[test]
+fn the_opacity_of_a_box_holds_on_every_page_of_its_inline_block() {
+    // M3: `opacity: .5` on the carrier of the box (a paragraph with no block entry holds it itself): page 1 painted
+    // inside the transparency group, the later pages from the main loop at alpha 1. Black text at alpha .5 is gray.
+    for body in [
+        format!(
+            "<div style=\"opacity:.5\"><div style=\"{IB}\"><p>{}</p></div></div>",
+            w()
+        ),
+        format!(
+            "<div style=\"opacity:.5;background:#eef\"><div style=\"{IB}\"><p>{}</p></div></div>",
+            w()
+        ),
+        format!(
+            "<div style=\"opacity:.5\"><div style=\"overflow:hidden;border:1px solid\"><div style=\"{IB}\"><p>{}</p></div></div></div>",
+            w()
+        ),
+    ] {
+        let pdf = render(&body);
+        assert_every_word_once("M3", &pdf, 4000);
+        let first = darkest_pixel(&pdf, 1);
+        assert!(first > 90, "page 1 is faded: darkest pixel {first}");
+        for page in 2..=page_count(&pdf) {
+            let d = darkest_pixel(&pdf, page);
+            assert!(
+                d.abs_diff(first) <= 20 && d > 90,
+                "page {page}: darkest pixel {d}, page 1 has {first}"
+            );
+        }
+    }
+}
+
+/// The lowest `yMax` of a word on page 1.
+fn page_one_bottom(pdf: &[u8]) -> f32 {
+    printed_words(pdf)
+        .iter()
+        .filter(|w| w.page == 1 && w.text.starts_with("word"))
+        .map(|w| w.y_max)
+        .fold(f32::MIN, f32::max)
+}
+
+#[test]
+fn the_last_line_of_a_split_inline_block_stays_inside_the_content_box() {
+    // M4: the carrier painted the box on page 1 under the baseline shift of the inline flow (about 5 px down) where
+    // the fragmenter had planned its break: with a frame around it the last line ended past the content bottom
+    // (801.7 pt, 799.4 pt allowed) and the frame's bottom edge struck the glyphs. A paragraph in the same card
+    // breaks right.
+    let limit = PAGE_H_PT - MARGIN_PT;
+    for pad in [0, 8, 16] {
+        let card = format!("overflow:hidden;border:1px solid;padding:{pad}px");
+        let pdf = render(&format!(
+            "<div style=\"{card}\"><div style=\"{IB}\">{}</div></div>",
+            w()
+        ));
+        assert_every_word_once(&format!("pad {pad}"), &pdf, 4000);
+        let ib = page_one_bottom(&pdf);
+        assert!(
+            ib <= limit,
+            "padding {pad}: page 1 ends at {ib:.1}pt, the content box at {limit:.1}pt"
+        );
+        let twin = page_one_bottom(&render(&format!(
+            "<div style=\"{card}\"><p>{}</p></div>",
+            w()
+        )));
+        assert!(
+            (ib - twin).abs() < 4.0 && twin <= limit,
+            "padding {pad}: {ib:.1}pt, the same card with a paragraph {twin:.1}pt"
+        );
+    }
+}
+
+#[test]
+fn a_split_inline_block_ends_inside_the_content_box_on_other_pages_and_margins() {
+    // LOW 5 of the validator: landscape and 40 mm margins overshot by 2-3 pt, the same shift.
+    for (what, page, height_pt, margin_pt) in [
+        (
+            "landscape",
+            Page::A4.landscape(),
+            210.0 / 25.4 * 72.0,
+            15.0 / 25.4 * 72.0,
+        ),
+        (
+            "40 mm",
+            Page {
+                margin_mm: 40.0,
+                ..Page::A4
+            },
+            297.0 / 25.4 * 72.0,
+            40.0 / 25.4 * 72.0,
+        ),
+    ] {
+        let pdf = render_on(
+            "body{font-family:Inter;line-height:20px;margin:0}p{margin:0}",
+            &format!(
+                "<div style=\"overflow:hidden;border:1px solid;padding:8px\"><div style=\"{IB}\">{}</div></div>",
+                words(0, 1500)
+            ),
+            RenderOptions {
+                page,
+                ..Default::default()
+            },
+        );
+        let bottom = page_one_bottom(&pdf);
+        assert!(
+            bottom <= height_pt - margin_pt,
+            "{what}: page 1 ends at {bottom:.1}pt, the content box at {:.1}pt",
+            height_pt - margin_pt
+        );
+    }
+}
+
 // ── pixels ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /// The page at 48 dpi as `(width, height, RGB bytes)`.
 fn page_pixels(pdf: &[u8], page: usize) -> (usize, usize, Vec<u8>) {
+    page_pixels_at(pdf, page, 48)
+}
+
+/// The page at `dpi` as `(width, height, RGB bytes)`.
+fn page_pixels_at(pdf: &[u8], page: usize, dpi: u32) -> (usize, usize, Vec<u8>) {
     let path = temp(pdf);
     let root = path.with_extension("page");
     let out = std::process::Command::new("pdftoppm")
         .args([
             "-r",
-            "48",
+            &dpi.to_string(),
             "-singlefile",
             "-f",
             &page.to_string(),
