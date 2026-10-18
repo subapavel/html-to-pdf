@@ -547,6 +547,18 @@ fn an_avoid_box_that_fits_without_its_parents_bottom_inset_closes_inside_the_pag
     assert_eq!(page_of(&pdf, "word00048"), 2);
 }
 
+#[test]
+fn a_plain_nested_bottom_padding_does_not_pull_the_next_sibling_into_it() {
+    // Validator `r6`, no `avoid` anywhere: a 949 px spacer, three nested parents with `padding-bottom: 30px`, a one-line
+    // last child that fits the page end but not with the padding below it, and a sibling. The sibling used to land
+    // inside the padding on page 1 (main: page 2; Chrome moves both lines to page 2).
+    let o = "<div style=\"padding-bottom:30px;background:#eef\">";
+    let pdf = render(&format!(
+        "<div style=\"height:949.1px;background:#cde\"></div>{o}{o}{o}<div>word00000</div></div></div></div><div>word90000</div>"
+    ));
+    assert_eq!(page_of(&pdf, "word90000"), 2);
+}
+
 /// Number of strongly red pixels on 1-based `page` (rendered at 48 dpi), read from the binary PPM poppler writes.
 fn red_pixels(pdf: &[u8], page: usize) -> usize {
     let path = temp(pdf);

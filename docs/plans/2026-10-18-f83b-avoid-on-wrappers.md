@@ -317,7 +317,7 @@ The moved box's top margin is truncated (§5.2), and a test pins it.
 
 ## 7. Result
 
-Landed on branch `f83b-avoid-on-wrappers`; fulgur fork `htmltopdf/srgb-colours` **`906d05f`** (on top of `659affe`; after `vrt-validator` the branch ends at **`9e92b24`**, §7.1); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `906d05f` (`cargo update -p fulgur` changed
+Landed on branch `f83b-avoid-on-wrappers`; fulgur fork `htmltopdf/srgb-colours` **`906d05f`** (on top of `659affe`; after `vrt-validator` the branch ends at **`a2b2d3a`**, §7.1, §7.2); the Blitz fork is unchanged (`52b22ef`). `Cargo.lock` pins `906d05f` (`cargo update -p fulgur` changed
 that one entry). Status: **done**.
 
 **Step 1, the model held, no stop.** Our CLI (debug) built against the local fork with temporary `eprintln!`s at the body gate, the F28 pre-advance and the nested gate (removed again, `git checkout`):
@@ -449,4 +449,21 @@ the 21 examples byte-identical; fork fmt and `clippy --all-targets -D warnings` 
 - **LOW** a box 0.7 px taller than the room moves where Chrome fits it (line metrics, F81): gen4 `twn_n5_*_mt-6_pad`, section 5 of 7 moves to page 2. **F83g**.
 - **LOW** an avoid wrapper that holds an image taller than a page adds a page (gen2 `F_img_s0_h1100`: 4 pages, main 3, Chrome 1). **F83g**.
 - an atomic leaf first in an avoid box overflows instead of leaving a stub page (above). **F83h**.
+
+### 7.2 After the re-validation (fork `a2b2d3a`)
+
+One regression of this change on plain documents (validator `r6`, no `avoid`): a spacer, 2-3 nested parents with `padding-bottom` 16-30 px and a one-line last child that fits the page end but not with the padding below it. The branch put the line
+and the next sibling on page 1, the sibling inside the padding (main: line on page 1, sibling on page 2; Chrome: both on page 2). Cause: the entry of a chain for its parents' bottom inset (`tail_over_at`, §7.1) also fired for a chain that is flush with
+its entry point after content, where the last child cannot move; the chain was entered, the cursor handed back was at the line and the sibling was placed in the padding. Fix: `tail_over_at` is gated by `content_above_child` (it is for a chain that is
+first on its strip with nothing above it, `t49`, gen1 `A_k49_*_d2`), which restores main's behaviour for `r6`. Matching Chrome (moving the chain) would need the parents' caller to move a chain whose last child plus tail does not fit; not done.
+
+Tests: fork lib `plain_nested_bottom_padding_does_not_pull_the_next_sibling_up` (red without the gate: sibling on page 0), ours `a_plain_nested_bottom_padding_does_not_pull_the_next_sibling_into_it` (page 2 for `word90000`; run red against the previous fork build was
+not done, the fork test is the red-then-green one).
+
+Sweep (copies of the validator's scripts under `/tmp/claude-0/vrt-f83b/sweep/`, the validator's directory untouched): `gen11` (the `padding-bottom` sweep, 552 documents): **0 differ from main** (before the fix 46 of the validator's 1380 differed); 178 differ from Chrome in
+words per page, the same 178 on main (Chrome moves both lines to page 2), page counts equal Chrome's in all 552. `gen9` last-child (420): 0 differ from main; `gen9` first-child (348) and `gen1` (780): 0 worse than main by the harness's score (`gen1` unchanged: 423 same,
+357 differ, 0 worse). `gen10` (396): 18 documents score worse than main by overflow: all are the F83h shape (an atomic spacer / image first in a box with an inset, main leaves a stub page, the branch overflows by the inset and has Chrome's page count).
+Fork checks after the fix: `--lib` local Blitz 2094 passed, `render_smoke` 254, `fulgur-vrt` 31 green, the 21 examples byte-identical, fmt and clippy clean. Ours: `cargo test --release --locked --no-fail-fast` 369 passed, 0 failed; fixtures 01-13 `cmp` identical to main, 14 identical to the previous branch build; `compare.py` unchanged; fmt and clippy clean.
+
+Filed in F83h: validator fuzz `S5_1390` and `S5_1594`, a blank page after a padding-only spill followed by a tall avoid box.
 
