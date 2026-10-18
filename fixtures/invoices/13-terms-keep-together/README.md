@@ -19,5 +19,5 @@ rest of the page, F30c), so this fixture renders the same PDF with the class, wi
 and on the F87 branch. It documents the invoice idiom; the tests that fail without F87 are in
 `crates/htmltopdf/tests/tailwind_breaks.rs`.
 
-Not exercised (F83a, F83b): `page-break-inside: avoid` (not aliased), an avoid box with several block children
-(the recursion gate ignores `break-inside`).
+Not exercised (F83a): `page-break-inside: avoid` (not aliased). An avoid box with several block children is
+fixture 14 (F83b).

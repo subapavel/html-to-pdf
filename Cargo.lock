@@ -957,7 +957,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#659affebe68e1c2c5ce7d5e8b407960882fdb6f6"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#a2b2d3a3e91b950a661cec0b3d8f633fd8a6a109"
 dependencies = [
  "blitz-dom",
  "blitz-html",
