@@ -74,9 +74,21 @@ fn the_unsplit_paragraph_warning_names_its_barrier() {
     );
     assert_eq!(shared.len(), 1, "{shared:?}");
     assert!(
-        shared[0].contains("an inline-block that shares its line"),
+        shared[0].contains("an inline-block or inline-table that shares its line"),
         "{}",
         shared[0]
+    );
+
+    // The same for an `inline-table` (F30e): the lines below the page are lost, and the warning names it.
+    let shared_table = unsplit_warnings(
+        &r,
+        &format!("<p>Úvod <span style=\"display:inline-table;width:60%\">{w}</span> konec</p>"),
+    );
+    assert_eq!(shared_table.len(), 1, "{shared_table:?}");
+    assert!(
+        shared_table[0].contains("an inline-block or inline-table that shares its line"),
+        "{}",
+        shared_table[0]
     );
 
     // A clip box shorter than its paragraph hides the lines below it: nothing is unprinted that Chrome prints, no
@@ -93,6 +105,25 @@ fn the_unsplit_paragraph_warning_names_its_barrier() {
         &format!("<div style=\"display:inline-block;width:100%\"><p>{w}</p></div>"),
     );
     assert!(alone.is_empty(), "{alone:?}");
+    // Text directly in a `display: table` box, an orphan table cell and an `inline-table` alone on its line are split
+    // since F30e: no warning.
+    for (what, markup) in [
+        (
+            "table text",
+            format!("<div style=\"display:table\">{w}</div>"),
+        ),
+        (
+            "orphan cell",
+            format!("<div><div style=\"display:table-cell\">{w}</div></div>"),
+        ),
+        (
+            "inline-table text",
+            format!("<div style=\"display:inline-table;width:100%\">{w}</div>"),
+        ),
+    ] {
+        let split = unsplit_warnings(&r, &markup);
+        assert!(split.is_empty(), "{what}: {split:?}");
+    }
     let hidden = unsplit_warnings(
         &r,
         &format!("<div style=\"overflow:hidden\"><p>{w}</p></div>"),

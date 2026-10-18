@@ -1,6 +1,6 @@
 # ADR-0004: Split a tall `inline-block` between its line boxes instead of slicing it at the page edge
 
-Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`)
+Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`) · Amended 2026-10-18 by F30e (`inline-table`, below)
 
 ## Context
 
@@ -30,6 +30,16 @@ block. We do not slice a line in two.
 An `inline-block` that shares its line, and `inline-flex` / `inline-grid` / `inline-table`, are not split (F30f-b);
 the warning names the barrier.
 
+**Amended 2026-10-18 by F30e: `inline-table` is covered like `inline-block`.** An `inline-table` that is the only thing
+on its carrier's single line is split between its line boxes in the same way (orphans and widows 2, each line in
+one fragment). Chrome m141 slices it exactly as it slices an `inline-block` (F30e plan §7, A4, 15 mm, 120 lines of
+20 px, width 100 %: 3 pages 51 / 51 / 19 with the straddling line printed on both pages; with a bordered frame around
+it, the table moves whole to page 2 and the frame stays empty on page 1, 4 pages; after an `<h1>` the same). Its
+inside is a table box whose real or anonymous cells are block containers, so the line splitter reaches the lines
+through them. What stays whole is now: an `inline-block` or `inline-table` that shares its line, and
+`inline-flex` / `inline-grid` (F30f-b); the warning names them ("an inline-block or inline-table that shares its
+line").
+
 ## Consequences
 
 - Every word is printed once, at the fragmenter's position. Chrome prints a line twice (cut in half) at each page
@@ -38,6 +48,8 @@ the warning names the barrier.
   where it is (below the heading, like a paragraph), while Chrome starts it on the next page: A3 has 12 pages here, 13
   in Chrome. A box that starts a page has Chrome's page count (A1, A2: 12; A2c: 20).
 - It is the same mechanism as for clipping wrappers, so there is one place that decides line ranges.
+- (F30e) An `inline-table` alone on its line has Chrome's page count where it starts a page (3), and one page fewer
+  than Chrome where something precedes it on its page (3 against 4 for a bordered frame or an `<h1>` before it).
 - The frame of a split box (border, radius) is closed on every page it touches (F96), where Chrome slices it.
 - If a product ever needs Chrome's exact slicing (a monolithic box cut at the page edge, a line printed on both pages),
   it is a new decision with its own renderer work; nothing here prevents it.
