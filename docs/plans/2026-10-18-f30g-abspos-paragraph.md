@@ -1,6 +1,6 @@
 # F30g — An absolutely positioned paragraph, or a wrapper of one, loses its text
 
-Date: 2026-10-18. Finding: F30g in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/fulgur`
+Date: 2026-10-18. Finding: F30g in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (after `a2b2d3a`), carried via `[patch.crates-io]`. Fork line numbers are at `a2b2d3a`, in
 `crates/fulgur/src/pagination_layout.rs` unless another file is named.
 
@@ -360,4 +360,72 @@ the `engine.rs` wiring is covered.
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed on branch `f30g-abspos-paragraph`; fulgur fork `htmltopdf/srgb-colours` **`129af34`** (three commits on top of `a2b2d3a`: `dff05f3` the pass, `a451cb9` a first bottom-padding fix that did not hold, `129af34` the one that does); the Blitz fork is
+unchanged (`52b22ef`). `Cargo.lock` pins `129af34` (`cargo update -p fulgur` changed that one entry). Status: **done**.
+
+**Step 1 (gate), no stop.** Scratch: `/tmp/claude-0/vrt-f30g/` (`probe.py`, `sweep.py`). Chrome m141, A4, 15 mm, Inter, 20 px and `normal` lines (same pages and words per page in both).
+- R1 (`abspos.html`, avoid and auto): ours 0 of 200 on 1 page; Chrome 200 on page 1. R2 `abs div > p` 5000 words: ours 372-386 words on 14-15 pages, Chrome all of them on 15. `abs > static > p` (a): 386; `relative > abs > p` (b): 0.
+- The causes held, measured with a temporary test (removed) on the engine's passes: the abspos `<p>` of A1 and of A5 has no geometry entry (its parent is recorded alone with height 0); A6's `ZAPLACENO` has none either (the relative parent has 2 fragments, `960 + 240`); A5b's box has one whole fragment `(0, 900) 600` from `record_descendant`; R2 / A2 have three full-height fragments `y = 0, -971, -1943` and empty `line_slices`; reading `paragraph_lines_for_page`, page 0 takes every line from the top and page k >= 1 gets `consumed >= height` and so `None`.
+- **Window offset:** confirmed, a new finding (**F92**). With `body{margin:8px}` an abspos box on the window path is 8 px (6 pt) too far left on every page and 8 px too high on pages >= 1 (`ofs8`: 36.5 / 97.5 pt against Chrome's 42.7 / 99.8 pt; `ofs40`: 12.5 / 73.5 pt). Not fixed here (the pass is untouched); boxes F30g fragments do not have it.
+- **Stop conditions:** Chrome fragments A2 (6 pages, `avoid` or not); A1 has no geometry (as predicted). Chrome appends pages for A5 (4 pages), so page extension stays.
+
+Chrome (words per page, first word) against main's binary before the change and the branch's after:
+
+| Case | Chrome | main | branch |
+|---|---|---|---|
+| A1 (R1) 200 words | 200, p1 | 0 | 200, p1 |
+| A2 2000 words in body | 6 pages: 351 / 350 / 350 / 364 / 353 / 232 | 372, 1 page | the same numbers |
+| A2 with `body{margin:8px}` | same as without | 371 | 2000 words, 6 pages, a few words fewer per page (F94: width) |
+| A3 R2 5000 words, (a), (b) | 15 pages | 372 / 372 / 0 | 15 pages, all words, every page within a word of Chrome's |
+| A4 ten `<p>` of 300 words | 9 pages | 1821 words, 9 pages | all 3000, 10 pages (F30c moves a short paragraph whole) |
+| A5 spacer 600 + relative > abs p | p1 at 600 px, 4 pages | 0 | p1 at 600 px, 4 pages, same split |
+| A5b whole-emitted parent | 35 words p1, 265 p2 | 56 | 35 / 265 |
+| A6 stamp `top:0` / `bottom:0` | once, p1 level with line 1 / p3 at the last line | not printed | once, p1 / p3, same places |
+| A8a `top:300px; height:1500px` | 246 / 350 / 350 / 54 | 510 | the same |
+| A8b `top:0; bottom:0` | 351 / 350 / 299 | 0 | the same |
+| A8c `bottom:0` | 355 words (645..999) | 369 | 369 (window path, unchanged; F95) |
+| A9 `<p>before</p>` + abs div | 3 pages, 15 pt below `before` | 365 | 3 pages, 15 pt below |
+| A9b spacers 900 + 300 | page 2 at **191 px** (the block splits) | 302 | page 2 at 300 px, 5 pages (F93) |
+| A10 fixed `Strana`; fixed taller than a page | 9 times; 358 words p1 | the same | the same (guards) |
+
+**Red before** (main at `53ef8ab` with fork `a2b2d3a`): ours `abspos_flow.rs` 15 of its 20 tests (the 5 green are guards: A7, A8c, the two fixed tests, the fixed repeat on added pages); fork lib: 12 of the 24 `abspos_flow` tests (the other 12 are the helper unit tests and guards:
+`abspos_that_fits_keeps_its_geometry`, `fixed_box_repeats_on_the_pages_an_abspos_flow_adds`, `many_static_abspos_siblings_are_bounded`) and `render_smoke_abspos_paragraph_spans_pages`. The first fork commit's message says 8 red; that was a miscount; 11 were red of the 23 tests it had, 12 of 24 now (pass disabled through a temporary environment check, removed).
+**Green after:** all of them.
+
+**What was built** (fork `pagination_layout/abspos_flow.rs`, a submodule, `pub use fragment_abspos_flows`; the plan said "in `pagination_layout.rs`", the logic is as in §3): `fragment_abspos_flows`, `abspos_boxes_in_tree_order`, `Anchor` (`Top`, `Bottom`, `Static`), `locate_forward` / `locate_backward` /
+`locate_icb` / `carry_over`, `abspos_disposition` (`Keep`, `Place`, `Flow`), `window_cuts_lines`, `lines_end_below_page`, `clear_subtree_geometry`, `abspos_line_split` (`line_split_candidate` calls it, output-neutral); wiring in `engine.rs` at both sites; a doc paragraph in `lib.rs`.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib`, crates.io Blitz | 2105 passed, 13 failed: the same 13 as at `a2b2d3a` (9 `seed_image_natural_size_tests`, 3 `convert::table`, 1 `pagination_layout` table test) |
+| fork `--lib`, local Blitz (`/home/user/blitz`, `52b22ef`) | 2118 passed, 0 failed |
+| fork `render_smoke` | crates.io Blitz 252 passed, 3 failed (the same `outside_*_markers`, `table_parts_with_a_non_table_display`); local Blitz 255 passed |
+| fork other test binaries | all 42 `tests/*.rs` one by one (local Blitz): no failure |
+| fork `fulgur-vrt` (`fonts-noinInter.conf`, crates.io Blitz) | 31 tests green, goldens untouched |
+| fork 21 examples (debug CLI at `a2b2d3a` against the branch) | byte-identical, 21 of 21. **`transform`: unchanged.** Its `.ghost`, `.box`, `.label` (children of `.cell{position:relative; height:130px}`) are placed whole by `record_descendant`, are complete or transformed themselves, so the pass keeps them; no `.cell` is entered across a page |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| fork WPT `css-page` subset | **not run**: no WPT checkout on this machine; the lib tests (`position_absolute_*`, `position_fixed_*`, `abs_positioned_pagination.rs`) stand in and are green |
+| ours `cargo test --release --locked --no-fail-fast` | 389 passed, 0 failed (20 new `abspos_flow.rs`; `fixtures.rs` renders 15 strict); `cargo fmt --check` and `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-14 | `cmp` byte-identical to the render of main's binary (`/tmp/claude-0/htmltopdf-main-53ef8ab`): 14 of 14; `compare.py` numbers unchanged |
+| render time 01 / 02 (25 runs, median) | 20.1 / 55.4 ms on main, 18.8 / 54.1 ms now: noise |
+| fixture 15 | new: **2 pages like Chrome, 8.7 / 4.9 %** against main's binary 8.9 / 4.8 % (stamp and note missing), threshold 0.097 (worst page + 1 point) |
+| generated abspos documents against Chrome (`sweep.py`: 11 containing-block shapes x 3 box kinds x 8 inset sets x 3 lengths x 3 spacers; 400 + 300 documents, two seeds) | 0 with fewer words than main; words per document within 8 of Chrome's: 304 / 400 and 233 / 300 (main: 56 and 39); page counts equal Chrome's: 368 / 400 and 274 / 300 (main: 179 and 136). The 38 + 34 documents with "duplicated" words are in-flow text that repeats the box's words by construction, with Chrome's counts. Left: transformed and clipping containing blocks (Keep, F95), `bottom: 0` above the page (F95) |
+
+Fixture 15 (`out/compare/15-paid-stamp-p1.png`, `-p2.png`, git-ignored): the stamp is top right of page 1 level with the title, the note is at the right on page 2 32 pt under the last payment line, both as in Chrome. The remaining diff is text drift, the totals table
+starting about 20 px above Chrome's after the split items table (not F30g, not analysed) and the `<tr>` rule of Blitz #386.
+
+**Deviations from the plan:**
+
+1. **A9b's expectation is not Chrome's.** The plan says 300 px; the Chrome probe says 191 px (Chrome splits the empty block). The test pins ours (300 px, after the sibling, as designed in §3) and the difference is **F93**. The plan's reasoning for `Static` (a Taffy offset puts the box inside the moved sibling) holds; its premise that Chrome agrees does not.
+2. **A2's body-margin twin** does not assert the words per page of the plain case (the plan: every word once, none above the content top): the box is 16 px narrower in ours because Taffy lays it out against its parent (**F94**), so a page holds a few words fewer; the page count and the first line agree. **A8c** asserts a range (340-390 words, Chrome 355) and the last word: it is the window path, unchanged.
+3. **A1 and A5 compare against an in-flow twin** (`content_top_glyph_y`) instead of an absolute y, because the glyph box of a line sits 2.7 pt higher in Chrome's PDF than in ours; A7 the same.
+4. **Stretched boxes and wrappers of boxes.** A body-direct box that Taffy makes 0 px tall (`top:0; bottom:0` in an empty body, A8b; a wrapper that holds only abspos boxes) has no window geometry; `abspos_disposition` flows it from `content_extent` / `window_cuts_lines`, and `window_cuts_lines` follows nested abspos boxes the way the window pass places them. Not in §3, needed for A8b and for a paragraph in an abspos wrapper. Also `ensure_zero_height_chain` (a containing block under several zero-height wrappers gets zero-height fragments) and `SIBLING_SCAN_BUDGET` (the static-position search is bounded).
+5. **`Anchor::Bottom`** measures to the bottom of the containing block's last in-flow child plus its bottom padding (`closing_deficit`), because the block fragmenter closes the last fragment at the last child. The first attempt used Taffy's height and did not move fixture 15.
+6. **Steps 3-5 in one pass** (the fork checks ran on the final code, three times: after the pass, after the nested and chain additions, after the bottom fix), as in F83b. The flow is built in a scratch table and merged, which gives the plan's "falls back to Keep above the budget" without undoing anything.
+7. **`vrt-validator` was not run** (a subagent cannot start another); the 700-document sweep against Chrome stands in for part of it.
+
+Filed: **F92** (window path body offset), **F93** (static position after a sibling ours moves whole), **F94** (abspos laid out against its parent), **F95** (text above the page area, transformed and clipping ancestors).
+
+Not verified here: `vrt-validator`; `pdf-reviewer` (not required: `render.rs`, the writer, fonts and metadata untouched); the spec citations of §2 (from memory; the Chrome probes stand in); the WPT `css-page` subset (no checkout); an abspos box inside `display: flex` / grid / table parents beyond the sweep's `flex` shape, inside inline `position:relative` spans (Keep), with `margin` on a `bottom`-anchored box in a split containing block, in a right-to-left or vertical writing mode, with `break-before` inside the box; `line-height: normal` for A4-A10 (only A1 and A3 are tested with it; the probes agree with 20 px); the release CLI against the fork examples (they ran on the debug CLI).

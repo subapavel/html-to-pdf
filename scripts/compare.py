@@ -97,6 +97,12 @@ THRESHOLDS = {
     #     than Chrome's, adding up over 8 rows) and the `border-t-2` Chrome paints on the total's `<tr>` and we do not
     #     (Blitz #386, F22). Worst page + 1 point.
     "14-totals-keep-together": 0.085,
+    # 15: new in F30g (an invoice in one `position:relative` `<main>` with an absolutely positioned "Zaplaceno" stamp at its
+    #     top and a payment note at its bottom, the items table spanning the page break). 8.7 / 4.9 %: on main's binary the
+    #     stamp and the note were not printed at all (8.9 / 4.8 %); now both are, in Chrome's places. The rest is the text
+    #     drift every fixture has, the totals table starting about 20 px above Chrome's and the `border-t-2` Chrome paints
+    #     on the total's `<tr>` (Blitz #386, F22). Worst page + 1 point.
+    "15-paid-stamp": 0.097,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
