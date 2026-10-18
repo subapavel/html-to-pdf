@@ -1,6 +1,6 @@
 # F30f — A long paragraph in an `inline-block` or `overflow: hidden` wrapper prints only its first page
 
-Date: 2026-10-18. Finding: F30f in `2026-10-15-m0-findings.md`. Status: **planned**. Fix goes on `subapavel/fulgur`
+Date: 2026-10-18. Finding: F30f in `2026-10-15-m0-findings.md`. Status: **done** (§7). Fix goes on `subapavel/fulgur`
 `htmltopdf/srgb-colours` (after `e0aed2e`), carried via `[patch.crates-io]`. Fork line numbers are at `e0aed2e`, in
 `crates/fulgur/src/pagination_layout.rs` unless another file is named; Blitz references are to the fork at `52b22ef`
 (`/home/user/blitz`, `packages/blitz-dom/src/`).
@@ -542,4 +542,66 @@ bar's background does not poke out of the rounded corners.
 
 ## 7. Result
 
-(Filled in at landing.)
+Landed on branch `f30f-inline-block-overflow-wrapper`; fulgur fork `htmltopdf/srgb-colours` **`5c496f3`** (commits on top of `e0aed2e`: `d116cd6` the barrier predicate, output-neutral; `e9ffbc1` the fix; `227dd59` and `5c496f3` doc comments only). The Blitz fork is
+unchanged (`52b22ef`). `Cargo.lock` pins `5c496f3` (`cargo update -p fulgur` changed that one entry). Status: **done**.
+
+**Step 1 (gate), no stop.** Scratch: `/tmp/claude-0/vrt-f30f/` (`probe.py`, `h.py`). Chrome m141, A4, 15 mm, Inter, 4000 words, 20 px and `normal` lines (same pages and words per page in both).
+- **Recreation:** R1 (`ibl_normal`) gives 386 words, 569 lines, 9917 px below the content box, as in §1; R2 the same. Main prints 372 words at 20 px.
+- **Causes held**, with temporary logs in the fork (removed): `line_split_candidate` returns `None` for R1 with `atomic_parent=true` and for R2 with `clips_parent=true`, the `<p>` is placed whole (the warning at the whole-placement site fires, so it has one fragment: stop condition 2 does not apply). The carrier of R1 is `<body>` (one fragment `(0, 0, 10925)`, no slices, painted on page 0); for A3 the anonymous block below the `<h1>` (fragment at y = 29). P1t: ours prints 351 words on 12 pages, 11 of them empty, no warning (cause 4).
+- **Stop conditions:** Chrome fragments P6 (12 pages, 4000 words), so the premise holds; the `<p>` does not already have several fragments. No stop.
+- **Chrome slices an `inline-block`**: every word, but the straddling line is printed on both pages, half on each (P1: 4042 word occurrences, 42 twice; PNG at the break read). When something precedes the box (P3 heading, P4 bordered frame) Chrome moves the box whole to page 2 and slices it from its top (13 pages, an empty frame on page 1). **ADR-0004** written.
+
+| Probe | Chrome | main | F30f |
+|---|---|---|---|
+| P1 / P1t / P2 (ib alone, direct text, auto width) | slices, 4000 words, 12 pages | 372 on 1 page / 351 on 12 (11 empty) / 372 | every word once, 12 pages |
+| P2c (centred 60 %) | slices, 20 pages | 212 on 1 page | every word once, 20 pages, x equal on every page |
+| P3 (`<h1>` before) / P4 (bordered carrier) | box on page 2, 13 pages | 365 / 364 on 1 page | every word once, 12 pages (box starts below the heading, ADR-0004) |
+| P5 (ib shares its line) | slices, 20 pages | 212 on 1 page | unchanged, warning names it (F30f-b) |
+| P6 / P6t / P7 (hidden, hidden child side, clip) | fragments, 12 pages | 372 / 372 / 372 on 1 page | every word once, 12 pages |
+| P8 auto, scroll, overflow-x:auto, overflow-x:hidden | fragments, 12 pages | 372 on 1 page | every word once, 12 pages: **no `ScrollContainer` barrier** |
+| P9 `height:600px` / `max-height:2000px` | 1 page, 211 words / 2 pages, 701 | 372 on 1 page | unchanged (F30f-b), no ink below the clip, no warning |
+| P10 body-level `overflow:hidden;height:300px` direct text | 1 page, 105 words | **ours prints all 4000 on 12 pages (reveals)** | unchanged (F30f-b) |
+| P11 / P12 (flow-root, hidden > div > p) | 12 pages | 4000 on 12 pages | unchanged |
+| P14 / P15 (05 shape, 3 / 60 rows) | 1 page / 2 pages, 126 + 54 cells | 1 page / 2 pages, 135 + 45 cells | unchanged |
+| P16 (abspos stamp in a clip box) | stamp once on page 1, 12 pages | 372 on 1 page | text 12 pages, stamp not printed (F95 b) |
+| P17 flex + overflow:hidden / + `height:300px` / inline-flex | fragments 12 / 1 page, 105 / slices 12 | 372 on 1 page / 372 / 8 words | split, 12 pages / whole / unchanged (F30f-b) |
+
+Decisions (§2 table): the `inline-block` rows are as predicted (ADR-0004); `overflow: auto` / `scroll` / `overflow-x-*` split like `hidden` (P8, Chrome fragments them in print); `overflow: hidden` with `height` / `max-height` stays whole; flow-root is a guard.
+
+**Red before** (fork at `e0aed2e`, red by running the new tests against the refactored, still-blocking `d116cd6`): ours `wrapper_line_split.rs` 15 of 21 tests (A1, A1t, A1n, A2, A2c, A3, A4, A4b, A6, A6t, A6n, A7, A8, A12, A13); the 6 green are guards (A5, both A9, A10, both A11) and `unsplit_paragraph_warning.rs`'s one test is red. Fork lib `pagination_layout`: 8 of the 14 new tests (clip box split, `direct_text_in_a_clip_box_is_split`, the flex clip box, `a_paragraph_in_an_inline_block_alone_on_its_line_is_split`, `an_inline_block_with_direct_text_is_split`, the two carrier tests, `split_barrier_names_each_arm`); the unit tests of `clip_hides_nothing`, `alone_on_its_line`, `carrier_slices_ok`, `unprinted_inline_lines` are green from the start. The render unit tests were red by absence of the functions (they did not compile); `render_smoke` was not run red. **Green after:** all of them.
+
+**What was built** (fork `pagination_layout.rs`, `render.rs`): `LineBarrier` (without `ScrollContainer`), `split_barrier`, `box_barrier`, `clip_hides_nothing`, `alone_on_its_line`, `inline_root_lines`, `line_split_candidate` / `abspos_line_split` on them, `unprinted_inline_lines` + the warning naming the barrier, `carrier_slices_ok`, `record_carrier_slices`, `record_carrier_slices_after` (called at the end of `fragment_block_subtree`), `inline_box_continues_on`, `paint_inline_box_continuation` at the three walks and a `debug_assert!` in `draw_under_transform`. Docs of `LineSlice`, `window_cuts_lines`, `lines_end_below_page`.
+
+**After:**
+
+| Check | Result |
+|---|---|
+| fork `--lib`, crates.io Blitz | 2127 passed, 13 failed: the same 13 as at `e0aed2e` (9 `seed_image_natural_size_tests`, 3 `convert::table`, 1 `pagination_layout` table test) |
+| fork `--lib`, local Blitz (`/home/user/blitz`, `52b22ef`) | 2140 passed, 0 failed (2123 before) |
+| fork `render_smoke` | crates.io Blitz 254 passed, 3 failed (the same `outside_*_markers`, `table_parts_with_a_non_table_display`) |
+| fork other test binaries | all 42 `tests/*.rs` one by one (local Blitz): no failure |
+| fork `fulgur-vrt` (`fonts-noinInter.conf`, crates.io Blitz) | 31 tests green, goldens untouched |
+| fork 21 examples (debug CLI at `e0aed2e` against the branch, after step 3, after step 4, after the final code) | byte-identical, 21 of 21 each time |
+| fork fmt, `clippy -p fulgur --all-targets -D warnings` | clean |
+| ours `cargo test --release --locked --no-fail-fast` | 417 passed, 0 failed, 2 ignored (21 new `wrapper_line_split.rs`, 1 `unsplit_paragraph_warning.rs`, `fixtures.rs` renders 16 strict); fmt and `clippy --release --locked --all-targets -D warnings` clean |
+| fixtures 01-15 | `cmp` byte-identical to the render of main's binary (`/tmp/claude-0/htmltopdf-main-a68154d`): 15 of 15; `compare.py` numbers unchanged |
+| render time 01 / 02 (25 runs, median) | 19.7 / 59.8 ms on main, 19.9 / 58.8 ms now: noise |
+| tagged output | `--tagged` renders of A1, A2c, A3, A4, A6 and fixture 16 succeed (no Krilla nesting panic); the structure tree was not inspected |
+| fixture 16 | new: **2 pages like Chrome, 16.6 / 20.8 %** against main's binary 3 pages, 11.4 / 25.0 / 0.9 % (the terms' tail lost, the payment block on page 3), threshold 0.218 (worst page + 1 point) |
+
+Fixture 16 (`out/compare/16-terms-card-p1.png`, `-p2.png`, git-ignored): every word is on Chrome's page; page 1 breaks after article 13 like Chrome's, the card continues on page 2 and the payment block follows it. What remains is dense text: ours closes the card's frame on page 2 (top border and 16 px of padding, F96), so page 2's lines sit about 20 px lower than Chrome's, and the drift every fixture has. Page 1 grew from main's 11.4 to 16.6 % because on main the paragraph's lines on page 1 were the unsplit ones (a different cut); the pages are not comparable (new fixture).
+
+**Deviations from the plan:**
+
+1. **Order of steps 2 and 3.** The red tests name `split_barrier`, `clip_hides_nothing` and the rest, so the refactor (step 3) came first; the tests were then red against it with the barriers still blocking. Steps 4 to 6 were committed as one fix (`e9ffbc1`); the examples were rendered after step 3, after step 4 and at the end, the full fork suite (lib on both Blitz, the 42 test binaries, smoke, VRT, examples) after step 3 and on the final code (as in F30g and F83b).
+2. **`ScrollContainer` is not a variant** (P8: Chrome fragments `auto` / `scroll`; the variant would be dead code under `-D warnings`).
+3. **`clip_hides_nothing` also reads inline-root children.** A child paragraph whose lines overflow its own box (a `height` on the `<p>`, a stretched flex item) counts with its lines, and the lines have 2 px of slack (`LINE_BOX_SLACK`): Blitz quantises line boxes, and with Noto at 20 px the lines are `(-1, 21)`, `(19, 41)` .., so the last one ends 1 px below the box (found by `render_smoke_overflow_hidden_paragraph_spans_pages`, which first printed 1 page).
+4. **`unprinted_inline_lines`** was split out of the warning so its clip counting is unit-testable; **`record_carrier_slices_after`** is the helper that decides when to call `record_carrier_slices`. Neither is in §3.
+5. **A2c** has `text-align:left` on the box (the plan's markup centres its text, so the first word of a page is not the box's left edge); the carrier-line x is the geometry's x on pages after the first and Parley's on the first, they agree within 0.5 pt.
+6. **The Orthogonal arm of `split_barrier` has no unit test**: `writing-mode: vertical-rl` on a child or a parent did not produce `Orthogonal` in the test harness (not investigated; the arm is the old check, moved).
+7. **A3's page count** is not asserted against Chrome's (13): Chrome moves the box to page 2 (ADR-0004), we have 12.
+8. **`vrt-validator` and `pdf-reviewer` were not run by the implementer** (a subagent cannot start another); merge policy items 2 and 5 are open for the caller. The tagged renders above are a smoke check, not a review.
+
+Filed: **F30f-b** (shared line, inline-flex, clip boxes that hide content, ours reveals clipped text at body level, ib that is not first on its page), **F95 (e)**; F30e updated with what it reuses and needs.
+
+Not verified here: the spec citations of §2 (from memory; the Chrome probes stand in); the Blink `IsMonolithic` claim (probes only); a `position: fixed` box or an opacity / transform scope around a split `inline-block` (the continuation call sites in `draw_under_opacity` and the `debug_assert!` in `draw_under_transform` are exercised by unit tests only, not by a render); a split `inline-block` inside a multicol or flex / grid item; `visibility: hidden` on the box (the continuation skips it like its carrier); the structure tree and link rectangles of continuation content; the WPT `css-page` subset (no checkout); right-to-left and vertical writing modes; `line-height: normal` for A2c-A4b, A7, A8, A10-A13 (A1n and A6n only).
