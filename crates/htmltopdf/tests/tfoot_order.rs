@@ -13,6 +13,10 @@ use htmltopdf::{RenderOptions, Renderer};
 
 const HEAD: &str = "<thead><tr><th>Hlavička</th><th>Cena</th></tr></thead>";
 const FOOT: &str = "<tfoot><tr><td>Celkem</td><td>999</td></tr></tfoot>";
+/// Rows of the long tables. Not 120: with the 24 pt rows of this setup 120 fill four pages exactly, so the footer would
+/// not fit under the last row and would start a fifth page; that is correct but not what these tests are about.
+const ROWS: usize = 115;
+
 const BODY: &str = "<tbody><tr><td>Položka1</td><td>1</td></tr><tr><td>Položka2</td><td>2</td></tr>\
                     <tr><td>Položka3</td><td>3</td></tr></tbody>";
 
@@ -27,7 +31,7 @@ fn tfoot_first_matches_tfoot_last() {
     // Every word of `thead, tfoot, tbody` is where it is in `thead, tbody, tfoot`, with automatic and with fixed
     // layout. In fixed layout the column widths come from the first row in visual order (Chrome, probes fx1-fx4):
     // here the header's three cells, not the footer's single `colspan=3` cell.
-    let head = "<thead><tr><th>Hlavička</th><th>Sloupec A</th><th>Sloupec B</th></tr></thead>";
+    let head = "<thead><tr><th>Hlavička</th><th>Počet</th><th>Cena</th></tr></thead>";
     let foot = "<tfoot><tr><td colspan=\"3\">Celkem</td></tr><tr><td>Fx</td><td>Fy</td><td>Fz</td></tr></tfoot>";
     let body = "<tbody><tr><td>P1a</td><td>P1b</td><td>P1c</td></tr><tr><td>P2a</td><td>P2b</td><td>P2c</td></tr></tbody>";
     for attrs in ["", "style=\"table-layout: fixed; width: 100%\""] {
@@ -124,11 +128,11 @@ fn caption_stays_on_top() {
 
 #[test]
 fn long_table_tfoot_first() {
-    let pdf = render(&table("", &[HEAD, FOOT, &rows(120)]));
+    let pdf = render(&table("", &[HEAD, FOOT, &rows(ROWS)]));
     let found = words(&pdf);
     let pages = page_count(&pdf);
     assert!(pages >= 3, "expected a multi-page table, got {pages}");
-    for i in 1..=120 {
+    for i in 1..=ROWS {
         let label = format!("Řádek{i}");
         assert_eq!(
             found.iter().filter(|w| w.text == label).count(),
@@ -145,12 +149,12 @@ fn long_table_tfoot_first() {
     }
     let totals: Vec<&Word> = found.iter().filter(|w| w.text == "Celkem").collect();
     assert_eq!(totals.len(), 1, "Celkem is printed {} times", totals.len());
-    let last_row = word(&found, "Řádek120");
+    let last_row = word(&found, &format!("Řádek{ROWS}"));
     assert_eq!(totals[0].page, pages, "Celkem is not on the last page");
-    assert_eq!(last_row.page, pages, "Řádek120 is not on the last page");
+    assert_eq!(last_row.page, pages, "the last row is not on the last page");
     assert!(
         totals[0].y_min > last_row.y_min,
-        "Celkem (y {:.1}) is not below Řádek120 (y {:.1})",
+        "Celkem (y {:.1}) is not below the last row (y {:.1})",
         totals[0].y_min,
         last_row.y_min
     );
@@ -160,11 +164,11 @@ fn long_table_tfoot_first() {
 fn long_table_thead_after_tbody_repeats() {
     // F12 repeats the header group on every continuation page; once it is first, one written after the body
     // repeats as well (Chrome, probe t3long).
-    let pdf = render(&table("", &[&rows(120), HEAD]));
+    let pdf = render(&table("", &[&rows(ROWS), HEAD]));
     let found = words(&pdf);
     let pages = page_count(&pdf);
     assert!(pages >= 3, "expected a multi-page table, got {pages}");
-    for i in 1..=120 {
+    for i in 1..=ROWS {
         let label = format!("Řádek{i}");
         assert_eq!(
             found.iter().filter(|w| w.text == label).count(),
