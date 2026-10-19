@@ -110,6 +110,13 @@ THRESHOLDS = {
     #     on page 2 (`box-decoration-break: slice` is not implemented, F96), so every line of page 2 sits about 20 px lower
     #     than Chrome's, and the drift every fixture has. Worst page + 1 point; F96 brings it down.
     "16-terms-card": 0.218,
+    # 17: new in F102 (a running footer, `position: running(paticka)` in an inline `<style>`, printed by `@bottom-center` on
+    #     both pages; Chrome ignores `running()`, so its reference prints the same two halves from `@bottom-left` /
+    #     `@bottom-right` strings, see the fixture's README). 12.0 / 10.0 %, 2 pages like Chrome's. The diff is the text drift
+    #     every fixture has and the `border-b` Chrome paints on every item row (`<tr>` borders, Blitz #386 / F22; ours rows are
+    #     about 0.5 px shorter, so page 1 has 24 rows against Chrome's 23); the footer itself is once per page, in the margin.
+    #     On main's binary the footer was painted in the body as well. Worst page + 1 point; F22 brings it down.
+    "17-running-footer": 0.13,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

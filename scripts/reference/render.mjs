@@ -3,6 +3,10 @@
 //   fixtures/invoices/<name>/reference/chrome-p<N>.png (each PDF page rasterised at 96 dpi)
 // Chrome is the *reference*, not the truth: where fulgur and Chrome disagree, CSS spec decides.
 //
+// A fixture may carry a `reference.html` next to `index.html`. Chrome renders that one instead, for a document
+// whose feature Chrome does not implement (17: `position: running()` / `element()`, which Chrome ignores): the
+// reference is the same document written the way Chrome can print it, and the fixture's README says how.
+//
 // Usage: node scripts/reference/render.mjs [fixture-name ...]
 import { chromium } from "playwright";
 import { readdir, mkdir, writeFile } from "node:fs/promises";
@@ -30,7 +34,8 @@ try {
 
     const page = await browser.newPage();
     await page.emulateMedia({ media: "print" });
-    await page.goto(pathToFileURL(resolve(dir, "index.html")).href, { waitUntil: "networkidle" });
+    const source = existsSync(resolve(dir, "reference.html")) ? "reference.html" : "index.html";
+    await page.goto(pathToFileURL(resolve(dir, source)).href, { waitUntil: "networkidle" });
     await page.evaluate(() => document.fonts.ready);
 
     // preferCSSPageSize: honour @page { size; margin } exactly like our engine does.
@@ -42,7 +47,7 @@ try {
     // Rasterise with pdftoppm (poppler) so the PNGs come from the PDF, not from the screen render.
     execFileSync("pdftoppm", ["-r", "96", "-png", pdfPath, resolve(out, "chrome-p")]);
     const pngs = (await readdir(out)).filter((f) => f.startsWith("chrome-p") && f.endsWith(".png"));
-    console.log(`${name}: ${(pdf.length / 1024).toFixed(0)} KB, ${pngs.length} page(s)`);
+    console.log(`${name}${source === "index.html" ? "" : " (" + source + ")"}: ${(pdf.length / 1024).toFixed(0)} KB, ${pngs.length} page(s)`);
   }
 } finally {
   await browser.close();

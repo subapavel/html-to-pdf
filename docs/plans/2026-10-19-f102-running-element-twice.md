@@ -1,6 +1,6 @@
 # F102 — an element with `position: running()` is also painted in the body
 
-Date: 2026-10-19. Finding: F102 (`2026-10-15-m0-findings.md`). Status: **planned**. Repro: `/tmp/claude-0/pdfrev-f99b/docs/own1.html` (PNG of page 1: `/tmp/claude-0/pdfrev-f99b/own1p-1.png`).
+Date: 2026-10-19. Finding: F102 (`2026-10-15-m0-findings.md`). Status: **done** (§7). Repro: `/tmp/claude-0/pdfrev-f99b/docs/own1.html` (PNG of page 1: `/tmp/claude-0/pdfrev-f99b/own1p-1.png`).
 The fix goes on the fulgur fork (`subapavel/fulgur` `htmltopdf/srgb-colours`, after `6a6da9b`), carried via `[patch.crates-io]`. Blitz is not changed: the fix uses its existing `DocumentMutator::set_style_property` (Blitz `mutator.rs:315`). Line references are to `6a6da9b` as read in `/home/user/fulgur`. As in F99b, I could not confirm the checked-out commit with git.
 
 ## 1. Problem and trace
@@ -162,4 +162,61 @@ This belongs in **fulgur**. GCPM is fulgur's own layer: Stylo and Blitz do not k
 
 ## 7. Result
 
-(Filled in at landing.)
+fulgur fork `182775c` (fix and tests) and `c2d07c9` (goldens), on `6a6da9b`, pushed; `Cargo.lock` pins `c2d07c9`. Blitz unchanged (`d4258c6`).
+
+### 7.1 Step 0, the gate (main's binary `2e29308`, `own1.html` with all Inter faces)
+
+| Render | Prediction | Result |
+|---|---|---|
+| as it is (rule inline) | duplicate | duplicate: a 10 pt copy at y 48.6, 4 `/Subtype /Link` (3 margin + 1 body), `<h1>` at 74.1 |
+| `.run` rule moved to `--css` | none | none: 3 links, `<h1>` at 56.1 |
+| `@top-center` removed | duplicate | duplicate: 1 link, no margin box at all, `<h1>` at 74.1 |
+
+The link comes from the body collector (the third render has no margin box and still has one). **The gate passed.** Two corrections to §1:
+- **The 49-61 pt position is not above the content box.** `RenderOptions::default()` gives the page a uniform 15 mm margin (`Margin::uniform_mm(opts.page.margin_mm)`, `lib.rs:385`) and that wins over the document's `@page { margin: 25mm 15mm }` (F6). The content box starts at 42.5 pt, plus the 6 pt body margin: 48.5 pt, a 12.1 pt line is 48.6-60.7. So `clip_body_occurrences_to_content_area` was right to keep the link: it was inside the real content box. The "70.9 pt" in §1 was read from the CSS. Tests use the real band (15 mm), not the `@page` one.
+- **The copy takes room.** The `<h1>` sits 18 pt lower with the copy than without (74.1 against 56.1): Taffy laid the box out, and only the fragmenter's cursor counted it as zero height. So the body moved, not only grew a duplicate.
+- It also showed that the body copy is only *painted* when the running element is itself an inline root: the descendants of a body-level running element have no geometry, so a footer made of a flex container with a table and spans printed no text in the body on main, only its `border-t` and its room (fixture 17 on main: a rule above "Faktura" and the page 34 px low).
+
+Chrome probes: P1 (`own1.html`): the div in flow at y 73.8, `@top-center` empty, as expected. P2 (div deleted, `@page` margin 15 mm to match our page): first paragraph at 91.0 against ours 93.6 (box tops), the usual drift; with the document's own 25 mm margin the comparison is 25 pt off for F6's reason, not this one.
+`pdftotext -bbox` of the eight old goldens: every one showed the running text in the body, but not always as a "duplicate": `running-element` and `element-policy-{first,last}` print it twice on the pages the margin shows it, `-first-except` and `-start` print it **once, in the body**, on pages whose margin box is empty or shows another instance (the old file looked right to the text check). The criterion "once more on page 1 than on page 2" in §3.3 was too narrow; the rule applied was: the only words that disappear are body copies and nothing is added (commit `c2d07c9` lists them).
+
+### 7.2 Red to green
+
+`running_elements.rs` (ours) against `6a6da9b`: 11 of 12 red, green on the change. The one that was green before is `r1_..._renderer_css` (rule from `--css`, already hidden: the plan's "identical" case). Mutation: with `append_running_placeholders` off in `engine.rs`, `r5_nested_running_elements` goes red and the other 11 stay green (R6 passes without it: the fragmenter evidently records that nested element itself, which §3.1 did not expect; only R5's element, inside `<header><div>`, needs the placeholder).
+Fork: `running_pass_hides_registered_elements`, `running_pass_beats_a_later_display_rule` (green after step 2); `running_placeholder_for_nested_element` (step 3), `convert_skips_running_node_with_important_display` (step 4, needed the `walk_semantics` guard too); `running_placeholder_leaves_body_level_fragment_alone` was green throughout (it guards the body-level path); render_smoke `inline_style_running_header_has_exactly_one_link` and `tagged_inline_style_..._no_link_structure` red to green, `linked_stylesheet_..._one_link` green throughout (path 2); `link_integration` `margin_box_running_element_link_keeps_pdf_annotation` flipped from `>= 2` to `== 1`.
+
+### 7.3 Checks
+
+| Check | Result |
+|---|---|
+| fork `cargo fmt --check`, `clippy -p fulgur --all-targets -- -D warnings` (local Blitz) | clean (one pre-existing Blitz warning in the path crate) |
+| fork lib | 2160 passed |
+| fork `render_smoke` / `gcpm_integration` / `link_integration` | 266 / 18 / 7 (+1 ignored) passed |
+| fork `gcpm_snapshot` | 16 passed, 3 changed as predicted, updated |
+| fork VRT | 5 of 64 differ, exactly the five predicted; updated; the other 59 and the three gradient harnesses pass |
+| fork `examples_determinism` | 10 of 11, the one failure is `committed_svg_matches_rendered` (host fonts for SVG text, unrelated, "10/11 as before") |
+| `examples/header-footer`, `header-footer-split` | byte-identical to a render of `6a6da9b` (their rules reach Stylo through the AssetBundle) |
+| ours `cargo fmt --check`, `clippy --release --locked --all-targets -- -D warnings` | clean |
+| ours `cargo test --release --locked --no-fail-fast` | 357 passed, 0 failed |
+| fixtures 01-16 and 7 `bench/corpus` PDFs against main, `RAYON_NUM_THREADS` 1 and 4 | `cmp`-identical (23 of 23 at each) |
+| `scripts/compare.py` | 01-16 unchanged (same numbers as before: 4.4, 11.4, 5.7, 5.7, 21.6, 15.9, 7.2, 13.2, 5.1, 5.9, 6.9, 14.6, 11.7, 7.5, 8.7, 20.8 worst page); 17 new |
+| `scripts/bench.py --check` | ok; 17-running-footer 36.6 ms median; `b200-items` 1511 ms, `b200-text` 870, `b200-mixed` 884 |
+
+### 7.4 Goldens (all in fork `c2d07c9`, evidence in its message)
+
+`gcpm/running-element` (header and footer twice on page 1, body 45.0 / 45.8 pt up, page 2 text 0.75 pt down), `gcpm/element-policy-first` (title in the body of every page, 30.0 / 21.8 pt), `-first-except` (heading in the body on pages 1 and 3, where the margin box is meant to be empty), `-last` (Intro A, Intro B, Chapter Two in the body, 52.5 / 21.8 pt), `-start`; snapshots `gcpm_running_element_via_inline_style` ("Running Header" twice), `gcpm_element_policy_first` (**6 pages to 3**) and `_last` (**5 to 3**): the title copy took room in a 400 x 300 pt page, so each 220 pt spacer moved to a page of its own.
+
+### 7.5 Fixture 17 (`17-running-footer`)
+
+Two pages, 42 rows, footer once per page in the bottom margin, nothing above "Faktura" (looked at `out/compare/17-running-footer-p1.png`, `-p2.png`). Reference: `reference.html` (footer deleted, two `@page` strings), 2 pages. `compare.py`: **main's binary 12.7 / 10.0 %, now 12.0 / 10.0 %** (the rule above the heading and the 34 px shift are gone); threshold 0.13 (worst page + 1 point), comment in `compare.py`. The rest is the usual drift and the `<tr>` `border-b` rows (F22).
+
+### 7.6 Deviations from the plan
+
+- `<link>` variant of R1 is a fork test (`linked_stylesheet_running_header_has_exactly_one_link`), not in `running_elements.rs`: `htmltopdf` has no base path, so it cannot load a `<link>`.
+- R4's `!important` case uses a text element (`display: block !important`), and does not assert (a): an author `!important` `display` beats the declaration (it keeps its room, which is the §6 risk, accepted), and a nested footer's descendants are never painted anyway (§7.1), so only a text element shows the problem. A stronger fix would add the hiding as `!important`; Blitz's `set_style_property` has no importance parameter, so it needs a Blitz change. Not done.
+- R4's image check is 0 or 1 per page, equal on both pages: an `<img>` in a margin copy is not painted at all (filed as F107). R5 also asserts the inner text is in the margin copy of the outer element on every page.
+- `walk_semantics` got the same guard as `convert_node` (the plan said "if R7 needs it": the unit test needed it, R7 did not).
+- The step 2 `cmp` on 01-16 was done once at the end, with all three changes, not after step 2 alone.
+- Not run: `vrt-validator` and `pdf-reviewer` (§4 asks for them; the implementing session has no way to start those agents). R7's PDF and fixture 17 still need `pdf-reviewer`.
+- Not done: `bench/baseline.json` has no row for fixture 17 (the default limit of 100 ms applies).
+- Filed beyond the plan: F107.
