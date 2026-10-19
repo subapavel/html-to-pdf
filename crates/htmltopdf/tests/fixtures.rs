@@ -209,6 +209,57 @@ fn plain_text_invoice_prints_every_line_on_both_pages() {
     assert!(info.contains("Pages:           2"), "{info}");
 }
 
+/// F36: fixture 20 writes `<tfoot>` before `<tbody>` (HTML 4.01 order); the totals belong below the last item.
+#[test]
+fn tfoot_first_invoice_prints_the_totals_below_the_last_item() {
+    let name = "20-tfoot-first";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-20.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout);
+    let y_min = |word: &str| -> f32 {
+        let line = xml
+            .lines()
+            .find(|l| l.contains(&format!(">{word}</word>")))
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"));
+        let start = line.find("yMin=\"").unwrap() + "yMin=\"".len();
+        line[start..start + line[start..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    let (last_item, total) = (y_min("Cestovné"), y_min("úhradě"));
+    assert!(
+        total > last_item,
+        "`Celkem k úhradě` (y {total}) is not below the last item (y {last_item})"
+    );
+    assert!(
+        y_min("Základ") > last_item,
+        "`Základ daně` is not below the last item"
+    );
+}
+
 #[test]
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.
