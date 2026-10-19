@@ -137,17 +137,31 @@ fn warns_about_content_below_the_page_only() {
     }
 
     // --- must warn -------------------------------------------------------------------------------------------------
-    // F30f-b, a known residual loss: an inline-flex box is kept whole.
+    // A box the fragmenter cannot move: an absolutely positioned box whose text starts at the bottom edge of a
+    // 100 pt page is painted below it on page 1 and is on no page (a known loss, F119). The net sees it.
+    let w = page_warnings(
+        "@page { size: 100pt 100pt; margin: 0 }",
+        "<div style=\"position:absolute;top:100vh\">outer on page 2\
+         <div style=\"position:absolute;top:300vh\">inner on page 5</div></div>",
+    );
+    assert!(
+        w.iter()
+            .any(|m| m.contains("past the bottom page edge on page 1")),
+        "abspos box at the page edge: {w:?}"
+    );
+
+    // F30f-b, a known residual loss: an inline-flex box is kept whole. Its text is painted inside the inline box,
+    // under a translation, which the net does not follow; the pagination warning is what says so.
     let w = page_warnings(
         "",
         &format!(
-            "<div style=\"display:inline-flex\"><div>{}</div></div>",
+            "<div style=\"display:inline-flex;width:100%\"><div>{}</div></div>",
             prose(4000)
         ),
     );
     assert!(
         w.iter()
-            .any(|m| m.contains("past the bottom page edge on page 1")),
+            .any(|m| m.contains("in an inline-flex or inline-grid box is placed whole")),
         "inline-flex around 4000 words: {w:?}"
     );
 

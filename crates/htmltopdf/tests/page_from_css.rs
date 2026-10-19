@@ -144,8 +144,8 @@ fn assert_near(got: f32, want: f32, what: &str) {
     assert!((got - want).abs() <= 0.1, "{what}: {got} pt, want {want}");
 }
 
-/// One `<p>` of `Line001<br>Line002<br>…`, 20 px per line. (Inline text directly in `<body>` that is taller than a
-/// page is cut off at the page edge, unrelated to F6, so the lines sit in a paragraph.)
+/// One `<p>` of `Line001<br>Line002<br>…`, 20 px per line. (The lines sit in a paragraph, not directly in `<body>`: that
+/// shape is the subject of F111, `body_inline_split.rs`, and these tests do not need it.)
 fn lines(n: usize) -> String {
     let text = (1..=n)
         .map(|i| format!("Line{i:03}"))
