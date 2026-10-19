@@ -45,7 +45,8 @@ under a minute. They are for watching a number go down when a finding is fixed.
 
 ## Current numbers
 
-Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 runs, 2026-10-18 (`bench/baseline.json`):
+Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 runs, 2026-10-18 (`bench/baseline.json`); the `b200-text` and `b200-mixed` rows were lowered by F99a
+(parallel shaping, 2026-10-19, same VM):
 
 | Document | Pages | min ms | median ms |
 |---|---:|---:|---:|
@@ -66,8 +67,8 @@ Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 run
 | 15-paid-stamp | 2 | 20.4 | 22.0 |
 | 16-terms-card | 2 | 22.7 | 25.1 |
 | b200-items | 200 | 2357 | 2433 |
-| b200-text | 200 | 1114 | 1123 |
-| b200-mixed | 201 | 1032 | 1084 |
+| b200-text | 200 | 787 | 879 |
+| b200-mixed | 201 | 811 | 862 |
 | slow-paragraph (1 run) | 59 | 3777 | 3777 |
 | slow-multicol (1 run) | 21 | 2460 | 2460 |
 | slow-breaks (1 run) | 17 | 2809 | 2809 |
@@ -76,9 +77,9 @@ Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 run
 Reading it:
 
 - A fixture is 17-57 ms, the single-page ones 18-29 ms: "low tens of ms" holds; 02-long (60 rows, 3 pages) is the slowest.
-- **The 200-page goal is not met by any of the three `b200-*` documents** (1.08-2.43 s), while 800 plain paragraphs make 160 pages in 0.35 s
+- **The 200-page goal is met by `b200-text` and `b200-mixed` since F99a** (0.88 s and 0.86 s; they were 1.12 s and 1.08 s) and not by `b200-items` (2.3-2.4 s), while 800 plain paragraphs make 160 pages in 0.35 s
   (F78's measurement). `b200-items` without its two margin boxes takes about 1.4 s, so the footers cost about 1.1 s (5 ms per page) and the table
-  alone is over the goal. Filed as F99 in the findings; not fixed here (B1 is tooling only).
+  alone is over the goal. Filed as F99 in the findings; `docs/plans/2026-10-19-f99-speed-profile.md` says where the time goes, F99a (`2026-10-19-f99a-parallel-construct.md`) took the first step.
 - The very first render of a large document can be much slower than the rest (`b200-items` took 5.7 s once, then 2.2-2.5 s; cause not investigated, probably cold caches); that is why gated documents get a warm-up.
 
 ## The guard (`--check`)
@@ -112,5 +113,5 @@ F99 (200-page budget), F82 (`slow-paragraph`), F30d-d (`slow-multicol`), F83f (`
 
 ## Not covered
 
-Library-level timing (no process start), peak memory (`/usr/bin/time -v` is easy to add), multi-threaded callers, and anything on CI hardware
+Library-level timing (no process start), peak memory (F99a measured it once with `resource.getrusage` of the child: `/usr/bin/time` is not installed on the dev VM; 128-243 MB for the b200 documents), multi-threaded callers, and anything on CI hardware
 until the first CI run has produced numbers.

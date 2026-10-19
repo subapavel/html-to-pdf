@@ -109,14 +109,14 @@
     "b200-text": {
       "kind": "b200",
       "pages": 200,
-      "min_ms": 1114.1,
-      "median_ms": 1123.0
+      "min_ms": 786.7,
+      "median_ms": 878.5
     },
     "b200-mixed": {
       "kind": "b200",
       "pages": 201,
-      "min_ms": 1032.3,
-      "median_ms": 1083.5
+      "min_ms": 811.0,
+      "median_ms": 861.9
     },
     "slow-paragraph": {
       "kind": "slow",
