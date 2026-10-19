@@ -1,6 +1,6 @@
 # F36: a `<tfoot>` written before `<tbody>` is printed under the header
 
-Date: 2026-10-19. Finding: F36 (`2026-10-15-m0-findings.md:1274-1278`). Status: planned. The engine fix goes on the Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`, after `d4258c6`. The fulgur fork `htmltopdf/srgb-colours` (after `41a8c8a`) only gets test and doc changes. Our crate gets tests, the lock bump and fixture 20. Line numbers are from those two heads as checked out under `/home/user/blitz` and `/home/user/fulgur` (read from `.git/refs`; I could not run git). I had no `css-spec-researcher` output.
+Date: 2026-10-19. Finding: F36 (`2026-10-15-m0-findings.md:1274-1278`). Status: implemented, see §7. The engine fix goes on the Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`, after `d4258c6`. The fulgur fork `htmltopdf/srgb-colours` (after `41a8c8a`) only gets test and doc changes. Our crate gets tests, the lock bump and fixture 20. Line numbers are from those two heads as checked out under `/home/user/blitz` and `/home/user/fulgur` (read from `.git/refs`; I could not run git). I had no `css-spec-researcher` output.
 
 ## 1. Problem
 
@@ -179,3 +179,63 @@ Unchanged and why:
   - Bottom captions (`caption-side`).
 
 ## 7. Result
+
+Measured 2026-10-19. Chrome is Chromium via Playwright (`@page{size:A4;margin:15mm}`, Inter, 14 px, `border-collapse: separate`, 4 px cell padding); main is the binary of main `8658256`; "after" is the Blitz fork `310878c` + fulgur fork `19c4782`. Order is by `yMin` of `pdftotext -bbox` words. Scratch probes are under `/tmp/claude-0/f36/` (deleted).
+
+### Step 0: main against Chrome
+
+| # | Shape | Main | Chrome | After |
+|---|---|---|---|---|
+| T1 | `thead, tfoot, tbody` | H F B | H B F | H B F |
+| T2 | `thead, tbody, tfoot` (4 pages, 115 rows in `t2long`) | H B F; F once, on the last page | H B F; **F repeated after the last row of every page** | unchanged (F12b) |
+| T3 | `tbody, thead` | B H | H B | H B |
+| T3 long | `tbody, thead`, 120 rows | no header on page 1, none repeated, H at the very end | H on every page, above the first row | H on every page |
+| T4 | `display:table` divs, `table-footer-group` first | F B | B F | B F |
+| T5 | `tfoot#1, tbody, tfoot#2` | F1 B F2 | B F2 F1 (only the first footer moves) | B F2 F1 |
+| T6a | `<tfoot style="display:table-row-group">` first | stays first | stays first | stays first |
+| T6b | `<tbody style="display:table-footer-group">` first, then a plain `tbody` | stays first | the plain `tbody` first, the footer last | same as Chrome |
+| T7 | T1, 120 rows | F on page 1 under H, H repeated on 4 pages | F after the last row of every page | F once, last page, under the last row |
+| T8 | `<caption>` + T1 | caption, H F B | caption, H B F | caption, H B F |
+| fx1-fx4 | fixed layout, header cells with or without widths, footer with a `colspan=3` first row, both orders | identical in both orders | identical in both orders (columns from the first visual row: 50/25/25, or thirds) | same |
+| au1/au2 | automatic layout, same shapes | identical | identical | identical |
+
+The stop condition did not trigger (Chrome moves a later `thead` and only the first footer; T5 is as planned), and Chrome's fixed layout agrees with "first visual row", so the fallback of §6 was not needed. Chrome also repeats the footer (F12b), which this plan does not do. Note that fx1-fx4 and au1/au2 have the `thead` first in the DOM, so the first visual row is also the first DOM row; the case of a column-setting row that moves is `tfoot_first_matches_tfoot_last` (the footer's `colspan=3` row against the header's three cells), which agrees with the modern order.
+
+### Red tests (on main's pins, `Cargo.lock` at `d4258c6` / `41a8c8a`)
+
+`tfoot_order.rs`, 11 tests: **10 red**, 1 green (`tfoot_after_tbody_is_unchanged`, the guard). `role_follows_display_not_tag` is red in its second half only. `fixtures.rs::tfoot_first_invoice_prints_the_totals_below_the_last_item` is red too. All 11 green with the forks; `fixtures.rs` 5 of 5 green.
+
+### Before / after
+
+| | Before (main) | After |
+|---|---|---|
+| Fixture 20 (new), pages | 1 | 1 (Chrome 1) |
+| Fixture 20, diff to Chrome | 12.4 % (totals under the column headings, items below) | **8.9 %** (threshold 9.9 %) |
+| Fixtures 01-19 and `bench/corpus/*` (b200, slow) | | PDFs `cmp`-identical to main's binary (26 of 27 files; 20 is the one that differs) |
+| Compare numbers 01-19 | | unchanged, page counts unchanged |
+| `bench.py --check` | | ok; 20: min 17.4 ms; `b200-items` 1615 ms (as before, goal not met), `b200-text` 939 ms, `b200-mixed` 917 ms |
+
+Fixture 20's 8.9 % is above the 3-6 % I wrote down. The PNG shows the layout is Chrome's (title, parties, header, the 8 items, Základ daně, DPH, the dark "Celkem k úhradě" bar, payment box); what is left is the text drift and rows that are about 0.9 px taller than Chrome's (31.6 px pitch against 30.7, Blitz #386 / F22: collapsed `<tr>` borders are not painted), which adds up to 7 px over the 11 rows of this table. Under the 10 % stop line of §4.
+
+### Tests that ran
+
+- Blitz: `cargo test -p blitz-dom --lib` 49 passed (6 new, in `layout/table.rs`: identity without roles, `[F B H]`, `[F1 B F2]`, `[H1 H2 B]` and the modern order, anonymous and bare rows, `group_role_of_display`). Clippy on `blitz-dom` reports 3 errors in `construct.rs` and `node.rs` that exist on `d4258c6`; none in `table.rs`.
+- fulgur: `--lib` 2184, `render_smoke` 273 (2 new), every other `tests/*.rs` target ok (2686 tests in all), `fulgur-vrt` ok and byte-identical, `examples_determinism` 10 of 11 as before (`committed_svg_matches_rendered`), `cargo clippy -p fulgur --all-targets -- -D warnings` and `cargo fmt --check` ok.
+- Ours: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --release --locked` (exit 0).
+
+### Deviations from the plan
+
+- The long-table tests use 115 rows, not 120: with this setup's 24 pt rows 120 fill four pages exactly, so the footer does not fit and starts a fifth page with a repeated header. That is legal but not what the tests are about; filed as **F126**. Row labels are `Řádek{i}` without a space, so the test matches single `pdftotext` words.
+- Test 2 uses unique header words (`Počet`, `Cena`) so each word is matched to its twin.
+- Test 11 (`footer_row_background_follows_the_row`) was green on main as first written (the dark row was dark wherever it was printed); it now also asserts the dark row is below the last item and that the row under the header is white.
+- Fixture 20 reaches 8.9 %, not 3-6 % (above).
+- The Blitz tests ran with `CARGO_TARGET_DIR=/home/user/fulgur/target` (no new target dir); `Cargo.lock` of the Blitz and fulgur forks was restored after each run.
+- New findings: **F126** (a footer alone on a page), **F127** (a header in a `display: contents` wrapper is not repeated).
+
+### Fork commits
+
+- Blitz `htmltopdf/blitz-dom-0.2.4`: `2ffffd3` (pure `order_table_slots`, `group_role_of`, unit tests), `310878c` (wired in `collect_table_children`, `Level::Table` only), on `d4258c6`.
+- fulgur `htmltopdf/srgb-colours`: `19c4782` (tests and doc comments only), on `41a8c8a`.
+- Ours: `Cargo.lock` pins `310878c` and `19c4782`.
+
+Not verified: the spec quotes of §2 (no `css-spec-researcher` run, no network read of the specs); that the two new fulgur lib tests are red against crates.io Blitz (the flipped test is the old test inverted); Chrome's behaviour at an exact page fit; `vrt-validator` (the owner runs it).
