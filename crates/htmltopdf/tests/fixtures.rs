@@ -162,6 +162,53 @@ fn mono_identifiers_survive_into_pdf_text() {
     }
 }
 
+/// F111: fixture 19 has text and `<br>` directly in `<body>`; its tail (payment details, terms) was lost on main.
+#[test]
+fn plain_text_invoice_prints_every_line_on_both_pages() {
+    let name = "19-plain-text-invoice";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, name);
+    for needle in [
+        "FAKTURA – DAŇOVÝ DOKLAD č. 2026-0019",
+        "CELKEM K ÚHRADĚ: 83 178,00 Kč",
+        "IBAN: CZ65 0300 0000 0001 2345 6789",
+        "Variabilní symbol: 20260019",
+        "15. Doba archivace dokladu je 10 let podle zákona o DPH.",
+        "www.novavlna.example",
+    ] {
+        assert!(
+            text.contains(needle),
+            "{name}: `{needle}` missing from PDF text"
+        );
+    }
+    let pages = std::process::Command::new("pdfinfo")
+        .arg({
+            let path =
+                std::env::temp_dir().join(format!("htmltopdf-test-{}-19p.pdf", std::process::id()));
+            std::fs::write(&path, &pdf).unwrap();
+            path
+        })
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let info = String::from_utf8_lossy(&pages.stdout);
+    assert!(info.contains("Pages:           2"), "{info}");
+}
+
 #[test]
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.
