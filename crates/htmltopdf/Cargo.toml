@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-fulgur.workspace = true
+fulgur = { workspace = true, features = ["parallel-construct"] }
 thiserror.workspace = true
 log.workspace = true
 cssparser.workspace = true
