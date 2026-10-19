@@ -184,3 +184,40 @@ There is no `css-spec-researcher` output. Every reference below is from memory a
   - an orientation-only caller override.
 
 ## 7. Result
+
+Done 2026-10-19, steps 0-6 (the `vrt-validator` run is the caller's). Fork commit `39ac1b2` on `subapavel/fulgur` `htmltopdf/srgb-colours` (after `c2d07c9`); ours: red tests `686764f`, the rest in the commits after it on `f6-page-size-margins`; `Cargo.lock` points at `39ac1b2`.
+
+**Step 0 (main's binary `33b0519`).** MediaBox 595.28 x 841.89 and compare numbers as in the table below for all of 01-17. 05 rendered with `--margin-mm 0` (the predicted fix): 21.6 -> 3.45 %, so the plan went on. Word lists (`pdftotext -bbox`) saved for the step 5 gate.
+
+**Red before.**
+- `page_from_css.rs`: 15 of 19 tests red (T1, T2 x4, T3 x2, T4, T5, T6 x2, T10 x2, T11, T12); green guards T9, T13 and "unknown keyword alone"; T12b `#[ignore = "F109"]` (run with `--ignored` after the change it fails on page 2: `Line095` ends at 743.2 pt, the margin edge is 728.5 pt, so F109 is real). T7 / T8 (caller wins) were written with the new API in step 3.
+- `page_flags.rs`: 4 of 7 red (`--page-size` does not exist, the flags forced A4 / 15 mm), 3 green guards.
+- Fork: the lib tests did not compile (`default_margin`, `sides_mm`, the `Option` keyword table); the three `render_smoke` tests gave an A4 MediaBox.
+
+**Numbers (fulgur vs Chrome, fraction of pixels, worst page last column).**
+
+| Fixture | pages main -> now | per page before | per page after | threshold |
+|---|---|---|---|---|
+| 01 | 1 -> 1 | 4.4 | 4.4 | 5 % (unchanged) |
+| 02 | 3 -> 3 (Chrome 3) | 10.2 / 11.4 / 9.8 | 10.2 / 11.1 / 9.5 | 12.4 -> 12.1 % |
+| 03 04 06-16 | unchanged | unchanged | unchanged to 0.1 point | unchanged |
+| 05 | 1 -> 1 | 21.6 | **3.5** | 22 -> 4.5 % |
+| 17 | 2 -> 2 | 12.0 / 10.0 | 12.0 / 10.0 | 13 % |
+| 18 (new) | - -> 1 (Chrome 1) | - | 5.3 | 6.3 % |
+
+- **05** (PNG looked at): the header gradient now runs from x = 0 to 794 px and from y = 0 like Chrome's, text at x ~ 57 px, the cards and table line up with Chrome's; what is left is text drift and the shadow band under the totals box.
+- **02** (page 2 looked at): the 20 mm bottom margin applies, 16 words move from page 2 to page 3 (359 / 369 / 280 -> 359 / 353 / 296 words), the footer is in the 20 mm band; it is not centred vertically in it as in Chrome (F103).
+- **01, 03, 04, 06-15:** words within 0.0000 pt of main (the two A4 widths and the two `15mm` conversions turned out equal after rounding to the PDF's precision), compare numbers equal. 16 / 17: words within 0.0002 pt.
+- **18:** PNG 560 x 794 px, content 38 px from the left and top, footer in the bottom 38 px band (Chrome's footer is centred, ours starts at the margin edge and is about 11 px higher: F110, F103). MediaBox ours 419.53 x 595.28, Chrome's 420 x 594.96 pt.
+- **Bench corpus:** `b200-text` 200 pages and `b200-mixed` 201, words within 0.00006 pt of main; `b200-items` 200 -> **204 pages** (its `@page` declares 15 / 20 mm, now honoured): still inside `B200_PAGES` (195-205), so no retuning. `bench.py --check` ok (02-long 41.8 ms vs main's binary 40.9 ms, same run; 18: 20 ms; the new fixture has no baseline entry and is held by the 100 ms hard budget).
+
+**Tests.** Fork: `cargo test -p fulgur --lib` 2175 passed, every integration test target green, `--doc` green, `fulgur-vrt` green **without** re-blessing, `fmt --check`, `clippy -p fulgur --all-targets` clean; fulgur-cli `examples_determinism` 10 passed, 1 failed (`committed_svg_matches_rendered`, the same failure on `c2d07c9`: the SVG example needs host fonts). Ours: `cargo test --release --no-fail-fast` 495 passed, 0 failed, 4 ignored (incl. T12b); `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` clean.
+
+**Deviations from the plan.**
+1. **No VRT golden moved.** The plan expected five (`size: A5` documents rendered as A4). `fulgur-vrt`'s manifest sets `[defaults] page_size = "A4"`, an override, so the harness never sees the document's size. Nothing re-blessed; the fork's own `render_smoke` tests cover A5.
+2. **Existing tests that depended on the override** besides the ones the plan names: `print_media.rs` (its bundled `@page { margin: 0 }` now applies; the sampling column moved from x = 120 to 50 px at 48 dpi). `running_elements.rs` got a `Band` (15 mm default, 25 mm for R1 / R7) instead of one constant.
+3. **Test details.** The CLI reports a bad `--page-size` / negative `--margin-mm` as an error (not in the plan). T11 pins the margin box's x at the left margin edge instead of "centred" because of F110. T5 / T10 allow the glyph box to start 2 pt above the line (83 pt for a 30 mm margin).
+4. **Fork tests were run with the pinned fontconfig minus the system Inter** (`FONTCONFIG_FILE` with a `rejectfont` for `/usr/share/fonts/*/inter`, the setup earlier fork work used on this VM), not the bare `examples/.fontconfig/fonts.conf`, and with the local Blitz checkout through `--config patch.crates-io` (never committed; the fork's `Cargo.lock` was restored each time).
+5. **Filed:** F109 (as planned), **F110** (a centre margin box is not centred) and **F111** (bare text in `<body>` taller than a page loses its tail silently, on main too; HIGH, unrelated to F6).
+
+**Not verified.** The CSS spec statements in §2 are still from memory (no `css-spec-researcher` run). Chrome's default margin and WeasyPrint's were not measured. `pdf-reviewer` was not run (not required). `vrt-validator` not run (the caller does). The fork was not run against CI's fontconfig, and `cargo test -p fulgur` as one command was not run (each integration target separately, to save disk).
