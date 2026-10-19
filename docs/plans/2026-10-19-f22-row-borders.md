@@ -1,6 +1,6 @@
 # F22: collapsed table borders (row and row-group rules, shared cell borders)
 
-Date: 2026-10-19. Finding: F22 (`2026-10-15-m0-findings.md:209-213`). Status: planned. The work is split into two PRs. **F22a** (this PR) puts the collapsing border model into Blitz *layout*, on `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` after `310878c`. **F22b** (the next queue item) *paints* the resolved borders, on `subapavel/fulgur` `htmltopdf/srgb-colours` after `19c4782`. F22b's design is fixed here (§3.3) so both PRs share one contract. Line numbers are from those heads. I had no `css-spec-researcher` output.
+Date: 2026-10-19. Finding: F22 (`2026-10-15-m0-findings.md:209-213`). Status: **done, one PR "F22"** (F22a and F22b landed together, see §7). The work was planned as two PRs. **F22a** put the collapsing border model into Blitz *layout*, on `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` after `310878c`. **F22b** *paints* the resolved borders, on `subapavel/fulgur` `htmltopdf/srgb-colours` after `19c4782`. F22b's design is fixed here (§3.3) so both PRs share one contract. Line numbers are from those heads. I had no `css-spec-researcher` output.
 
 ## 1. Problem
 
@@ -242,4 +242,77 @@ F22b steps (next PR), each one day or less: b1 convert and drawables plus suppre
 
 ## 7. Result
 
-(to be filled)
+Fork commits. Blitz (`subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`, after `310878c`): `6973fd6` resolver, `25f4f90` row owners and resolve (output-neutral), `3e5a924` layout, `fadaabb` origin of each segment. fulgur (`htmltopdf/srgb-colours`, after `19c4782`): `7e97cfa` convert, paint and lib tests, `1d32ddf` two VRT goldens, `0a97ce1` `examples/tagged-pdf/index.pdf`. Ours: this branch.
+
+### F22b was folded into F22a, and why
+
+The plan expected the cells' own style to be `none`, so that an F22a that only changes layout would paint nothing new. It is not: Tailwind's preflight sets `border: 0 solid; border-color: currentColor` on everything, so a cell is `solid` at computed width 0. With the half widths the cell got in F22a, fulgur painted a 1 px line in the cell's own colour (gray-900) under every ruled row, where Chrome has the row's gray-100. F22a alone grew fixture 09 from 5.1 / 4.9 / 0.7 % to 5.2 / 5.2 / 0.9 % (stop rule). The coordinator decided to continue with F22b on the same branch, as one PR, rather than suppress the cells' borders as an interim (that would have dropped the whole grid of 03 and 20 until paint landed). With F22b 09 is 4.0 / 3.8 / 0.7 %.
+
+### Step 0: Chrome 141 measurements
+
+Probes `probe.mjs`, `probe-pdf.mjs`, `g-chrome.mjs` (`getBoundingClientRect` and Chrome's PDF read with `pdftotext -bbox` / `pdftoppm -r 96`; scratch, not committed). 5 rows, 28 px each without borders:
+
+| Probe | Result |
+|---|---|
+| `tr` rule 1 / 2 / 3 px | pitch 29 / 30 / 31 px (21.75 / 22.5 / 23.25 pt); first row 28.5 / 29 / 29.5, table 145 / 150 / 155 px |
+| `td` border 1 / 2 px | pitch 29 / 30 px, the table is 1 / 2 px taller than the rows, not 5 |
+| row 4 px against cell 2 px bottom | pitch 32 px (24 pt): the wider wins, not 2 + 4 |
+| cell `border-bottom: hidden` against a 3 px row rule | pitch 28 px: `hidden` suppresses |
+| `tbody { border-top: 3px }` | first body row 29.5 px high, table 87 px; only the first row |
+| `divide-y` (1 px) | rows 28.5 / 29 / 29 / 29 / 28.5 px: bottom border of every row but the last |
+| `width: 300px`, 10 px cell borders | table border-box 300 px, 5 px of the outer line in the table, 5 px in the cell; first word at 5 + 5 + 4 = 14 px; `box-sizing: content-box` gives 310 |
+| spill: row 1 cells 1 px, a row 2 cell `border-left: 10px` | the table's left border is 5 px (half of the **maximum** over the whole edge), right 0.5, top 0.5, bottom 0; **not** the first row's, which is what CSS 2.1 §17.6.2 says |
+| table border 6 px, cells 2 px | the line is 6 px, 3 px in the table, 3 px in the cell; rows 34 px high (28 + 3 + 3) |
+| colspan under 2 px and 6 px segments | both rows are 31 px high: a spanning cell takes the maximum (3) |
+| `thead { border-bottom: 2px }` | the header row and the first body row are 29 px, the others 28 |
+| break, rows with a 3 px rule (`brk_rows`) | the line on the break is cut: its upper half (1.5 px, drawn 2) ends page 1, its lower half starts page 2 (red at y 0-1); the first whole rule of page 2 is at y 30-32 against 28-30 on page 1 |
+| repeated `thead` with only a header rule (`brk_headonly`) | the copy has its own rule, blue at y 28-30 on every page |
+| repeated `thead` and a 3 px row rule on the body (`brk_head`) | the line under the copy is the row's red, not the header's blue (equal width, row beats row group) |
+| junction (10 px blue vertical, 10 px red horizontal) | the vertical line is painted over the whole red band, to the band's bottom edge |
+
+Equal contents in G6: Chrome divides a table's free width between auto columns in proportion to their content, Taffy equally (F129), so G6 uses identical words in both columns. Fixture words against the committed reference PDFs, `yMin` in pt (reference / main / now): 01 `úhradě` 425.67 / 420.94 / 425.44; 04 `Daň` 550.03 / 545.30 / 549.80; 20 `IBAN` 622.83 / 630.85 / 622.60; 02 `IF-1019` page 1 / page 1 / page 1, `IF-1020` page 2 / page 1 / page 2.
+
+### Tests
+
+`crates/htmltopdf/tests/row_borders.rs`: 21 tests. On main's binary G1, G2, G3, G6, G7 and G8 were red (6 of 8), G4 and G5 guards. With Blitz `3e5a924` all of G1-G8 are green. P1-P13 (the paint tests) were written ignored at that point and enabled with F22b; they pass against the pinned forks (I did not run them red one by one: P1, P3-P8 and P12-P13 cannot pass without paint; P11 and G5 are guards). Blitz: 20 unit tests in `collapsed_borders.rs` (every rule 1-6, symmetry, groups, anonymous rows, colspan, the table halves). fulgur: 5 unit tests in `table_borders.rs`, 3 in `convert/table.rs` (a collapsed table's edges and its cells' `none` styles, a separated table untouched, a nested table inheriting `collapse`), 4 smoke tests in `render.rs` (transform, overflow clip, opacity, tagged, 120 rows with a repeated header, spans, hidden and mixed styles). The plan's Blitz unit test "build_table_context gives a separate table no `CollapsedBorders`" needs a document; the fulgur test `a_separated_table_keeps_its_own_borders` covers it. G5 is also byte-checked: two separated documents are byte-identical between main's binary and the pinned one, as is `b200-text` and fixtures 01-20 for the data-only step (`25f4f90`).
+
+### Fixtures: worst page (%), pages unchanged on all 20
+
+| | main | F22a only | F22 | | main | F22a only | F22 |
+|---|---|---|---|---|---|---|---|
+| 01 | 4.4 | 3.3 | 3.0 | 11 | 6.9 | 3.2 | 3.1 |
+| 02 | 11.1 | 6.6 | 4.8 | 12 | 14.6 | 9.0 | 8.8 |
+| 03 | 5.7 | 4.7 | 4.7 | 13 | 11.7 | 11.7 | 11.7 |
+| 04 | 5.7 | 4.2 | 3.8 | 14 | 7.5 | 4.6 | 3.9 |
+| 05 | 3.5 | 3.5 | 3.3 | 15 | 8.7 | 5.3 | 4.5 |
+| 06 | 15.9 | 11.8 | 11.8 | 16 | 20.8 | 20.8 | 20.8 |
+| 07 | 7.2 | 5.3 | 3.7 | 17 | 12.0 | 7.6 | 5.7 |
+| 08 | 13.2 | 12.1 | 12.1 | 18 | 5.3 | 4.0 | 3.1 |
+| 09 | 5.1 | **5.2** | 4.0 | 19 | 3.1 | 3.1 | 3.1 |
+| 10 | 5.9 | 5.3 | 5.2 | 20 | 8.9 | 3.4 | 3.3 |
+
+No page of any fixture is above main's. Thresholds of the 17 that improved are lowered to the new worst + 1 point (`scripts/compare.py`); 13, 16, 19 did not move (their worst page has no collapsed table). Looked at the PNGs of 01, 02, 03, 04, 09, 18, 20: rows, rules, the totals bar and the page break of 02 (19 rows on page 1, like Chrome) line up with Chrome's, 04's indigo header rule is there, 09's row rules are the light gray of Chrome's (the dark half-lines are gone), the repeated header of 09 and 02 carries its rule. What is left in the diffs is text drift, the footer position (F103), the totals table of 01 placed too far right (F34), and on 03 and 20 grid lines that stand 1 px off Chrome's (the table is 1 px higher, all text with it). Estimates of §4 against the result: 03 4.0 expected, 4.7 got; 04 3.5 / 3.8; 20 5 / 3.3; 02 8-9 / 4.8; 18 3.8 / 3.1.
+
+### Goldens re-blessed (fork)
+
+- `fulgur-vrt` `layout/multicol-table-width` and `layout/table-caption-top`: `pdftocairo` diffs looked at, doubled shared borders became single lines, rows are one pixel shorter; nothing else moved.
+- `examples/tagged-pdf/index.pdf`: the doubled lines of its collapsed table are single.
+- Not touched, though they differ from a fresh render on this VM: `examples/svg/index.pdf` (no table in it; `committed_svg_matches_rendered` fails here, the SVG text uses host fonts), `examples/wasm-demo/index.pdf`, `examples/template/output.pdf` (not reproducible from `template.html` with the pinned fonts). Filed as F133. `examples/table-header/index.pdf` is byte-identical (its table is separated).
+- The lib tests at `pagination_layout.rs` and `render.rs` that build collapse tables did not need a change.
+
+### Speed
+
+`bench.py --check` ok. `b200-items` 1662 ms median (1615 ms before; the relative gate allows 2053 ms), `b200-text` 878 ms and `b200-mixed` 890 ms. `b200-items` grows from 204 to 210 pages and `b200-mixed` from 201 to 203, because every ruled row is now as tall as Chrome's; the bench prints a NOTE (210 outside 195-205). `b200-text` is byte-identical.
+
+### Deviations from the plan
+
+- F22b folded in (above).
+- The table's left and right border is half of the maximum over the whole edge (Chrome, probe spill), not of the first row.
+- Segment widths are stored in CSS px (`Px`), not pt: a line is a band of `w` px centred on the cell edge, snapped down to the px grid (`floor(c - w/2)`), which is where Chrome puts it. Blitz rounds the cell edges, so an odd-width line can stand 1 px off Chrome's.
+- Painting is a post-pass at the end of `draw_v2_page` (as the multicol rules are) and at the tail of the transform, overflow-clip and opacity wrappers, not "after the table's cells" in dispatch order: content painted after the table that overlaps it draws under its lines. `paint_collapsed_borders(canvas, table_id, only_group, ...)` of §3.3 became `paint_page`, `paint_tables` and `paint_header_copy` in `table_borders.rs`.
+- A line cut by a page break gets `ceil(w / 2)` px on each side (Chrome 1.5 px, drawn 2). The line under a repeated header is the better of the header's bottom line and the line the break cut (width, style, then origin; Blitz keeps the origin of every segment for it).
+- Junctions: a run is extended over half of the widest crossing segment and verticals are painted after horizontals. Translucent borders are painted twice where they cross (F131).
+- `border-radius` is zeroed on the cells only; a collapsed table keeps its own radius.
+- A table with no cells or no tracks keeps the separated geometry.
+- P2 uses `divide-gray-100` (only that colour is in the compiled CSS, tolerance 4 against white); P12 expects Chrome's indigo rgb(79, 57, 246); P7 and P8 expect 100 px columns because Blitz does not stretch explicit-width columns to the table's width (F130); P9 and P10 use text rows, since the fragmenter cuts an empty block row in two.
+- Not done: the Blitz unit test for a separated table (see Tests), `<col>` borders (F22c).
