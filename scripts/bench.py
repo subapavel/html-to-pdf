@@ -52,9 +52,10 @@ HARD_MS_FIXTURE = 100.0  # AGENTS.md: single-page invoice in low tens of ms
 HARD_MS_B200 = 1500.0  # AGENTS.md goal is 1000 ms on the dev VM; this is the any-machine limit (plan §2) ...
 HARD_MS_OVERRIDE = {
     # ... except where main is already over it. One 4800-row table with margin boxes (counter(pages) in the footer) takes
-    # about 2.3 s for 200 pages on the dev VM (docs/benchmarks.md): the goal is not met for this shape, so the limit is a
-    # backstop against a collapse, not the goal. Lower it in the PR that makes the shape faster.
-    "b200-items": 6000.0,
+    # about 1.6 s for 200 pages on the dev VM since F99b (2.3 s before; docs/benchmarks.md): the goal is not met for this
+    # shape, so the limit (about 1.8x the median, a CI runner is slower) is a backstop against a collapse, not the goal.
+    # Lower it in the PR that makes the shape faster.
+    "b200-items": 3000.0,
 }
 GOAL_MS_B200 = 1000.0  # reported, not gated
 B200_PAGES = (195, 205)  # a b200-* document that leaves this range no longer measures "200 pages"
