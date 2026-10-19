@@ -1,6 +1,6 @@
 # F111: text directly in `<body>` that is taller than a page loses its tail
 
-Date: 2026-10-19. Finding: F111 (`2026-10-15-m0-findings.md:650-652`). Status: planned. The engine fix goes on the fulgur fork `subapavel/fulgur` `htmltopdf/srgb-colours` (after `2103e35`). Our crate gets tests, the lock bump and fixture 19. The Blitz fork stays unchanged. Line references are to `/home/user/fulgur`, `/home/user/blitz` (`htmltopdf/blitz-dom-0.2.4`) and this repo as I read them; I could not run git to confirm the fork commit.
+Date: 2026-10-19. Finding: F111 (`2026-10-15-m0-findings.md:650-652`). Status: done (§7). The engine fix goes on the fulgur fork `subapavel/fulgur` `htmltopdf/srgb-colours` (after `2103e35`). Our crate gets tests, the lock bump and fixture 19. The Blitz fork stays unchanged. Line references are to `/home/user/fulgur`, `/home/user/blitz` (`htmltopdf/blitz-dom-0.2.4`) and this repo as I read them; I could not run git to confirm the fork commit.
 
 ## 1. Problem
 
@@ -174,3 +174,56 @@ Options considered:
   - F30c parity of body-level widows.
 
 ## 7. Result
+
+Done 2026-10-19. Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `6c9af6a` (pagination), `a79ccfe` (body paragraph render), `152c65a` (guards found by triage),
+`41a8c8a` (safety net), all after `2103e35`. Ours: lock bump to `41a8c8a` (one line), tests, fixture 19.
+
+### Step 0 (main's binary `3986a85`, A4, 15 mm, `body{margin:0;line-height:20px}`, 200 lines or 4000 words; Chrome m141 with `@page{size:A4}`)
+
+Chrome's page size is Letter unless `@page` says A4; every probe sets it. `scripts/reference/render.mjs` takes fixture names only, so arbitrary files went through the scratch `chrome-pdf.mjs`.
+
+| Shape | main: pages / printed | Chrome: pages / printed |
+|---|---|---|
+| S1 `<br>` lines in body | 1 / 53 of 200, no warning | 4 / 200 |
+| S2 in `<span>`, `<font>`, `<b>` | 1 / 53 each | 4 / 200 |
+| S3 `<html>Line…</html>`; bare string | 1 / 53; 1 / 55 (quirks) | 4 / 200; 4 / 200 |
+| S4 4000 words in body | 1 / 624 | 7 / 4000 |
+| S5 + `body{padding:20px}` | 1 / **0 text** | 5 / 200 |
+| S6 + `body{background:#fafafa}` | 1 / **0 text** | 4 / 200 |
+| item 6, short body (`padding:24px` or background, "Dobrý den") | **no text** | text |
+| S7 text, `<p>`, text | 1 / all | 1 / all |
+| S8 td, li, flex item, abspos, nested div, flex body | 4 / 5 / 4 / 4 / 4 / 4 pages, 200 of 200 each | 4 / 5 / 4 / 4 / 4 / 4 |
+| S9 S1 with a running footer | 1 / 53, footer once | n/a (no `running()`) |
+| S10 short body | 1 / all | 1 / all |
+| `div` / `<p>` wrapper (reference shape) | 4 / 200; S4 7 / 4000; S5 5 / 200 | the same |
+
+Dump (a scratch test in the fork, removed): S1, S2, S3, S5 body `is_inline_root() == true`, `layout_children` empty (`Some(0)`), 399 `children`, one body fragment `(page 0, y 0, h 3840)` and 1 page; S7 and the flex body are not inline roots (`layout_children` 3 / 399). Item 6 holds: the early return at `render.rs:856` hides the paragraph of a body with a block style. The stop condition (S1's body not an inline root) did not trigger.
+
+### Red before
+
+- `body_inline_split.rs`: 9 of 12 red on the old pin (S1, S2, S3, S4, S5 x2, S6, S9, image); the guards S7, S8, S10 green. 53 of 200, 624 of 4000, 0 words for S5 / S6 as in the table.
+- `page_bottom_warning.rs`: the silent cases pass trivially on main (nothing warns); red at the first must-warn case.
+- Fork: 3 of 5 pagination unit tests red (the short body and the transformed body are guards), both `render_smoke` tests red (1 page instead of 4; no text). The `PaintExtent::note_bottom` test is new code (red = does not compile).
+
+### After
+
+- 12 of 12 and 1 of 1 green on the bump; fork `cargo test -p fulgur` (lib 2182 + 271 smoke + 45 targets) and `fulgur-vrt` green and byte-identical, `examples_determinism` 10 of 11 (the known SVG failure), `clippy -D warnings` and `fmt --check` clean.
+- Fixtures 01-18: PDFs `cmp`-identical to main's binary, `compare.py` numbers unchanged, no warning line. `bench/corpus/*` (7 files) byte-identical to main, same warning count. `bench.py --check` ok, b200 numbers unchanged (items 1580, text 970, mixed 897 ms).
+- Fixture 19 (`19-plain-text-invoice`, 85 lines): 2 pages like Chrome's, page 2 starts with `PLATEBNÍ ÚDAJE` as in Chrome, 3.1 / 2.8 %, threshold 4 %. Looking at the PNGs: same lines on the same pages, only glyph-edge drift in the diff. Main printed 1 page, 50 lines.
+
+### Deviations and why
+
+1. **Line taller than a page → leave body to the walk** (`body_line_split`, `152c65a`). A body of `Intro<br><inline-block 200 lines>` has a line the splitter cannot cut; splitting around it would have placed the box whole where F30f fragments it through the children walk. Test `body_inline_root_with_a_line_taller_than_a_page_is_left_to_the_walk`.
+2. **The "None" warning only for a barrier.** My first version called `warn_unprinted_inline_lines` whenever body stayed whole; for a body that is one tall inline-block line it said "placed whole" although F30f splits that box (false positive, found by reasoning while triaging the net).
+3. **The net records the lowest baseline of a line with text or an image, not `y + Σ line.height`** (plan §3). Triage over the fork's suites: the carrier line of an `inline-block` alone on its line is as tall as the box (958 pt past the edge in `render_smoke_inline_block_paragraph_spans_pages`, `…inline_table…`), and a multicol line box hung 0.9 pt over a 100 pt page. Lines with only inline boxes (or white space) are skipped. Final hits over the fork suites, fixtures 01-18, `bench/corpus`: one, `abs_positioned_pagination::nested_abs_offset_resolves_against_cb_not_flow` (a true loss, F119).
+4. **Must-warn case.** "inline-flex around 4000 words → past the bottom page edge" does not hold: inline box content is painted under a translation (`enter_local`) that the net does not follow, and an `inline-flex` without `width` is max-content wide (F120), so the plan's case warns about the right edge only. The test uses an absolutely positioned box at the page edge for the net, and asserts the F30f "in an inline-flex or inline-grid box is placed whole" warning for the `width:100%` inline-flex.
+5. S10's "no warning" is in the silent list of `page_bottom_warning.rs` (one global logger), not in `body_inline_split.rs`.
+6. Extras: the body paragraph is drawn under the body's opacity; the split branch records the running placeholders itself (production also has `append_running_placeholders`); `fixtures.rs` gets a text check for 19; fixture 19 has 85 lines, not "about 85".
+
+### Not verified
+
+`vrt-validator` and `pdf-reviewer` (run afterwards by the owner's agent): the body paragraph now goes through `draw_paragraph_dispatch` for tagged output; `--tagged` renders S1, S5, S9 with all lines but the PDFs were not reviewed (poppler prints "Suspects object is wrong type" on tagged files). Body text with links in a split body was not probed beyond the unresolved-anchor message (F121).
+
+### Findings filed
+
+F119 (abspos box at the page edge loses its text), F120 (inline-flex / inline-grid is max-content wide), F121 (`#id` of an inline element in a split paragraph is not a link target), F122 (`body{height:100vh;overflow:hidden}`: body is a clip barrier, CSS propagates it to the viewport).
