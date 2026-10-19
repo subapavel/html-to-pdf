@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0017 (reference)</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  /* Chrome ignores position: running() and element(), so the reference has no footer in the body and prints
+     the same two halves from @page strings (see README). */
+  @page {
+    size: A4;
+    margin: 15mm;
+    @bottom-left { content: "Příkladná integrace s.r.o. · IČO 12345678 · DIČ CZ12345678"; font-family: Inter, sans-serif; font-size: 9pt; color: #6b7280; }
+    @bottom-right { content: "IBAN CZ65 0800 0000 1920 0014 5399 · www.example.cz"; font-family: Inter, sans-serif; font-size: 9pt; color: #6b7280; }
+  }
+  thead { display: table-header-group; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0017</span> · období 09/2026</p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 1. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 31. 10. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold w-8">#</th>
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right w-16">Množ.</th>
+      <th class="py-2 px-2 font-semibold text-right w-24">Cena/h</th>
+      <th class="py-2 pl-2 font-semibold text-right w-28">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">1</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2001 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">2</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2002 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">3</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2003 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">5 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">4</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2004 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">11 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">5</td>
+      <td class="py-1.5 pr-2">Monitoring a podpora IF-2005 – řešení incidentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">6</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2006 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">3 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">8 700,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">7</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2007 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 900,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">8</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2008 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">14 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">9</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2009 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">3 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">10</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2010 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">11</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2011 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">12</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2012 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">11 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">13</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2013 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">17 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">14</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2014 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">14 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">15</td>
+      <td class="py-1.5 pr-2">Oprava mapování IF-2015 – chybějící pole v segmentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">11 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">16</td>
+      <td class="py-1.5 pr-2">Monitoring a podpora IF-2016 – řešení incidentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">17</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2017 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">5 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">18</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2018 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">1 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">19</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2019 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">1 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">20</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2020 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">4 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">21</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2021 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">22</td>
+      <td class="py-1.5 pr-2">Monitoring a podpora IF-2022 – řešení incidentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">23 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">23</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2023 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">10 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">24</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2024 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">8 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">25</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2025 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">15 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">26</td>
+      <td class="py-1.5 pr-2">Oprava mapování IF-2026 – chybějící pole v segmentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">27</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2027 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">3 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">5 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">28</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2028 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">5 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">29</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2029 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">10 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">30</td>
+      <td class="py-1.5 pr-2">Monitoring a podpora IF-2030 – řešení incidentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">31</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2031 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">3 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">5 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">32</td>
+      <td class="py-1.5 pr-2">Oprava mapování IF-2032 – chybějící pole v segmentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">33</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2033 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 500,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">34</td>
+      <td class="py-1.5 pr-2">Testování rozhraní IF-2034 – scénář s partnerem</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">15 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">35</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2035 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">17 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">36</td>
+      <td class="py-1.5 pr-2">Analýza rozhraní IF-2036 – mapování IDoc → XML</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">37</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2037 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 900,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">38</td>
+      <td class="py-1.5 pr-2">Oprava mapování IF-2038 – chybějící pole v segmentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">3 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">39</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2039 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">10 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">40</td>
+      <td class="py-1.5 pr-2">Vývoj iFlow IF-2040 – SOAP adaptér, WS-Security</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 800,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">10 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">41</td>
+      <td class="py-1.5 pr-2">Konzultace architektury IF-2041 – groovy vs. XSLT</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">13 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100 break-inside-avoid">
+      <td class="py-1.5 pr-2 text-gray-500 tabular-nums">42</td>
+      <td class="py-1.5 pr-2">Oprava mapování IF-2042 – chybějící pole v segmentu</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">1 h</td>
+      <td class="py-1.5 px-2 text-right tabular-nums">2 900,00</td>
+      <td class="py-1.5 pl-2 text-right tabular-nums">2 900,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<section class="break-inside-avoid flex justify-end mt-6">
+  <table class="text-sm w-80">
+    <tbody>
+      <tr><td class="py-1 text-gray-600">Základ daně</td><td class="py-1 text-right tabular-nums">379 500,00 Kč</td></tr>
+      <tr><td class="py-1 text-gray-600">DPH 21 %</td><td class="py-1 text-right tabular-nums">79 695,00 Kč</td></tr>
+      <tr class="border-t-2 border-gray-900 text-lg font-bold"><td class="pt-2">Celkem k úhradě</td><td class="pt-2 text-right tabular-nums">459 195,00 Kč</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</body>
+</html>
