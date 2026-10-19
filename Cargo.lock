@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#310878c64c12a445eb54c3592c9fc3de381892d6"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#fadaabb3698d2f210ee4d5ffcc90765a57be541c"
 dependencies = [
  "accesskit",
  "app_units",
@@ -957,7 +957,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#19c478275a458b3bd5905cc7569ba8eb590e1efb"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#0a97ce1c4e9b9de891bce73c966c8d9cad1bddc9"
 dependencies = [
  "blitz-dom",
  "blitz-html",
