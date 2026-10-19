@@ -126,6 +126,11 @@ THRESHOLDS = {
     #     while ours starts at its left edge and sits about 11 px higher (centre margin box alignment, F110, and vertical centring, F103). On main's binary the page was
     #     A4 with 15 mm margins. Worst page + 1 point.
     "18-a5-receipt": 0.063,
+    # 19: new in F111 (a plain-text invoice: 85 lines of text and `<br>` directly in `<body>`, no block around them, 2 pages like
+    #     Chrome's; the shape of e-mail and ERP templates). 3.1 / 2.8 %: only the text drift every fixture has (glyph edges), page 2
+    #     starts with the same line as Chrome's (`PLATEBNÍ ÚDAJE`). On main's binary this printed 1 page with the first 50 lines
+    #     and no warning (the other 35 were lost). Worst page + 1 point.
+    "19-plain-text-invoice": 0.041,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
