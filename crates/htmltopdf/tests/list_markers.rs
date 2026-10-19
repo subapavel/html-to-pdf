@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
 /// Where the item text starts (CSS px).
 const TEXT_X: usize = 100;
@@ -280,8 +280,8 @@ fn render_with(b: htmltopdf::RendererBuilder, css: &str, body: &str) -> Vec<u8> 
         &format!("<!doctype html><html><body>{body}</body></html>"),
         &RenderOptions {
             page: Page {
-                margin_mm: 0.0,
-                ..Page::A4
+                margin: Some(Margins::uniform_mm(0.0)),
+                ..Page::default()
             },
             ..Default::default()
         },

@@ -456,7 +456,7 @@ fn render(images: &[(&str, Vec<u8>)], body: &str) -> Vec<u8> {
         .render(
             &format!("<!doctype html><html><body>{body}</body></html>"),
             &RenderOptions {
-                page: Page::A4,
+                page: Page::default(),
                 ..Default::default()
             },
         )

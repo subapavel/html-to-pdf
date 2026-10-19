@@ -18,7 +18,7 @@
 //! The page is A4 with 15 mm margins (content box 1009.1 px) and 20 px lines unless a test says otherwise. Words are
 //! found with `pdftotext -bbox`.
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, PageSize, RenderOptions, Renderer};
 
 /// A4 height in pt and the 15 mm page margin.
 const PAGE_H_PT: f32 = 841.89;
@@ -743,15 +743,18 @@ fn a_split_inline_block_ends_inside_the_content_box_on_other_pages_and_margins()
     for (what, page, height_pt, margin_pt) in [
         (
             "landscape",
-            Page::A4.landscape(),
+            Page {
+                size: Some(PageSize::A4.landscape()),
+                ..Page::default()
+            },
             210.0 / 25.4 * 72.0,
             15.0 / 25.4 * 72.0,
         ),
         (
             "40 mm",
             Page {
-                margin_mm: 40.0,
-                ..Page::A4
+                margin: Some(Margins::uniform_mm(40.0)),
+                ..Page::default()
             },
             297.0 / 25.4 * 72.0,
             40.0 / 25.4 * 72.0,

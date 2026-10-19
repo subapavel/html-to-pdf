@@ -12,7 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
 /// Tolerance for "same line", in pt.
 const TOL: f32 = 1.0;
@@ -324,7 +324,7 @@ fn render(body: &str) -> Vec<u8> {
     render_at(CSS, body, 20.0)
 }
 
-/// The page margin is explicit because `Page::margin_mm` wins over `@page`.
+/// The page margin is explicit because the caller's `Page::margin` wins over `@page`.
 fn render_at(css: &str, body: &str, margin_mm: f32) -> Vec<u8> {
     Renderer::builder()
         .css(format!("body {{ margin: 0 }} {css}"))
@@ -333,8 +333,8 @@ fn render_at(css: &str, body: &str, margin_mm: f32) -> Vec<u8> {
             &format!("<!doctype html><html><body>{body}</body></html>"),
             &RenderOptions {
                 page: Page {
-                    margin_mm,
-                    ..Page::A4
+                    margin: Some(Margins::uniform_mm(margin_mm)),
+                    ..Page::default()
                 },
                 ..Default::default()
             },

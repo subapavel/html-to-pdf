@@ -11,9 +11,9 @@
 //! - (c) the running text is in the margin band on exactly the pages the case lists;
 //! - (d) X has as many link annotations as X_ref plus one per margin box that shows a link.
 //!
-//! The renderer's page margin (15 mm) wins over `@page { margin }` (F6), so the content area is the one the
-//! default page gives, not the one the documents' own `@page` rule asks for. Positions come from
-//! `pdftotext -bbox`, link and image counts from the file itself and `pdfimages -list`.
+//! The content area is the one the document's own `@page` rule gives (F6): 15 mm all round when it sets no margin
+//! (the default), 25 mm top and bottom for the R1 page. Positions come from `pdftotext -bbox`, link and image counts
+//! from the file itself and `pdfimages -list`.
 
 use std::path::{Path, PathBuf};
 
@@ -21,6 +21,24 @@ use htmltopdf::{RenderOptions, Renderer};
 
 const PAGE_H_PT: f32 = 841.89;
 const MARGIN_PT: f32 = 15.0 / 25.4 * 72.0;
+
+/// The top and bottom margin of the page a case prints on, in pt: the content area lies between them.
+#[derive(Clone, Copy)]
+struct Band {
+    top: f32,
+    bottom: f32,
+}
+
+/// The default page: 15 mm.
+const DEFAULT_BAND: Band = Band {
+    top: MARGIN_PT,
+    bottom: MARGIN_PT,
+};
+/// `@page { margin: 25mm 15mm }` of R1.
+const R1_BAND: Band = Band {
+    top: 25.0 / 25.4 * 72.0,
+    bottom: 25.0 / 25.4 * 72.0,
+};
 /// Positions of the same word in two renders may differ by this much.
 const EPS_PT: f32 = 0.5;
 
@@ -45,12 +63,12 @@ impl Word {
     fn centre_y(&self) -> f32 {
         (self.y0 + self.y1) / 2.0
     }
-    /// Inside the content area of the default page (between the top and bottom margin).
-    fn in_content(&self) -> bool {
-        (MARGIN_PT..=PAGE_H_PT - MARGIN_PT).contains(&self.centre_y())
+    /// Inside the content area of the page (between its top and bottom margin).
+    fn in_content(&self, band: Band) -> bool {
+        (band.top..=PAGE_H_PT - band.bottom).contains(&self.centre_y())
     }
-    fn in_margin(&self) -> bool {
-        !self.in_content()
+    fn in_margin(&self, band: Band) -> bool {
+        !self.in_content(band)
     }
 }
 
@@ -218,7 +236,7 @@ struct Shows {
 }
 
 /// The checks (a) to (d) for one case: `x` is the document with the running elements, `x_ref` without.
-fn check(name: &str, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
+fn check(name: &str, band: Band, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
     let wx = words(x);
     let wr = words(x_ref);
     assert_eq!(
@@ -228,8 +246,8 @@ fn check(name: &str, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
     );
 
     // (a) the content area is the one of the document without the running element.
-    let cx: Vec<&Word> = wx.iter().filter(|w| w.in_content()).collect();
-    let cr: Vec<&Word> = wr.iter().filter(|w| w.in_content()).collect();
+    let cx: Vec<&Word> = wx.iter().filter(|w| w.in_content(band)).collect();
+    let cr: Vec<&Word> = wr.iter().filter(|w| w.in_content(band)).collect();
     let texts = |v: &[&Word]| v.iter().map(|w| w.text.clone()).collect::<Vec<_>>();
     if texts(&cx) != texts(&cr) {
         let first = cx
@@ -268,7 +286,7 @@ fn check(name: &str, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
     for s in shows {
         if let Some(w) = wx
             .iter()
-            .find(|w| w.text.starts_with(s.token) && w.in_content())
+            .find(|w| w.text.starts_with(s.token) && w.in_content(band))
         {
             panic!(
                 "{name}: (b) `{}` is painted in the content area of page {} at ({:.2},{:.2})",
@@ -290,7 +308,7 @@ fn check(name: &str, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
     for s in shows {
         let mut on: Vec<usize> = wx
             .iter()
-            .filter(|w| w.text.starts_with(s.token) && w.in_margin())
+            .filter(|w| w.text.starts_with(s.token) && w.in_margin(band))
             .map(|w| w.page)
             .collect();
         on.dedup();
@@ -391,7 +409,7 @@ fn r1_running_header_is_painted_only_in_the_margin_inline_style() {
     let x = render(&r1_html(true, true), &s);
     let x_ref = render(&r1_html(false, true), &s);
     assert_eq!(pages(&x_ref), 3, "the case must span three pages");
-    check("R1 inline", &x, &x_ref, &r1_shows(), &[]);
+    check("R1 inline", R1_BAND, &x, &x_ref, &r1_shows(), &[]);
 }
 
 #[test]
@@ -399,7 +417,7 @@ fn r1_running_header_is_painted_only_in_the_margin_renderer_css() {
     let s = r1_setup(false);
     let x = render(&r1_html(true, false), &s);
     let x_ref = render(&r1_html(false, false), &s);
-    check("R1 css", &x, &x_ref, &r1_shows(), &[]);
+    check("R1 css", R1_BAND, &x, &x_ref, &r1_shows(), &[]);
 }
 
 #[test]
@@ -446,6 +464,7 @@ fn r2_header_footer_and_a_third_running_element() {
     };
     check(
         "R2",
+        DEFAULT_BAND,
         &x,
         &x_ref,
         &[all("RUNHDR"), all("RUNFTR"), all("RUNICO")],
@@ -480,6 +499,7 @@ fn r3_first_except_and_a_source_on_page_two() {
     assert_eq!(pages(&x_ref), 3);
     check(
         "R3",
+        DEFAULT_BAND,
         &x,
         &x_ref,
         &[
@@ -543,7 +563,7 @@ fn r4_footer_with_table_image_and_flex() {
     let x = render(&r4_html(true, rule), &s);
     let x_ref = render(&r4_html(false, rule), &s);
     assert_eq!(pages(&x_ref), 2);
-    check("R4", &x, &x_ref, &r4_shows(), &[]);
+    check("R4", DEFAULT_BAND, &x, &x_ref, &r4_shows(), &[]);
     // An image in the margin copy is not painted at all today (F107: the margin-box documents are converted
     // without the image assets), so this is 0 and 0; once F107 is fixed it is 1 and 1. Either way the image is
     // not painted a second time in the body and both pages agree.
@@ -558,7 +578,14 @@ fn r4_author_display_in_the_same_rule() {
     let s = r4_setup("");
     let x = render(&r4_html(true, rule), &s);
     let x_ref = render(&r4_html(false, rule), &s);
-    check("R4 same-rule display", &x, &x_ref, &r4_shows(), &[]);
+    check(
+        "R4 same-rule display",
+        DEFAULT_BAND,
+        &x,
+        &x_ref,
+        &r4_shows(),
+        &[],
+    );
     let n = images_per_page(&x, 2);
     assert!(
         n[0] <= 1 && n[0] == n[1],
@@ -590,7 +617,7 @@ fn r4_author_important_display_is_not_painted() {
     let wx = words(&x);
     let on: Vec<usize> = wx
         .iter()
-        .filter(|w| w.text.starts_with("RUNP") && w.in_margin())
+        .filter(|w| w.text.starts_with("RUNP") && w.in_margin(DEFAULT_BAND))
         .map(|w| w.page)
         .collect();
     assert_eq!(
@@ -600,7 +627,7 @@ fn r4_author_important_display_is_not_painted() {
     );
     for w in wx.iter().filter(|w| w.text.starts_with("RUNP")) {
         assert!(
-            w.in_margin(),
+            w.in_margin(DEFAULT_BAND),
             "RUNP is painted in the body: page {} ({:.1},{:.1})",
             w.page,
             w.x0,
@@ -637,6 +664,7 @@ fn r5_nested_running_elements() {
     let x_ref = render(&r5_html(false), &s);
     check(
         "R5",
+        DEFAULT_BAND,
         &x,
         &x_ref,
         &[
@@ -689,6 +717,7 @@ fn r6_between_the_paragraphs_of_a_split_section() {
     assert_eq!(pages(&x_ref), 2, "the section must split over two pages");
     check(
         "R6",
+        DEFAULT_BAND,
         &x,
         &x_ref,
         &[Shows {
@@ -709,7 +738,7 @@ fn r7_tagged_output_has_no_structure_for_the_running_source() {
     s.tagged = true;
     let x = render(&r1_html(true, true), &s);
     let x_ref = render(&r1_html(false, true), &s);
-    check("R7", &x, &x_ref, &r1_shows(), &[]);
+    check("R7", R1_BAND, &x, &x_ref, &r1_shows(), &[]);
     assert_eq!(
         count(&x, "/Type /StructElem"),
         count(&x_ref, "/Type /StructElem"),
@@ -739,7 +768,7 @@ fn r8_running_element_that_no_element_places_is_not_displayed() {
     let s = Setup::default();
     let x = render(&html(true), &s);
     let x_ref = render(&html(false), &s);
-    check("R8", &x, &x_ref, &[], &["RUNX"]);
+    check("R8", DEFAULT_BAND, &x, &x_ref, &[], &["RUNX"]);
     assert_eq!(link_count(&x), 0);
     assert_eq!(link_count(&x_ref), 0);
 }

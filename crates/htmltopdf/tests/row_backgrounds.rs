@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
 const RED: [u8; 3] = [255, 0, 0];
 const GREEN: [u8; 3] = [0, 128, 0];
@@ -171,7 +171,7 @@ fn root() -> PathBuf {
         .unwrap()
 }
 
-/// A margin-less A4 page (`Page::margin_mm` wins over `@page`) with `css` and `body` inside.
+/// A margin-less page (the caller's `Page::margin` wins over `@page`) with `css` and `body` inside.
 fn render(css: &str, body: &str) -> Vec<u8> {
     Renderer::builder()
         .css(format!("body {{ margin: 0 }} {css}"))
@@ -180,8 +180,8 @@ fn render(css: &str, body: &str) -> Vec<u8> {
             &format!("<!doctype html><html><body>{body}</body></html>"),
             &RenderOptions {
                 page: Page {
-                    margin_mm: 0.0,
-                    ..Page::A4
+                    margin: Some(Margins::uniform_mm(0.0)),
+                    ..Page::default()
                 },
                 ..Default::default()
             },
