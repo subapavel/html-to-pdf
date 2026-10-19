@@ -90,20 +90,26 @@ fn separate_model_is_unchanged() {
 fn table_holds_half_the_outer_border() {
     // G6. `width: 300px` with 10 px cell borders. Chrome: the table's border-box is 300 px wide and holds half
     // of the outer border (5 px) on each side, the cell half another 5 px, so the first word is at 5 + 5 + 4
-    // px = 10.5 pt; the second column starts at 158.03 px (118.52 pt text). The right edge enters through the
-    // second word: a table that came out wider or narrower than 300 px would shift it.
-    let html = "<table style=\"width: 300px\"><tr><td>Aa</td><td>Bb</td></tr>\
-                <tr><td>Cc</td><td>Dd</td></tr></table>";
+    // px = 10.5 pt. The two columns have the same content, so they are 145 px wide each and the second word is at
+    // 5 + 145 + 5 + 4 px = 119.25 pt. The right edge enters through that: a table that came out wider or narrower
+    // than 300 px would shift it. (With different words Chrome divides the width in proportion to the contents and
+    // Taffy equally, which is not what this test is about.)
+    let html = "<table style=\"width: 300px\"><tr><td>Aa</td><td>Aa</td></tr>\
+                <tr><td>Cc</td><td>Cc</td></tr></table>";
     let found = words(&render_g(&format!(
         "<style>td {{ border: 10px solid }}</style>{html}"
     )));
-    for (text, x) in [("Aa", 10.5), ("Cc", 10.5), ("Bb", 118.52), ("Dd", 118.52)] {
-        let w = word(&found, text);
-        assert!(
-            (w.x_min - x).abs() < PITCH_TOL,
-            "`{text}` is at x {:.2} pt, Chrome has {x}",
-            w.x_min
-        );
+    for (text, xs) in [("Aa", [10.5, 119.25]), ("Cc", [10.5, 119.25])] {
+        let mut at: Vec<&Word> = found.iter().filter(|w| w.text == text).collect();
+        at.sort_by(|a, b| a.x_min.total_cmp(&b.x_min));
+        assert_eq!(at.len(), 2, "`{text}` is printed {} times", at.len());
+        for (w, x) in at.iter().zip(xs) {
+            assert!(
+                (w.x_min - x).abs() < PITCH_TOL,
+                "`{text}` is at x {:.2} pt, Chrome has {x}",
+                w.x_min
+            );
+        }
     }
     let rows = word(&found, "Cc").y_min - word(&found, "Aa").y_min;
     assert!(
