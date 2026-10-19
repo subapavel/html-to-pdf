@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0020</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<header class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura 2026-0020</h1>
+    <p class="text-sm text-gray-500">Daňový doklad</p>
+  </div>
+  <div class="text-right text-sm">
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-3 gap-6 mb-8 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1</p>
+    <p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Termíny</h2>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-3">
+      <dt class="text-gray-500">Vystaveno</dt><dd class="tabular-nums">19. 10. 2026</dd>
+      <dt class="text-gray-500">DUZP</dt><dd class="tabular-nums">19. 10. 2026</dd>
+      <dt class="text-gray-500">Splatnost</dt><dd class="tabular-nums font-semibold">2. 11. 2026</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- HTML 4.01 §11.2.3 order, still produced by older ERP templates: thead, tfoot, tbody.
+     CSS 2.1 §17.2 prints the footer group after all other rows. -->
+<table class="w-full border-collapse text-sm mb-6">
+  <thead>
+    <tr class="bg-gray-100">
+      <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Popis</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-20">Množství</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-28">Cena/ks</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-16">DPH</th>
+      <th class="border border-gray-300 px-3 py-2 text-right font-semibold w-32">Celkem</th>
+    </tr>
+  </thead>
+  <tfoot>
+    <tr>
+      <td colspan="4" class="border border-gray-300 px-3 py-2 text-right text-gray-600">Základ daně</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">53 140,00</td>
+    </tr>
+    <tr>
+      <td colspan="4" class="border border-gray-300 px-3 py-2 text-right text-gray-600">DPH 21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">11 159,40</td>
+    </tr>
+    <tr class="bg-gray-900 text-white font-bold">
+      <td colspan="4" class="border border-gray-900 px-3 py-2 text-right">Celkem k úhradě</td>
+      <td class="border border-gray-900 px-3 py-2 text-right tabular-nums">64 299,40 Kč</td>
+    </tr>
+  </tfoot>
+  <tbody>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Servisní paušál – říjen 2026</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">12 000,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">12 000,00</td>
+    </tr>
+    <tr class="bg-gray-50">
+      <td class="border border-gray-300 px-3 py-2">Správa serverů a monitoring</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">8 500,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">8 500,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Zálohování dat (500 GB)</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 900,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 900,00</td>
+    </tr>
+    <tr class="bg-gray-50">
+      <td class="border border-gray-300 px-3 py-2">Konzultace – architektura integrace</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">6 h</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">2 500,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">15 000,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Úprava exportu do účetního systému</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">3 h</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">2 500,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">7 500,00</td>
+    </tr>
+    <tr class="bg-gray-50">
+      <td class="border border-gray-300 px-3 py-2">Zřízení certifikátu a nasazení</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 ks</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">3 200,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">3 200,00</td>
+    </tr>
+    <tr>
+      <td class="border border-gray-300 px-3 py-2">Školení obsluhy</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">2 h</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 800,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">3 600,00</td>
+    </tr>
+    <tr class="bg-gray-50">
+      <td class="border border-gray-300 px-3 py-2">Cestovné – Trutnov, Praha</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">120 km</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">12,00</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">21 %</td>
+      <td class="border border-gray-300 px-3 py-2 text-right tabular-nums">1 440,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<section class="rounded-lg border border-gray-200 p-4 text-sm">
+  <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Platební údaje</h2>
+  <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+    <dt class="text-gray-500">Účet</dt><dd class="font-mono">123456789/0300</dd>
+    <dt class="text-gray-500">IBAN</dt><dd class="font-mono">CZ65 0300 0000 0001 2345 6789</dd>
+    <dt class="text-gray-500">VS</dt><dd class="font-mono">20260020</dd>
+    <dt class="text-gray-500">Částka</dt><dd class="font-mono font-semibold">64 299,40 CZK</dd>
+  </dl>
+</section>
+
+</body>
+</html>

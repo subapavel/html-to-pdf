@@ -131,6 +131,12 @@ THRESHOLDS = {
     #     starts with the same line as Chrome's (`PLATEBNÍ ÚDAJE`). On main's binary this printed 1 page with the first 50 lines
     #     and no warning (the other 35 were lost). Worst page + 1 point.
     "19-plain-text-invoice": 0.041,
+    # 20: new in F36 (an items table written `thead, tfoot, tbody`, the HTML 4.01 order, with the dark total row in the footer, one
+    #     page like Chrome's). 8.9 %: on main's binary the totals were printed straight under the column headings and the 8 items
+    #     below them (12.4 %). The rest is the text drift every fixture has and the 11 rows of the table, each about 0.9 px taller
+    #     than Chrome's because collapsed `<tr>` borders are not painted (Blitz #386 / F22), which adds up to 7 px at the last item.
+    #     Worst page + 1 point; F22 brings it down.
+    "20-tfoot-first": 0.099,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
