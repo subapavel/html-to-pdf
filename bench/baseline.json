@@ -13,8 +13,8 @@
     "02-long": {
       "kind": "fixture",
       "pages": 3,
-      "min_ms": 53.8,
-      "median_ms": 57.0
+      "min_ms": 37.9,
+      "median_ms": 41.6
     },
     "03-logo-qr": {
       "kind": "fixture",
@@ -103,8 +103,8 @@
     "b200-items": {
       "kind": "b200",
       "pages": 200,
-      "min_ms": 2357.0,
-      "median_ms": 2433.0
+      "min_ms": 1442.7,
+      "median_ms": 1575.2
     },
     "b200-text": {
       "kind": "b200",

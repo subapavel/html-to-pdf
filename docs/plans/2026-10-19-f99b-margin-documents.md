@@ -1,6 +1,6 @@
 # F99b — `@page` margin-box documents (second F99 step)
 
-Date: 2026-10-19. Finding: F99 (speed). Status: **planned**. Profile: `2026-10-19-f99-speed-profile.md` (C2a, C2b, C2c, §3). Previous step: `2026-10-19-f99a-parallel-construct.md`.
+Date: 2026-10-19. Finding: F99 (speed). Status: **done** (§7). Profile: `2026-10-19-f99-speed-profile.md` (C2a, C2b, C2c, §3). Previous step: `2026-10-19-f99a-parallel-construct.md`.
 The fixes go on the Blitz fork (`subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`, after `b720ad0`) and the fulgur fork (`htmltopdf/srgb-colours`, after `33f8993`), carried via `[patch.crates-io]`. The line references below are to those commits. I read them in the working trees at `/home/user/blitz` and `/home/user/fulgur` and could not confirm the checked-out commit with git. Stylo is crates.io `stylo` 0.8.0.
 
 ## 1. Problem and measurement
@@ -166,4 +166,102 @@ Gains are estimates from the profile's attribution unless marked as measured.
 
 ## 7. Result
 
-(Filled in at landing: commits, the bench table before/after, RSS, the `cmp` matrix, the mutation-check result, which of 1b and A was taken and why, deviations, what was not verified.)
+Blitz fork `a2ee966` (`SharedStyles`) and `d4258c6` (public read accessors), on `b720ad0`; fulgur fork `6a6da9b`, on `33f8993`; both pushed, `Cargo.lock` pins them. Machine: 4 vCPU Xeon 2.1 GHz, shared VM (spread 2-8 %, so under about 5 % is noise).
+**Variant 1b (sheet out of band) was taken**; fallback A was only prototyped for the gate and is not in the code.
+
+### 7.1 Step 2, the measurement gate (scratch workspace with `[patch]` to the local forks, release, `b200-items` median of 5)
+
+| Variant | `cmp` against main (`b200-items`, `02-long`, `01-basic`, 1 and 4 threads) | `b200-items` median | vs main (2275 ms, same session) |
+|---|---|---:|---:|
+| A (wrapper keeps its `<style>`, shared sheet reused on a text match) | 6 of 6 identical | 1797 ms | -478 ms |
+| 1b (sheet attached at document creation, wrapper without `<style>`) | 6 of 6 identical | 1564 / 1522 ms (two runs) | -711 / -753 ms |
+
+1b clears the 600 ms bar and is identical, so A was dropped (no env-var switch, no text-equality lookup in `process_style_element`) and step 5 (per-render `font_cache`) was not needed. `02-long`: 57.9 -> 36-40 ms.
+The node ids of 1b shift by 2 and the PDFs are still identical, as the plan expected.
+
+### 7.2 Change
+
+- **Blitz** (`shared_styles.rs`, `config.rs`, `document.rs`): `SharedStyles` (`new(base_url)`, `with_author_sheet(sheet)`, `lock()`, `base_url()`, `ua_sheets()`, `author_sheets()`; an `Arc` inside, so a clone per document is a reference count), `DocumentConfig::shared_styles`,
+  `BaseDocument::stylesheet_of_node`. With `Some(shared)`, `BaseDocument::new` uses the shared lock, appends the shared UA and author sheets to its `Stylist` and fills `ua_stylesheets`; `debug_assert`s that `ua_stylesheets` is `None` and the base URL is the shared one.
+  Without it nothing changes.
+- **fulgur** (`blitz_adapter.rs`, `render.rs`): `MarginDocEnv` (shared styles, an `Option<FontContext>` template, `author_sheet_attached`, `PhantomData<Cell<()>>`) and `parse_and_layout_margin_doc`; `MarginBoxRenderer::env: OnceCell<MarginDocEnv>`, created on the first
+  cache miss; stages 1a, 1b and 3 use it, and their wrappers drop `<style>{margin_css}</style>` (`margin_wrapper_style`). The author sheet comes from a probe document (`<!doctype html>...<style>{css}</style>`, same shared lock) read back with `stylesheet_of_node`.
+  A CSS text that contains `</style` (case-insensitive) is not probed: the wrapper keeps its own `<style>`, and the lock, UA sheet and fonts are still shared. The font template is built once (`shared: false`, `Blob::new(Arc::clone(data))`, generics applied once) and cloned per document.
+- **Ours**: the lock bump, determinism tests, baseline, override, docs.
+
+### 7.3 Speed (release CLI, `scripts/bench.py --skip-slow`, median of 7, min / median ms, main's binary `f00877c` (identical to this branch's binary before the change) and the new binary back to back)
+
+| Document | Pages | Before | After | Change of the median |
+|---|---:|---:|---:|---:|
+| 01-basic | 1 | 17.6 / 17.8 | 15.8 / 19.0 | noise |
+| 02-long | 3 | 50.6 / 53.6 | 37.9 / 41.6 | **-12 ms (-22 %)** |
+| 03-logo-qr | 1 | 19.0 / 23.4 | 23.4 / 27.5 | noise |
+| 04-bilingual-vat | 1 | 21.1 / 23.3 | 18.8 / 20.9 | noise |
+| 05-fancy | 1 | 20.8 / 23.0 | 24.0 / 25.0 | noise |
+| 06-long-notes | 2 | 22.0 / 23.3 | 21.8 / 25.7 | noise |
+| 07-heading-margin | 2 | 20.1 / 24.1 | 20.0 / 22.4 | noise |
+| 08-terms-grid | 2 | 27.0 / 33.4 | 26.4 / 30.2 | noise |
+| 09-fixed-row-height | 3 | 21.7 / 23.8 | 22.5 / 23.3 | noise |
+| 10-stacked-items | 2 | 17.5 / 21.4 | 17.3 / 20.1 | noise |
+| 11-full-width-rows | 1 | 14.7 / 15.1 | 15.8 / 19.0 | noise |
+| 12-terms-columns | 2 | 21.6 / 22.9 | 21.7 / 23.4 | noise |
+| 13-terms-keep-together | 3 | 23.2 / 25.2 | 23.7 / 24.1 | noise |
+| 14-totals-keep-together | 2 | 17.1 / 19.3 | 18.2 / 18.9 | noise |
+| 15-paid-stamp | 2 | 19.8 / 28.8 | 19.2 / 21.6 | noise |
+| 16-terms-card | 2 | 26.3 / 29.1 | 22.4 / 23.6 | noise |
+| b200-items | 200 | 2156 / 2256 | 1443 / 1575 | **-681 ms (-30 %)** |
+| b200-text | 200 | 769 / 815 | 816 / 891 | noise (no margin boxes; 4 alternating re-runs: 869, 851 before, 875, 865 after) |
+| b200-mixed | 201 | 790 / 834 | 848 / 902 | noise (alternating re-runs: 935, 863 before, 879, 898 after) |
+
+The target was at least 600 ms for `b200-items`: met (-681 ms; -711 and -753 ms in the two gate runs). The one-page invoices do not move: their main document does not use the environment (a non-goal), and the one-page fixtures have no page-varying footer.
+`bench.py --check --runs 5`: ok (`b200-items` 1573 ms against the new limit 2053 ms, `b200-text` 857, `b200-mixed` 871). `bench/baseline.json`: `b200-items` 1442.7 / 1575.2 (was 2357.0 / 2433.0), `02-long` 37.9 / 41.6 (was 53.8 / 57.0); nothing raised, other rows as they were.
+`HARD_MS_OVERRIDE["b200-items"]` 6000 -> 3000 ms (about 1.8x the median; the comment in `bench.py` says why).
+
+Peak RSS (`resource.getrusage` of the child): `b200-items` 243.9 -> 242.7 MB, `02-long` 30.3 -> 27.1 MB. The shared sheets and one font template are not visible in it.
+F100 is unchanged: 416 stdout lines on `b200-items`, 9 on fixture 02 (the probe has a doctype and prints none).
+
+### 7.4 Determinism and the mutation check
+
+`determinism_threads.rs` has two margin scenarios: M1 (`--css` `div { letter-spacing: .5px }`, Inter Regular) and M2 (`div { word-spacing: 4px; font-weight: 700 }`, Inter Regular + Bold, `@bottom-left { font-family: "JetBrains Mono" }`); both are 36 pages with a running header
+(`element()`), `counter(page)` / `counter(pages)` and a constant box. Tests: `margin_boxes_do_not_see_the_environment_of_earlier_renders` (M1, M2, M2, M1 in one process, each equal to a fresh process), `margin_boxes_are_identical_when_rendered_concurrently` (2 x M1 and 2 x M2 on 4 threads),
+`margin_scenarios_differ`. All green on main's code and on the change. **Mutation check (not committed)**: `margin_env` made a process-wide `static OnceLock` (with `unsafe impl Sync`) in the local fulgur tree, built in a scratch workspace: test 1 went **red**
+("M2 after M1: differs from a fresh process (55828 vs 54693 bytes, first difference at 383)"), the concurrent test went red too, `margin_scenarios_differ` stayed green. Mutation reverted; the fork trees are clean.
+In the Blitz fork a second mutation (the author sheets not appended) turned two of the five new lib tests red; in the fulgur fork the same mutation turned `margin_env_matches_fresh_document` and `margin_env_attaches_the_render_css_without_a_style_element` red.
+
+### 7.5 Checks
+
+| Check | Result |
+|---|---|
+| `cmp` matrix: fixtures 01-16 + `bench/corpus/` (3 b200 + 4 slow = 23 documents), `RAYON_NUM_THREADS` 1 and 4, final locked binary against main `f00877c` | 46 of 46 byte-identical |
+| `scripts/compare.py` | `summary.json` byte-identical to main's; thresholds unchanged, all ok; `02-long-p3.png` looked at: footer ("Faktura 2026-0002 ..." and "Strana 3 / 3") present and unchanged |
+| `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings` (ours) | clean |
+| `cargo test --release --locked --no-fail-fast` (ours) | 452 passed, 0 failed, 43 test binaries (449 before + the 3 margin tests) |
+| Blitz fork `cargo test -p blitz-dom --lib` | 43 passed (default features), 45 passed (`--features parallel-construct`); 5 new; `cargo fmt --check` clean; clippy shows only the three warnings that were there |
+| fulgur fork `--lib --features parallel-construct` (local Blitz) | 2155 passed (4 new: `margin_env_matches_fresh_document`, `margin_env_attaches_the_render_css_without_a_style_element`, `margin_documents_of_one_env_share_sheets_and_lock`, `margin_env_without_fonts_uses_the_blitz_default_context`) |
+| fulgur fork `render_smoke` / `gcpm_integration` (local Blitz) | 263 passed (1 new, 3-page `counter(page)` footer) / 18 passed |
+| fulgur fork `fulgur-vrt` (`FONTCONFIG_FILE=...fonts-noinInter.conf`, local Blitz) | all green, goldens untouched |
+| fulgur fork `examples_determinism` | 10 of 11; `committed_svg_matches_rendered` fails as in every earlier item |
+| fulgur fork `cargo clippy --all-targets --features parallel-construct -- -D warnings`, `cargo fmt --check` | clean (the one Blitz warning is in the path dependency) |
+| `bench.py --check` | ok |
+
+`margin_env_matches_fresh_document` compares, for 6 contents (plain text, `<div style>`, class rules, a `<style>` in the content, one repeating the render's CSS, `position: fixed`) x 7 CSS texts (empty, CRLF, `&amp;`, `@import`, `@media`, a `</style` inside a comment) x measure and
+render wrappers: measured width and height, the drawables, and the shaped runs (text, size, colour, offset, glyph ids and advances) and the pagination geometry. The new-path wrapper has a `<title>` where the old one had the `<style>`, which gives both documents the same
+node ids; the production wrapper has neither.
+
+### 7.6 Deviations from the plan
+
+- `SharedStyles::with_author_sheet(sheet)` takes no text (the plan had `(text, sheet)`): with 1b nothing reads the text. `ua_sheets()` and `author_sheets()` are public read accessors (a second small Blitz commit) so that the fulgur test can check what the environment holds.
+- The `</style` guard (a CSS text that would end the wrapper's `<style>` early keeps the old wrapper) is not in the plan.
+- The fulgur test that two documents of one environment share their sheets checks the environment's sheets, the lock and the font clones; that two documents hold the same UA sheet `Arc` is checked in the Blitz fork (`ServoArc::ptr_eq`), because a document's sheet list is not public.
+- Variant A was prototyped for the gate only (env-var switch in the scratch build) and is not in the code.
+- Commit trailers carry the attribution the session harness prescribes (`Claude Sonnet 5.5`), not the `Claude Opus 5.5` line the task text gave (as in F99a).
+- `vrt-validator` and `pdf-reviewer` (§4) were not run by this session (no subagent tool); see 7.7.
+
+### 7.7 Not verified
+
+- `vrt-validator` and `pdf-reviewer`: not run. The PDFs are byte-identical on 46 renders (16 fixtures, 7 corpus documents, 2 thread counts), which is the evidence here; the fonts path (blobs shared without a copy, a cloned `FontContext` per margin document) is what `pdf-reviewer` should look at.
+- Margin boxes with `@page :first` / `:left` / `:right` overrides, left / right edge boxes (stage 1b), `string-set`, `target-counter` and `system_fonts(true)` (the `fonts: None` branch): covered by the lib equivalence test or the existing tests only in part; no fixture or corpus document has them.
+- A machine with fewer cores or a CI runner; the 3000 ms override is 1.8x this VM's median, not measured elsewhere.
+- Whether Stylo's process-wide UA cascade-data cache now hits (the plan expected it): not measured separately; the gain is the whole of the measured -681 ms.
+- The remaining footer cost (about 0.2 s of `b200-items`) is inferred from 1.57 s and the table's 1.4 s; not re-measured with the footers removed.
+- bindings, wasm.

@@ -46,12 +46,12 @@ under a minute. They are for watching a number go down when a finding is fixed.
 ## Current numbers
 
 Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 runs, 2026-10-18 (`bench/baseline.json`); the `b200-text` and `b200-mixed` rows were lowered by F99a
-(parallel shaping, 2026-10-19, same VM):
+(parallel shaping, 2026-10-19, same VM), the `b200-items` and `02-long` rows by F99b (margin-box documents share one style and font environment, 2026-10-19, same VM):
 
 | Document | Pages | min ms | median ms |
 |---|---:|---:|---:|
 | 01-basic | 1 | 21.1 | 22.1 |
-| 02-long | 3 | 53.8 | 57.0 |
+| 02-long | 3 | 37.9 | 41.6 |
 | 03-logo-qr | 1 | 23.7 | 27.8 |
 | 04-bilingual-vat | 1 | 23.1 | 25.7 |
 | 05-fancy | 1 | 24.3 | 29.1 |
@@ -66,7 +66,7 @@ Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 run
 | 14-totals-keep-together | 2 | 19.3 | 21.2 |
 | 15-paid-stamp | 2 | 20.4 | 22.0 |
 | 16-terms-card | 2 | 22.7 | 25.1 |
-| b200-items | 200 | 2357 | 2433 |
+| b200-items | 200 | 1443 | 1575 |
 | b200-text | 200 | 787 | 879 |
 | b200-mixed | 201 | 811 | 862 |
 | slow-paragraph (1 run) | 59 | 3777 | 3777 |
@@ -76,18 +76,19 @@ Release CLI of main `d532069`, dev VM (4x Intel Xeon @ 2.10GHz), median of 7 run
 
 Reading it:
 
-- A fixture is 17-57 ms, the single-page ones 18-29 ms: "low tens of ms" holds; 02-long (60 rows, 3 pages) is the slowest.
-- **The 200-page goal is met by `b200-text` and `b200-mixed` since F99a** (0.88 s and 0.86 s; they were 1.12 s and 1.08 s) and not by `b200-items` (2.3-2.4 s), while 800 plain paragraphs make 160 pages in 0.35 s
-  (F78's measurement). `b200-items` without its two margin boxes takes about 1.4 s, so the footers cost about 1.1 s (5 ms per page) and the table
-  alone is over the goal. Filed as F99 in the findings; `docs/plans/2026-10-19-f99-speed-profile.md` says where the time goes, F99a (`2026-10-19-f99a-parallel-construct.md`) took the first step.
+- A fixture is 17-42 ms, the single-page ones 18-29 ms: "low tens of ms" holds; 02-long (60 rows, 3 pages) is the slowest (it was 57 ms before F99b: its footer is a page-number box).
+- **The 200-page goal is met by `b200-text` and `b200-mixed` since F99a** (0.88 s and 0.86 s; they were 1.12 s and 1.08 s) and not by `b200-items` (1.6 s since F99b, 2.3-2.4 s before), while 800 plain paragraphs make 160 pages in 0.35 s
+  (F78's measurement). `b200-items` without its two margin boxes takes about 1.4 s, so the table alone is over the goal and the footers, which cost about 1.1 s (5 ms per page) before F99b, are
+  down to roughly 0.2 s (inferred from 1.57 s minus 1.4 s, not re-measured without the footers). Filed as F99 in the findings; `docs/plans/2026-10-19-f99-speed-profile.md` says where the time goes,
+  F99a (`2026-10-19-f99a-parallel-construct.md`) and F99b (`2026-10-19-f99b-margin-documents.md`) took the first two steps.
 - The very first render of a large document can be much slower than the rest (`b200-items` took 5.7 s once, then 2.2-2.5 s; cause not investigated, probably cold caches); that is why gated documents get a warm-up.
 
 ## The guard (`--check`)
 
 Applies to gated documents (fixtures and `b200-*`). A document fails when its median exceeds
 
-- the **hard budget**, on any machine: 100 ms for a fixture, 1500 ms for a `b200-*`; `b200-items` is 6000 ms because main already needs
-  2.4 s (`HARD_MS_OVERRIDE` in the script; lower it in the PR that makes that shape faster), or
+- the **hard budget**, on any machine: 100 ms for a fixture, 1500 ms for a `b200-*`; `b200-items` is 3000 ms because it takes about 1.6 s
+  (`HARD_MS_OVERRIDE` in the script, 6000 ms until F99b; lower it in the PR that makes that shape faster), or
 - **baseline x 1.30 + 5 ms**, only when the machine label (`nproc` + CPU model) equals the one in `bench/baseline.json`. A CI runner has a
   different label, so there only the hard budgets apply until a `bench/baseline-ci.json` exists (plan §4 step 4: commit it from the first CI
   artifact).
@@ -113,5 +114,5 @@ F99 (200-page budget), F82 (`slow-paragraph`), F30d-d (`slow-multicol`), F83f (`
 
 ## Not covered
 
-Library-level timing (no process start), peak memory (F99a measured it once with `resource.getrusage` of the child: `/usr/bin/time` is not installed on the dev VM; 128-243 MB for the b200 documents), multi-threaded callers, and anything on CI hardware
+Library-level timing (no process start), peak memory (F99a and F99b measured it with `resource.getrusage` of the child: `/usr/bin/time` is not installed on the dev VM; 128-243 MB for the b200 documents, 243 MB `b200-items` before and 243 MB after F99b), multi-threaded callers, and anything on CI hardware
 until the first CI run has produced numbers.

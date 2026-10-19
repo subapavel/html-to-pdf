@@ -8,6 +8,11 @@
 //! construction and not by the order the test harness happens to run the tests in.
 //!
 //! Documents are large enough (hundreds of inline layouts) that every worker of a 2-4 thread pool takes part.
+//!
+//! F99b adds two `@page` margin-box scenarios (M1, M2). The margin-box documents of one render share a style and
+//! font environment (the Blitz `SharedStyles` and a font template, both owned by that render's `MarginBoxRenderer`).
+//! These tests are the guard that the environment of one render never reaches another render in the same process:
+//! the two scenarios differ in the `--css` sheet, in the bundled fonts and in the margin boxes' own `font-family`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -102,6 +107,61 @@ fn doc_b() -> String {
     s
 }
 
+/// M1: Inter Regular only; the `--css` sheet spaces letters of every `div`, margin boxes included.
+fn renderer_m1() -> Renderer {
+    Renderer::builder()
+        .font_bytes(font("Inter-Regular.ttf"))
+        .unwrap()
+        .css("div { letter-spacing: .5px }")
+        .strict_fonts(true)
+        .build()
+}
+
+/// M2: Inter Regular and Bold; the `--css` sheet spaces words and makes every `div` bold.
+fn renderer_m2() -> Renderer {
+    Renderer::builder()
+        .font_bytes(font("Inter-Regular.ttf"))
+        .unwrap()
+        .font_bytes(font("Inter-Bold.ttf"))
+        .unwrap()
+        .css("div { word-spacing: 4px; font-weight: 700 }")
+        .strict_fonts(true)
+        .build()
+}
+
+/// 36 pages, each with a running header (`element()`), a `counter(page)` / `counter(pages)` footer and a constant
+/// footer box. `left_font` is the `font-family` of the `@bottom-left` box.
+fn doc_margin(tag: &str, left_font: &str) -> String {
+    let mut s = format!(
+        "<!doctype html><html><head><style>\
+         @page {{ size: A4; margin: 20mm 15mm 25mm 15mm; \
+           @top-center {{ content: element(hdr); }} \
+           @bottom-right {{ content: \"Strana \" counter(page) \" / \" counter(pages); font-size: 9pt; }} \
+           @bottom-left {{ content: \"Faktura {tag} · Příkladná integrace s.r.o.\"; font-family: {left_font}; font-size: 8pt; }} \
+         }} \
+         .hdr {{ position: running(hdr); }} \
+         .pg {{ break-after: page; }}\
+         </style></head><body>\
+         <div class=\"hdr\">Daňový doklad {tag} <b>č. 2026-001</b></div>"
+    );
+    for i in 0..36 {
+        s.push_str(&format!(
+            "<p class=\"pg\">Stránka {i}: položka {tag}-{i}, Kč {} včetně DPH</p>",
+            i * 137
+        ));
+    }
+    s.push_str("</body></html>");
+    s
+}
+
+fn doc_m1() -> String {
+    doc_margin("M1", "Inter")
+}
+
+fn doc_m2() -> String {
+    doc_margin("M2", "\"JetBrains Mono\"")
+}
+
 fn render(r: &Renderer, html: &str) -> Vec<u8> {
     r.render(html, &RenderOptions::default()).expect("render")
 }
@@ -116,6 +176,8 @@ fn scenario(name: &str) -> (Renderer, String) {
         "b" => (renderer_b(), doc_b()),
         "g1" => (renderer_g1(), doc_b()),
         "g2" => (renderer_g2(), doc_b()),
+        "m1" => (renderer_m1(), doc_m1()),
+        "m2" => (renderer_m2(), doc_m2()),
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -213,6 +275,22 @@ fn references() -> &'static BTreeMap<&'static str, Vec<u8>> {
         let dir = scratch("refs");
         let mut m = BTreeMap::new();
         for name in ["a", "b", "g1", "g2"] {
+            let out = dir.join(format!("{name}.pdf"));
+            run_child(name, &out, None);
+            m.insert(name, std::fs::read(&out).unwrap());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        m
+    })
+}
+
+/// Same for the margin-box scenarios; separate so the F99a tests do not pay for two more child processes.
+fn margin_references() -> &'static BTreeMap<&'static str, Vec<u8>> {
+    static REFS: OnceLock<BTreeMap<&'static str, Vec<u8>>> = OnceLock::new();
+    REFS.get_or_init(|| {
+        let dir = scratch("margin-refs");
+        let mut m = BTreeMap::new();
+        for name in ["m1", "m2"] {
             let out = dir.join(format!("{name}.pdf"));
             run_child(name, &out, None);
             m.insert(name, std::fs::read(&out).unwrap());
@@ -320,4 +398,67 @@ fn fixtures_are_identical_at_one_and_four_rayon_threads() {
     }
     assert!(n >= 16, "expected the 16 fixtures, rendered {n}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// F99b: the margin-box documents of one render share one environment. A second render, with another `--css`
+/// sheet, other fonts and another margin-box font, must not see any of it (and a repeat must not see its own
+/// earlier self).
+#[test]
+fn margin_boxes_do_not_see_the_environment_of_earlier_renders() {
+    let refs = margin_references();
+    let (r1, r2) = (renderer_m1(), renderer_m2());
+    let (h1, h2) = (doc_m1(), doc_m2());
+    assert_same("M1 first", &render(&r1, &h1), &refs["m1"]);
+    assert_same("M2 after M1", &render(&r2, &h2), &refs["m2"]);
+    assert_same("M2 again", &render(&r2, &h2), &refs["m2"]);
+    assert_same("M1 after M2", &render(&r1, &h1), &refs["m1"]);
+}
+
+#[test]
+fn margin_boxes_are_identical_when_rendered_concurrently() {
+    let refs = margin_references();
+    let (r1, r2) = (renderer_m1(), renderer_m2());
+    let (h1, h2) = (doc_m1(), doc_m2());
+    // Two M1 and two M2 at the same time, from four threads.
+    std::thread::scope(|s| {
+        let hs: Vec<_> = (0..4)
+            .map(|i| {
+                let (r, h, key) = if i % 2 == 0 {
+                    (&r1, &h1, "m1")
+                } else {
+                    (&r2, &h2, "m2")
+                };
+                (key, s.spawn(move || render(r, h)))
+            })
+            .collect();
+        for (key, h) in hs {
+            assert_same(
+                &format!("{key} next to the other"),
+                &h.join().unwrap(),
+                &refs[key],
+            );
+        }
+    });
+}
+
+/// Sanity: the margin scenarios tell a leaked environment from a clean one, and they really have margin boxes
+/// on every page.
+#[test]
+fn margin_scenarios_differ() {
+    let r = margin_references();
+    assert_ne!(r["m1"], r["m2"], "the margin scenarios render the same");
+    for key in ["m1", "m2"] {
+        let pages = r[key].windows(11).filter(|w| *w == b"/Type /Page").count();
+        let pages_alt = r[key].windows(10).filter(|w| *w == b"/Type/Page").count();
+        assert!(
+            pages.max(pages_alt) >= 36,
+            "{key}: expected 36 page objects, found {} / {}",
+            pages,
+            pages_alt
+        );
+    }
+    assert!(
+        has_jetbrains(&r["m2"]) && !has_jetbrains(&r["m1"]),
+        "M2's @bottom-left uses JetBrains Mono, M1's does not"
+    );
 }
