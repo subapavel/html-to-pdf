@@ -4,7 +4,7 @@
 //! every table out as `separate`: row rules vanished, shared cell borders counted twice.
 //!
 //! F22a (layout, tests G1-G8) is Blitz: cells get half of the collapsed border on each side. F22b (painting, tests
-//! P1-P13, `#[ignore]`d until it lands) draws the resolved lines.
+//! P1-P13) draws the resolved lines.
 //!
 //! Expected numbers are Chrome 141's, from the step-0 probes of `docs/plans/2026-10-19-f22-row-borders.md` §7:
 //! the same HTML printed with Chrome (Inter loaded from `fixtures/fonts`, `@page { margin: 0 }`) and read with the
@@ -170,7 +170,6 @@ fn grid_rows(rows: usize, tr_style: &str, td_style: &str) -> String {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn tr_border_bottom_is_painted() {
     // P1. A 2 px red rule under each row, across all three cells; the line between rows 1 and 2 is centred on
     // y = 41 (row 1 is 40 + 1 px high), so it covers device rows 40 and 41.
@@ -188,7 +187,6 @@ fn tr_border_bottom_is_painted() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn divide_y_rows() {
     // P2. Tailwind's `divide-y` is `border-bottom-width: 1px` on every row but the last. Only `divide-gray-100`
     // (#f3f4f6) is in the compiled stylesheet, which is 12 off white: tolerance 4 still tells it from white.
@@ -211,7 +209,6 @@ fn divide_y_rows() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn row_group_border_top() {
     // P3. A 3 px blue line above the first body row only: the header row ends at 40 + 1.5 px.
     let html = format!(
@@ -227,7 +224,6 @@ fn row_group_border_top() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn wider_wins() {
     // P4. Cell 4 px green against row 2 px red: green over its column, the row's red over the others. The row is
     // 40 + 2 px high (half of the widest segment), so the line is centred on y = 42.
@@ -243,7 +239,6 @@ fn wider_wins() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn cell_beats_row_at_equal_width() {
     // P5 (§17.6.2.1 rule 5): same width, same style: cell > row.
     let html = "<table><tr style=\"border-bottom: 2px solid red\">\
@@ -256,7 +251,6 @@ fn cell_beats_row_at_equal_width() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn solid_beats_dotted() {
     // P6 (rule 4): at equal width the style decides, `solid` over `dotted`, whatever the origin.
     let html = "<table><tr style=\"border-bottom: 2px solid blue\">\
@@ -274,20 +268,19 @@ fn solid_beats_dotted() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn left_cell_wins() {
     // P7 (rule 6): two cells, equal borders on the line between them: the left one's colour.
     let html = "<table><tr>\
                 <td style=\"border-right: 2px solid red\"><div></div></td>\
                 <td style=\"border-left: 2px solid blue\"><div></div></td></tr></table>";
     let page = rasterise(&render_grid(html), 1, 96);
-    // The line is centred on the column boundary at x = 150 (two 150 px columns).
-    assert_pixel(&page, (149, 20), RED, "left cell's border");
-    assert_pixel(&page, (150, 20), RED, "left cell's border");
+    // The columns are 100 px wide (`td { width: 100px }`; Blitz does not stretch them to the table's 300 px as Chrome
+    // does), so the 2 px line covers x 100 and 101.
+    assert_pixel(&page, (100, 20), RED, "left cell's border");
+    assert_pixel(&page, (101, 20), RED, "left cell's border");
 }
 
 #[test]
-#[ignore = "F22b"]
 fn shared_line_painted_once() {
     // P8. Translucent borders: one layer of black at 50 % is 128 grey; painted by both neighbours it would be 64.
     let page = rasterise(
@@ -295,27 +288,29 @@ fn shared_line_painted_once() {
         1,
         96,
     );
-    assert_pixel(&page, (100, 20), [128, 128, 128], "line between two cells");
+    // The cells are 100 px wide plus their 2 px borders: the lines are 2 px wide at x 0, 102, 204 and 306.
+    assert_pixel(&page, (102, 20), [128, 128, 128], "line between two cells");
+    assert_pixel(&page, (103, 20), [128, 128, 128], "line between two cells");
 }
 
 #[test]
-#[ignore = "F22b"]
 fn rule_below_every_repeated_header() {
     // P9. 120 rows, `thead` with a 3 px blue bottom border: Chrome prints the header on every page with its own
-    // rule under it (probe brk_headonly: blue at CSS y 28-30 on pages 1 and 2).
-    let rows: String = (0..120).map(|_| "<tr><td><div></div></td></tr>").collect();
+    // rule under it (probe brk_headonly: blue at the same place on pages 1 and 2). The rows hold text, so the
+    // fragmenter breaks between them; the header row is 40 + 1.5 px high, its rule covers y 40-42.
+    let rows: String = (0..120).map(|_| "<tr><td>x</td></tr>").collect();
     let html = format!(
-        "<table><thead style=\"border-bottom: 3px solid blue\"><tr><td><div></div></td></tr></thead>\
+        "<table><thead style=\"border-bottom: 3px solid blue\"><tr><td>H</td></tr></thead>\
          <tbody>{rows}</tbody></table>"
     );
-    let pdf = render_grid(&html);
+    let pdf = render_text_grid(&html);
     let pages = page_count(&pdf);
     assert!(pages >= 3, "expected a multi-page table, got {pages}");
     for n in 1..=pages {
         let page = rasterise(&pdf, n, 96);
         assert_pixel(
             &page,
-            (150, 41),
+            (50, 41),
             BLUE,
             &format!("page {n}, rule under the header"),
         );
@@ -323,39 +318,42 @@ fn rule_below_every_repeated_header() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn rule_at_page_break() {
     // P10. A 3 px red rule under every row of a 60-row table, Chrome probe brk_rows: the line that falls on the
-    // break is cut in two, its upper half (1.5 px) ends page 1 and its lower half starts page 2 (red at CSS y 0-1),
-    // and the first rule of page 2 is centred 1.5 px lower than on page 1 (y 30-32 against 28-30).
-    let pdf = render_grid(&grid_rows(60, "border-bottom: 3px solid red", ""));
+    // break is cut in two, its upper half ends page 1 and its lower half (here 2 px, `ceil(3 / 2)`; Chrome
+    // 1.5 px drawn as 2) starts page 2, and the first whole rule of page 2 follows the 43 px pitch. Rows hold text,
+    // so the break is between them.
+    let pdf = render_text_grid(&format!(
+        "<table>{}</table>",
+        "<tr style=\"border-bottom: 3px solid red\"><td>x</td><td>x</td><td>x</td></tr>".repeat(60)
+    ));
     assert!(page_count(&pdf) >= 2);
     let second = rasterise(&pdf, 2, 96);
     assert_pixel(
         &second,
-        (150, 0),
+        (50, 0),
         RED,
         "lower half of the rule cut by the break",
     );
     assert_pixel(
         &second,
-        (150, 1),
+        (50, 1),
         RED,
         "lower half of the rule cut by the break",
     );
-    assert_pixel(&second, (150, 30), RED, "first whole rule of page 2");
-    assert_pixel(&second, (150, 10), WHITE, "first row of page 2");
+    assert_pixel(&second, (50, 5), WHITE, "first row of page 2");
+    assert_pixel(&second, (50, 42), RED, "first whole rule of page 2");
 }
 
 #[test]
-#[ignore = "F22b"]
 fn separate_model_paints_no_row_borders() {
     // P11. `border-collapse: separate`: rows cannot have borders (§17.6.1), no red anywhere on the page.
-    let html = format!(
-        "<style>table {{ border-collapse: separate }}</style>{}",
-        grid_rows(3, "border-bottom: 2px solid red", "")
+    let html = grid_rows(3, "border-bottom: 2px solid red", "");
+    let page = rasterise(
+        &render_grid_css("table { border-collapse: separate }", &html),
+        1,
+        96,
     );
-    let page = rasterise(&render_grid(&html), 1, 96);
     for y in 0..200 {
         for x in (0..300).step_by(7) {
             let p = page.pixel(x, y);
@@ -368,7 +366,6 @@ fn separate_model_paints_no_row_borders() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn fixture_04_header_rule_is_indigo() {
     // P12. `tr.border-b-2.border-indigo-600` on the items header: Chrome's reference has a 2 px line at device
     // y 341-342, 680 px wide, rgb(79, 57, 246).
@@ -389,7 +386,6 @@ fn fixture_04_header_rule_is_indigo() {
 }
 
 #[test]
-#[ignore = "F22b"]
 fn table_border_collapses_with_cells() {
     // P13. `border: 4px solid blue` on the table against 2 px cell borders: the 4 px line wins on the outer
     // edge, centred on it, so it covers x 0-3 inside the table's border box (half of it is in the table's border).
@@ -473,7 +469,20 @@ fn render_g(body: &str) -> Vec<u8> {
 }
 
 fn render_grid(body: &str) -> Vec<u8> {
-    let css = format!("body {{ margin: 0 }} {GRID}");
+    render_grid_css("", body)
+}
+
+/// Like [`GRID`] with rows of 40 px that hold a line of text instead of a `<div>`: the fragmenter breaks between such
+/// rows, where an empty block would be cut in two.
+fn render_text_grid(body: &str) -> Vec<u8> {
+    render_grid_css(
+        "td { height: 40px; line-height: 20px } td > div { height: auto }",
+        body,
+    )
+}
+
+fn render_grid_css(extra: &str, body: &str) -> Vec<u8> {
+    let css = format!("body {{ margin: 0 }} {GRID} {extra}");
     renderer(&css, false)
         .render(
             &format!("<!doctype html><html><body>{body}</body></html>"),
