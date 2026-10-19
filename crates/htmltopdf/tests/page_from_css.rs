@@ -6,6 +6,8 @@
 //! Asserted on the PDF's MediaBoxes (`pdfinfo -box`) and on word positions (`pdftotext -bbox`), tolerance 0.1 pt unless
 //! a test says otherwise. Plan: docs/plans/2026-10-19-f6-page-size-margins.md.
 
+use std::sync::{Mutex, Once};
+
 use htmltopdf::{Margins, Page, PageSize, RenderOptions, Renderer};
 
 const A4_W: f32 = 595.28;
@@ -513,4 +515,121 @@ fn t13_a_named_page_rule_is_dropped_and_the_page_stays_a4() {
         "<p>Ahoj</p>",
     );
     assert_size(&pdf, (A4_W, A4_H), "@page cover { size: A5 }");
+}
+
+// --- Warnings: boxes that differ from page 1's, and margins that leave no room -----------------------------------
+//
+// The log is global to the process and the tests run in parallel, so every test looks for a message made unique by
+// the sizes in its own document.
+
+static LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+struct Capture;
+
+impl log::Log for Capture {
+    fn enabled(&self, m: &log::Metadata<'_>) -> bool {
+        m.level() <= log::Level::Warn
+    }
+    fn log(&self, r: &log::Record<'_>) {
+        if r.level() <= log::Level::Warn
+            && (r.target().starts_with("fulgur") || r.target().starts_with("htmltopdf"))
+        {
+            LOG.lock().unwrap().push(r.args().to_string());
+        }
+    }
+    fn flush(&self) {}
+}
+
+fn capture_warnings() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        log::set_boxed_logger(Box::new(Capture)).unwrap();
+        log::set_max_level(log::LevelFilter::Warn);
+    });
+}
+
+/// The captured warnings that contain `needle`.
+fn warnings_with(needle: &str) -> Vec<String> {
+    LOG.lock()
+        .unwrap()
+        .iter()
+        .filter(|m| m.contains(needle))
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn w1_a_smaller_later_page_size_warns_that_pages_follow_page_1s_box() {
+    capture_warnings();
+    // A3 first page, A5 for the rest: 299 lines fill 4 pages against the A3 box, of which most is lost on A5 pages
+    // (F109). The page size says what happened; the output is not changed.
+    let css = format!(
+        "@page {{ size: A5; margin: 10mm }} @page :first {{ size: A3; margin: 10mm }} {LINES20}"
+    );
+    let body: String = (1..=299)
+        .map(|i| format!("<p>Line{i:03} lorem ipsum</p>"))
+        .collect();
+    render(&css, &body);
+    let w = warnings_with("page 1's content box (785.2 x 1133.9 pt)");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("362.8 x 538.6 pt"), "{}", w[0]);
+    assert!(
+        w[0].contains("smaller, so content may be clipped or lost"),
+        "{}",
+        w[0]
+    );
+    assert!(w[0].contains("F109"), "{}", w[0]);
+}
+
+#[test]
+fn w1_a_larger_later_box_warns_too() {
+    capture_warnings();
+    // The letterhead shape (t12): later pages have room page 1's box does not.
+    let css = format!("@page :first {{ margin-top: 50mm }} {LINES20}");
+    render(&css, &lines(100));
+    let w = warnings_with("page 1's content box (510.2 x 657.6 pt)");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(
+        w[0].contains("larger, so the page is filled only as far as page 1's box"),
+        "{}",
+        w[0]
+    );
+}
+
+#[test]
+fn w1_pages_with_one_box_say_nothing() {
+    capture_warnings();
+    let css = format!("@page {{ size: 5in; margin: 7mm }} {LINES20}");
+    let pdf = render(&css, &lines(100));
+    assert!(media_boxes(&pdf).len() >= 2);
+    assert!(warnings_with("(320.2 x 320.2 pt)").is_empty());
+    assert!(warnings_with("page 1's content box (320.2").is_empty());
+}
+
+#[test]
+fn w2_a_margin_larger_than_the_page_warns() {
+    capture_warnings();
+    let pdf = render(
+        &format!("@page {{ size: A5; margin: 200mm }} {BODY0}"),
+        "<p>Ahoj</p>",
+    );
+    assert_size(&pdf, (419.53, 595.28), "margin 200mm");
+    let w = warnings_with("(page 419.5 x 595.3 pt, margins 566.9 / 566.9 / 566.9 / 566.9 pt)");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("the margins leave no room"), "{}", w[0]);
+}
+
+#[test]
+fn w2_a_caller_margin_larger_than_the_page_warns() {
+    capture_warnings();
+    render_with(
+        "@page { size: 99mm 98mm }",
+        "<p>Ahoj</p>",
+        &with_page(Page {
+            margin: Some(Margins::uniform_mm(60.0)),
+            ..Page::default()
+        }),
+    );
+    let w = warnings_with("(page 280.6 x 277.8 pt, margins 170.1 / 170.1 / 170.1 / 170.1 pt)");
+    assert_eq!(w.len(), 1, "{w:?}");
 }

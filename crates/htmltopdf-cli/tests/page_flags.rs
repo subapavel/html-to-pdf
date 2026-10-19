@@ -155,3 +155,11 @@ fn a_bad_page_size_is_an_error() {
     assert!(!ok, "--page-size Foo must fail");
     assert!(err.contains("page size"), "{err}");
 }
+
+#[test]
+fn a_margin_larger_than_the_page_is_reported() {
+    let c = Case::new("huge", "@page { size: A5 }");
+    let (ok, _, err) = c.render(&["--margin-mm", "1000"]);
+    assert!(ok, "{err}");
+    assert!(err.contains("the margins leave no room"), "{err}");
+}

@@ -41,8 +41,9 @@ enum Cmd {
         /// the document decides (15 mm when it says nothing).
         #[arg(long, value_parser = parse_margin_mm)]
         margin_mm: Option<f32>,
-        /// Landscape orientation: the long side of --page-size (A4 when there is none) is horizontal.
-        /// Overrides the document's `@page { size }`.
+        /// Landscape orientation: the long side of --page-size is horizontal. Without --page-size the page is
+        /// A4 landscape: the flag replaces the document's `@page { size }` (an A5 document becomes A4 landscape),
+        /// it does not rotate it. Use `@page { size: A5 landscape }` in the document to rotate its own size.
         #[arg(long)]
         landscape: bool,
         /// PDF title metadata.
