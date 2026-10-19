@@ -197,7 +197,7 @@ Fork: `running_pass_hides_registered_elements`, `running_pass_beats_a_later_disp
 | fork `examples_determinism` | 10 of 11, the one failure is `committed_svg_matches_rendered` (host fonts for SVG text, unrelated, "10/11 as before") |
 | `examples/header-footer`, `header-footer-split` | byte-identical to a render of `6a6da9b` (their rules reach Stylo through the AssetBundle) |
 | ours `cargo fmt --check`, `clippy --release --locked --all-targets -- -D warnings` | clean |
-| ours `cargo test --release --locked --no-fail-fast` | 357 passed, 0 failed |
+| ours `cargo test --release --locked --no-fail-fast` | 464 passed, 0 failed, 3 ignored, 44 binaries (corrected by the main session from the `vrt-validator` re-count: the first count of 357 was a miscount; 452 on main + 12 new `running_elements` tests) |
 | fixtures 01-16 and 7 `bench/corpus` PDFs against main, `RAYON_NUM_THREADS` 1 and 4 | `cmp`-identical (23 of 23 at each) |
 | `scripts/compare.py` | 01-16 unchanged (same numbers as before: 4.4, 11.4, 5.7, 5.7, 21.6, 15.9, 7.2, 13.2, 5.1, 5.9, 6.9, 14.6, 11.7, 7.5, 8.7, 20.8 worst page); 17 new |
 | `scripts/bench.py --check` | ok; 17-running-footer 36.6 ms median; `b200-items` 1511 ms, `b200-text` 870, `b200-mixed` 884 |

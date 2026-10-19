@@ -100,17 +100,17 @@
       "min_ms": 22.7,
       "median_ms": 25.1
     },
+    "17-running-footer": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 25.0,
+      "median_ms": 28.0
+    },
     "b200-items": {
       "kind": "b200",
       "pages": 200,
       "min_ms": 1442.7,
       "median_ms": 1575.2
-    },
-    "b200-text": {
-      "kind": "b200",
-      "pages": 200,
-      "min_ms": 786.7,
-      "median_ms": 878.5
     },
     "b200-mixed": {
       "kind": "b200",
@@ -118,17 +118,17 @@
       "min_ms": 811.0,
       "median_ms": 861.9
     },
-    "slow-paragraph": {
-      "kind": "slow",
-      "pages": 59,
-      "min_ms": 3777.2,
-      "median_ms": 3777.2
+    "b200-text": {
+      "kind": "b200",
+      "pages": 200,
+      "min_ms": 786.7,
+      "median_ms": 878.5
     },
-    "slow-multicol": {
+    "slow-avoid": {
       "kind": "slow",
-      "pages": 21,
-      "min_ms": 2460.3,
-      "median_ms": 2460.3
+      "pages": 399,
+      "min_ms": 1246.9,
+      "median_ms": 1246.9
     },
     "slow-breaks": {
       "kind": "slow",
@@ -136,11 +136,17 @@
       "min_ms": 2808.9,
       "median_ms": 2808.9
     },
-    "slow-avoid": {
+    "slow-multicol": {
       "kind": "slow",
-      "pages": 399,
-      "min_ms": 1246.9,
-      "median_ms": 1246.9
+      "pages": 21,
+      "min_ms": 2460.3,
+      "median_ms": 2460.3
+    },
+    "slow-paragraph": {
+      "kind": "slow",
+      "pages": 59,
+      "min_ms": 3777.2,
+      "median_ms": 3777.2
     }
   }
 }
