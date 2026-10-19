@@ -5,7 +5,8 @@
 //!
 //! The crate owns three things fulgur deliberately leaves to the caller:
 //!
-//! 1. **Print medium defaults** — A4, margins, `@page` handling for invoices.
+//! 1. **Print medium defaults** — the document's own `@page` rules decide the page size and margins; where it says
+//!    nothing the page is A4 with 15 mm margins, and what the caller sets in [`Page`] overrides the document (ADR-0005).
 //! 2. **Asset bundling** — fonts and stylesheets are always explicit; nothing is
 //!    read from the host system, so the same input renders byte-identically on a
 //!    developer laptop, in CI and in a cloud agent session.
@@ -30,7 +31,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use fulgur::{AssetBundle, Engine, Margin, PageSize};
+use fulgur::{AssetBundle, Engine, Margin};
 
 mod css_text;
 mod fonts;
@@ -142,39 +143,80 @@ fn join_unresolved(list: &[UnresolvedFamily]) -> String {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Page geometry. Values in millimetres; converted to PDF points internally.
+/// A paper size in millimetres. Converted to PDF points inside fulgur, never here.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Page {
+pub struct PageSize {
     pub width_mm: f32,
     pub height_mm: f32,
-    pub margin_mm: f32,
 }
 
-impl Page {
-    pub const A4: Page = Page {
+impl PageSize {
+    pub const A3: PageSize = PageSize {
+        width_mm: 297.0,
+        height_mm: 420.0,
+    };
+    pub const A4: PageSize = PageSize {
         width_mm: 210.0,
         height_mm: 297.0,
-        margin_mm: 15.0,
     };
-    pub const LETTER: Page = Page {
+    pub const A5: PageSize = PageSize {
+        width_mm: 148.0,
+        height_mm: 210.0,
+    };
+    pub const LETTER: PageSize = PageSize {
         width_mm: 215.9,
         height_mm: 279.4,
-        margin_mm: 15.0,
     };
 
+    /// The same paper with its long side horizontal (css-page-3 `landscape`). Idempotent: a page that is
+    /// already wider than it is tall is returned unchanged.
     pub fn landscape(self) -> Self {
-        Page {
-            width_mm: self.height_mm,
-            height_mm: self.width_mm,
-            ..self
+        PageSize {
+            width_mm: self.width_mm.max(self.height_mm),
+            height_mm: self.width_mm.min(self.height_mm),
         }
     }
 }
 
-impl Default for Page {
-    fn default() -> Self {
-        Page::A4
+/// The four page margins in millimetres.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Margins {
+    pub top_mm: f32,
+    pub right_mm: f32,
+    pub bottom_mm: f32,
+    pub left_mm: f32,
+}
+
+impl Margins {
+    pub const fn uniform_mm(mm: f32) -> Self {
+        Margins {
+            top_mm: mm,
+            right_mm: mm,
+            bottom_mm: mm,
+            left_mm: mm,
+        }
     }
+}
+
+/// The margin of a page whose document does not say: 15 mm on every side (ADR-0005).
+pub const DEFAULT_MARGIN_MM: f32 = 15.0;
+
+/// What the caller wants the page to be. A `None` field leaves that property to the document.
+///
+/// Precedence, per property (size, and each margin side) (ADR-0005, css-page-3 "Page context"):
+///
+/// 1. what the caller set here;
+/// 2. the document's `@page :first` / `:left` / `:right` rules;
+/// 3. the document's plain `@page` rule;
+/// 4. the default: A4 portrait and [`DEFAULT_MARGIN_MM`].
+///
+/// A caller's size is final, orientation included (`@page { size: A4 landscape }` does not turn a forced portrait
+/// size); use [`PageSize::landscape`] for a landscape one. Like the print dialog in a browser, setting a value here
+/// overrides the document's own choice for it.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Page {
+    pub size: Option<PageSize>,
+    pub margin: Option<Margins>,
 }
 
 /// Per-document options. Everything that varies between two renders of the
@@ -381,8 +423,6 @@ impl Renderer {
 
     fn engine(&self, opts: &RenderOptions) -> Engine {
         let mut b = Engine::builder()
-            .page_size(PageSize::custom(opts.page.width_mm, opts.page.height_mm))
-            .margin(Margin::uniform_mm(opts.page.margin_mm))
             // Determinism: never consult host fonts. Every font must be bundled.
             .system_fonts(false)
             .assets(self.assets.clone())
@@ -390,6 +430,21 @@ impl Renderer {
             // `strict_fonts` makes the static findings errors.
             .strict_text(self.strict_fonts)
             .tagged(opts.tagged);
+        // Only what the caller set overrides the document. With no size fulgur's default (A4 portrait, the page
+        // box of `@page { size: A4 }`) stands unless an `@page` rule says otherwise.
+        if let Some(s) = opts.page.size {
+            b = b.page_size(fulgur::PageSize::custom(s.width_mm, s.height_mm));
+        }
+        b = match opts.page.margin {
+            Some(m) => b.margin(Margin::sides_mm(
+                m.top_mm,
+                m.right_mm,
+                m.bottom_mm,
+                m.left_mm,
+            )),
+            // The product's default, below every `@page` margin of the document, side by side.
+            None => b.default_margin(Margin::uniform_mm(DEFAULT_MARGIN_MM)),
+        };
         if let Some(t) = &opts.title {
             b = b.title(t.clone());
         }

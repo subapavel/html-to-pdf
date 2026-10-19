@@ -34,15 +34,18 @@ THRESHOLDS = {
     # 02: re-baselined by F5 (4 → 3 pages, ADR-0003); F12 (repeated thead) 10.3 / 11.8 / 9.6 → 10.3 / 11.5 / 9.9 %
     #     (p3 grew 0.3: the header band is content that was missing). Rows still drift against Chrome's because
     #     collapsed `<tr>` borders are not painted (Blitz #386, F22). F13 (vertical-align) 10.3 / 11.5 / 9.9 →
-    #     10.2 / 11.4 / 9.8 %.
-    "02-long": 0.124,
+    #     10.2 / 11.4 / 9.8 %. F6 (`@page` margin honoured: the document's 20 mm bottom margin, not the renderer's 15 mm)
+    #     10.2 / 11.4 / 9.8 -> 10.2 / 11.1 / 9.5 %; 16 words move from page 2 to page 3 and the footer sits in the 20 mm band like
+    #     Chrome's (ours is not centred vertically in it, F103). Worst page + 1 point.
+    "02-long": 0.121,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %; F19 (row backgrounds) 03 8.2 → 6.2 %.
     # F9 (<img> natural size: the logo renders) 03 6.2 → 5.7 %.
     "03-logo-qr": 0.067,
     "04-bilingual-vat": 0.06,
-    # 05: the rest is mostly the header printed inside the page margin instead of full-bleed (F6) and the
-    #     totals box sitting lower than in Chrome.
-    "05-fancy": 0.22,
+    # 05: F6 (`@page { size: A4; margin: 0 }` honoured: the header band is full-bleed like Chrome's instead of printed 15 mm
+    #     inside the page) 21.6 -> 3.5 %. The rest is the text drift every fixture has and the shadow under the totals box.
+    #     Worst page + 1 point.
+    "05-fancy": 0.045,
     # 06: new in F30 (a paragraph taller than a page inside a bordered box). 15.9 / 12.5 %: one dense paragraph, so
     #     the diff is the line-wrapping drift against Chrome's text metrics over ~100 lines, not layout; the page
     #     break itself matches (page 1 filled, 2 pages like Chrome). Chrome also leaves the box open at the break,
@@ -117,6 +120,12 @@ THRESHOLDS = {
     #     about 0.5 px shorter, so page 1 has 24 rows against Chrome's 23); the footer itself is once per page, in the margin.
     #     On main's binary the footer was painted in the body as well. Worst page + 1 point; F22 brings it down.
     "17-running-footer": 0.13,
+    # 18: new in F6 (an A5 receipt, `@page { size: A5; margin: 10mm }` with a `@bottom-center` string, one page; Chrome's page is
+    #     420 x 594.96 pt, ours 419.53 x 595.28, both 560 x 794 px). 5.3 %: the text drift every fixture has, the `border-b` rules
+    #     Chrome paints on the item rows (`<tr>` borders, Blitz #386 / F22) and the footer, which Chrome centres in the margin box
+    #     while ours starts at its left edge and sits about 11 px higher (centre margin box alignment, F110, and vertical centring, F103). On main's binary the page was
+    #     A4 with 15 mm margins. Worst page + 1 point.
+    "18-a5-receipt": 0.063,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

@@ -29,17 +29,16 @@ fn first_red_x(css: &str, rows: &str, y: usize) -> f32 {
             &RenderOptions::default(),
         )
         .expect("render");
-    // 96 dpi: one device pixel per CSS px; the default page margin is 15 mm.
+    // 96 dpi: one device pixel per CSS px; the document's `@page { margin: 0 }` applies, so the table starts at the
+    // page corner (before F6 the renderer's 15 mm margin won over it).
     let (w, rgb) = rasterise(&pdf, 96);
-    let margin = (15.0 / 25.4 * 96.0_f32).round() as usize;
-    let y = margin + y;
     let red = (0..w)
         .find(|&x| {
             let i = (y * w + x) * 3;
             rgb[i] > 200 && rgb[i + 1] < 60 && rgb[i + 2] < 60
         })
         .expect("no red cell found");
-    (red - margin) as f32
+    red as f32
 }
 
 #[test]

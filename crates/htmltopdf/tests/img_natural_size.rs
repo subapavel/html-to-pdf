@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
 /// Pixel tolerance of a bounding-box edge (anti-aliasing at the image border).
 const TOL: i64 = 1;
@@ -356,8 +356,8 @@ fn render(css: &str, body: &str) -> Vec<u8> {
             &format!("<!doctype html><html><body>{body}</body></html>"),
             &RenderOptions {
                 page: Page {
-                    margin_mm: 0.0,
-                    ..Page::A4
+                    margin: Some(Margins::uniform_mm(0.0)),
+                    ..Page::default()
                 },
                 ..Default::default()
             },

@@ -9,7 +9,7 @@
 //! Asserted on word positions (`pdftotext -bbox`); lines are forced with `<br>` (20 px = 15 pt each) so the numbers
 //! do not depend on font metrics.
 
-use htmltopdf::{Page, RenderOptions, Renderer};
+use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
 /// Tolerance for "same position", in pt.
 const TOL: f32 = 1.0;
@@ -459,8 +459,8 @@ fn a_row_background_shows_behind_a_flex_cell() {
              </table></body></html>",
             &RenderOptions {
                 page: Page {
-                    margin_mm: 0.0,
-                    ..Page::A4
+                    margin: Some(Margins::uniform_mm(0.0)),
+                    ..Page::default()
                 },
                 ..Default::default()
             },

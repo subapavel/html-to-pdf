@@ -74,11 +74,11 @@ fn assert_boxes(pdf: &[u8]) {
 }
 
 /// Colours of the boxes down a column through them, read from the rasterised first page: each run of
-/// at least 10 non-white rows is one box. The column is inside the default page margin plus the box
-/// width, whatever the margin.
+/// at least 10 non-white rows is one box. The document's `@page { margin: 0 }` applies (F6), so the 200 px
+/// boxes span x = 0..100 at 48 dpi; the column is inside them.
 fn column(pdf: &[u8]) -> Vec<[u8; 3]> {
     let (w, h, rgb) = rasterise(pdf);
-    let x = 120;
+    let x = 50;
     let mut runs: Vec<([u8; 3], usize)> = Vec::new();
     for y in 0..h {
         let i = (y * w + x) * 3;
