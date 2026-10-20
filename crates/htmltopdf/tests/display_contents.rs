@@ -501,7 +501,11 @@ fn c14_a_long_wrapper_paginates_like_the_unwrapped_content() {
 
 #[test]
 fn c17_a_wrapper_in_a_multicol_container_keeps_the_columns() {
-    let css = ".mc { columns: 2; column-gap: 20px }";
+    let css = ".mc { columns: 2; column-gap: 20px } .mc3 { columns: 3; column-gap: 20px }";
+    let prose = (0..300)
+        .map(|i| format!("x{i:03}"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let paragraphs =
         |pre: &str, n: usize| -> String { (0..n).map(|i| format!("<p>{pre}{i}</p>")).collect() };
     let cases: Vec<(&str, String, Vec<String>)> = vec![
@@ -545,6 +549,50 @@ fn c17_a_wrapper_in_a_multicol_container_keeps_the_columns() {
             ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
                 .map(String::from)
                 .to_vec(),
+        ),
+        // `column-span: all` behind a wrapper (three columns: a page and a half of text): the container must still be
+        // recognised as one with a spanner, or the flow is cut short (F150 review).
+        (
+            "span-all in a wrapper, then a long paragraph",
+            format!(
+                "<div class=\"mc3\"><w><h2 style=\"column-span:all\">SPAN</h2></w><div><p>{}</p></div></div>",
+                prose
+            ),
+            ["SPAN".to_string()]
+                .into_iter()
+                .chain((0..300).map(|i| format!("x{i:03}")))
+                .collect(),
+        ),
+        (
+            "span-all and paragraph in one wrapper",
+            format!(
+                "<div class=\"mc3\"><w><h2 style=\"column-span:all\">SPAN</h2><p>{prose}</p></w></div>"
+            ),
+            ["SPAN".to_string()]
+                .into_iter()
+                .chain((0..300).map(|i| format!("x{i:03}")))
+                .collect(),
+        ),
+        (
+            "span-all in nested wrappers, then a paragraph",
+            format!(
+                "<div class=\"mc3\"><w><w><h2 style=\"column-span:all\">SPAN</h2></w></w><p>{prose}</p></div>"
+            ),
+            ["SPAN".to_string()]
+                .into_iter()
+                .chain((0..300).map(|i| format!("x{i:03}")))
+                .collect(),
+        ),
+        (
+            "paragraph before a wrapped span-all",
+            format!(
+                "<p>top</p><div class=\"mc3\"><p>a1</p><w><h2 style=\"column-span:all\">SPAN</h2></w><div><p>{prose}</p></div></div>"
+            ),
+            ["top", "a1", "SPAN"]
+                .map(String::from)
+                .into_iter()
+                .chain((0..300).map(|i| format!("x{i:03}")))
+                .collect(),
         ),
         (
             "taller than a page",
@@ -724,9 +772,18 @@ impl Gen {
         let mut out = String::new();
         for _ in 0..n {
             out.push_str(self.ws());
-            let pick = if depth == 0 { 0 } else { self.rng.below(6) };
+            let pick = if depth == 0 { 0 } else { self.rng.below(8) };
             match pick {
                 0..=2 => out.push_str(&format!("<p>{}</p>", self.inline_tight(2))),
+                // A `column-span: all` heading, directly or behind a wrapper.
+                6 => out.push_str(&format!(
+                    "<h2 style=\"column-span:all\">{}</h2>",
+                    self.word()
+                )),
+                7 => out.push_str(&format!(
+                    "<w><h2 style=\"column-span:all\">{}</h2></w>",
+                    self.word()
+                )),
                 3 => out.push_str(&format!("<div>{}</div>", self.column_blocks(depth - 1))),
                 _ => out.push_str(&format!("<w>{}</w>", self.column_blocks(depth - 1))),
             }
