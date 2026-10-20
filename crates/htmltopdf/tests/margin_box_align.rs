@@ -477,15 +477,18 @@ fn t08_side_boxes_top_middle_bottom() {
     );
     let all = margin_words(&pdf);
     // Chrome P8: LT/RT y 43.78..54.67, LM/RM 415.78..426.67, LB/RB 787.78..798.67; x centre 35.24 / 559.84 (the
-    // 25 mm side margins are 70.87 pt wide: text-align centre).
-    for (l, r, cy) in [
-        ("LT", "RT", 49.225),
-        ("LM", "RM", 421.225),
-        ("LB", "RB", 793.225),
+    // 25 mm side margins are 70.87 pt wide: text-align centre). Chrome's middle and bottom side boxes sit 0.7 and
+    // 1.2 pt lower than the mm geometry (its content area ends at 800.02, not 799.37; the same snapping as the
+    // 15 mm bottom band, module doc), and Blitz rounds the box height to whole px (up to 0.4 pt), hence the
+    // tolerances.
+    for (l, r, cy, tol) in [
+        ("LT", "RT", 49.225, 0.5),
+        ("LM", "RM", 421.225, 1.0),
+        ("LB", "RB", 793.225, 1.25),
     ] {
         let (l, r) = (word(&all, l), word(&all, r));
-        near(l.cy(), cy, 0.75, &format!("`{}` y", l.text));
-        near(r.cy(), cy, 0.75, &format!("`{}` y", r.text));
+        near(l.cy(), cy, tol, &format!("`{}` y", l.text));
+        near(r.cy(), cy, tol, &format!("`{}` y", r.text));
         near(l.cx(), 35.24, 0.5, &format!("`{}` x", l.text));
         near(r.cx(), 559.84, 0.5, &format!("`{}` x", r.text));
     }
@@ -784,5 +787,67 @@ fn t16_tagged_struct_count_unchanged() {
     assert_eq!(text.matches("/StructElem").count(), 2);
     for tag in ["/S /Table", "/S /TR", "/S /TD", "/S /TH"] {
         assert!(!text.contains(tag), "{tag} appeared in the structure tree");
+    }
+}
+
+// --- guards found while moving the fork's goldens ---------------------------------------------------------------
+
+#[test]
+fn t17_leader_keeps_the_page_number_inside_the_box() {
+    // `leader()` makes the box a flex container whose fill item holds 400 characters (`flex: 1; min-width: 0`).
+    // In a cell that took its width from its content the fill stretched the cell and pushed the number out of the
+    // box (fork VRT `gcpm/leader-toc`). The number stays at the right edge of the box: A5, 50 pt margins.
+    let pdf = render(
+        "size:A5;margin:50pt;",
+        &bx(
+            "top-right",
+            "\"Introduction\" leader(dotted) counter(page)",
+            "",
+        ),
+        BODY,
+    );
+    let all = margin_words(&pdf);
+    let n = word(&all, "1");
+    let right_edge = 419.53 - 50.0;
+    assert!(
+        n.x1 <= right_edge + 1.0 && n.x1 >= right_edge - 1.0,
+        "page number ends at {:.2}, want the box edge {right_edge:.2}",
+        n.x1
+    );
+    near(
+        word(&all, "Introduction").x0,
+        50.0,
+        1.0,
+        "title at the left edge",
+    );
+}
+
+#[test]
+fn t18_author_margin_on_a_margin_box_does_not_hide_it() {
+    // A table cell has no margins; Blitz places one with a `margin-top` outside its row and the box was not painted
+    // at all (fork example `header-footer-split`, `@top-right { margin-top: 12px }`). The margin is ignored and the
+    // text stays centred in the band, like the same box without it.
+    let plain = render(
+        "size:A4;margin:15mm;",
+        &bx("top-right", "\"MARG\"", ""),
+        BODY,
+    );
+    let y = word(&margin_words(&plain), "MARG").cy();
+    for decl in [
+        "margin-top:12px",
+        "margin:5px 3px 4px 2px",
+        "margin-bottom:9px",
+    ] {
+        let pdf = render(
+            "size:A4;margin:15mm;",
+            &bx("top-right", "\"MARG\"", decl),
+            BODY,
+        );
+        near(
+            word(&margin_words(&pdf), "MARG").cy(),
+            y,
+            0.5,
+            &format!("`{decl}`: the box is painted where it is without it"),
+        );
     }
 }
