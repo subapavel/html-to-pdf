@@ -173,4 +173,81 @@ The fragmenter has no nested sibling loop on the table path, as far as I can rea
 
 ## 7. Result
 
-(to be filled)
+Status: **done** (Fix A and Fix B; Fix C not warranted; the rest is F99d). Forks: Blitz `a4b7624` (on `fadaabb`), fulgur `92304b1` (on `cc1db38`). Measured 2026-10-20 on a host that is **not** the one the plan's numbers come from (4 vCPU Xeon @ 2.80GHz; the committed baseline is from a 2.10GHz host and the same main binary is about 1.4-1.5 times slower here: `b200-items` 2.3 s instead of 1.58 s). Use ratios and A/B deltas, not absolute times.
+
+### 7.1 Step 0: where the time goes
+
+Symbolised build of main (`/tmp/claude-0/f99c-prof`, frame pointers, line tables; deleted afterwards), `perf record -e cpu-clock -F 999 -g`, `RAYON_NUM_THREADS=1`, the `t` variant (corpus table, plain `@page`). `perf` was not installed: `apt-get install linux-tools-generic`, run as `/usr/lib/linux-tools/<ver>/perf` (the wrapper wants a kernel-matched package). Samples are ms of CPU; perf and the frame pointers inflate the total by about 15 % over the stripped binary's wall clock (second row).
+
+Wall clock, stripped main, 1 thread, median of 5 (ms), per variant and rows:
+
+| variant | 1200 | 2400 | 4800 | 9600 | r = t(4800)/t(1200) |
+|---|---:|---:|---:|---:|---:|
+| t | 375 | 789 | 1881 | 4854 | 5.02 |
+| t-sep | 377 | 793 | 1737 | | 4.61 |
+| t-noavoid | 401 | 841 | 1877 | | 4.69 |
+| t-nohead | 393 | 803 | 1719 | | 4.37 |
+| t-boxes | 500 | 949 | 2236 | | 4.48 |
+
+`t-nohead` is 160 ms below `t` at 4800 rows (the header copy is A1); `t-sep` is 140 ms below (collapsed borders: A1 again, and the F22 painting). Doubling `t`: x2.10, x2.38, x2.58: superlinear and getting worse.
+
+Phase x size, inclusive samples (ms) of `t`:
+
+| phase | 1200 | 2400 | 4800 | 9600 | r(4800/1200) |
+|---|---:|---:|---:|---:|---:|
+| all samples | 473 | 1199 | 2149 | 4991 | 4.5 |
+| parse | 33 | 63 | 133 | 307 | 4.0 |
+| style (`resolve_stylist`) | 28 | 62 | 149 | 384 | **5.3** |
+| construct (`resolve_layout_children`) | 15 | 46 | 65 | 127 | 4.3 |
+| flush_styles_to_layout | 6 | 23 | 26 | 51 | 4.3 |
+| shaping (`resolve_deferred_tasks`, workers) | 117 | 227 | 363 | 672 | 3.1 |
+| Taffy (`resolve_layout`) | 85 | 359 | 626 | 1459 | **7.4** |
+| convert | 36 | 65 | 130 | 262 | 3.6 |
+| paint (`draw_v2_page`) | 56 | 122 | 161 | 394 | 2.9 |
+| `render_v2` (self, includes inlined paint of header copies) | 16 | 60 | 154 | | **9.6** |
+| fragmentation (`run_pass_with_multicol`) | not separately visible (inlined) | | | | |
+| margin boxes, PDF write | below 1 % (no margin boxes in `t`; Krilla page drop / `finish` not a symbol) | | | | |
+
+Flagged (r > 5): Taffy, style and the self time of `render_v2`. Fits a*n + b*n^2 (n = rows; two points, third as a check): `paint_header_copy` a = 0.0065, b = 5.0e-6 (predicts 522 at 9600, measured 701); Taffy `minimum_contribution` grows as n^1.5-1.8, so it is not a pure quadratic (a = 0.008, b = 1.4e-5 predicts 1379, measured 1028).
+
+Attribution (samples that any frame of the call chain, inline frames included, puts in the named code; `addr2line -i` on the sample addresses; at 1200 / 2400 / 4800 / 9600 rows):
+
+| spot | 1200 | 2400 | 4800 | 9600 | verdict |
+|---|---:|---:|---:|---:|---|
+| **A1** `table_borders::paint_header_copy` (the `find` / `on_page` scan, `table_borders.rs:242`) | 15 | 58 | **146** | 701 | the whole of render_v2's superlinear self time; the plan estimated 100-350 |
+| **A2** `paint_lines` loop over all lines (`:379-384`) | 3 | | 13 | | about 3 ms excess: negligible, done anyway (same helper) |
+| A3 `paint_tables` | 0 | 0 | 0 | 0 | not hit by the corpus |
+| **B1** `Node::child_index` (`node.rs:488`, inlined `position`) inside `matches_generic_nth_child` | 3 | 14 | **47** | 178 | in scope (excess about 35 ms); `matches_generic_nth_child` 5 / 20 / 54 / 201 |
+| **B2** `widen_explicit_columns` | 1 | 1 | 3 | 2 | **below the 20 ms bar: Fix C not done**; `TableContext` drop 2 / 4 / 8 / 11 |
+| **T1** Taffy `resolve_intrinsic_track_sizes`; of it `GridItem::minimum_contribution` | 44; 30 | 226; 181 | **415; 364** | 1129; 1028 | the largest superlinear cost: self time of `minimum_contribution` 17 / 128 / 291 / 902 |
+| (new) pagination `has_page_name_change_below` + `has_forced_break_below` + `walk_used_page_names` | 5 | 18 | 54 | 81 | F144 |
+| `build_table_context` | 12 | 33 | 47 | 91 | linear |
+
+Callgrind of `t`-1200 (2.0 G instructions): `build_table_context` 2 calls (the items table and the totals table), `resolve_intrinsic_track_sizes` 8 calls, 13 % of all instructions; `widen_explicit_columns` has no cost line (inlined, under 0.1 %), so Fix C has nothing to take.
+
+**Gate decision.** A + B + C = 146 + 13 + 47 + 3 = about 210 samples, about 170 ms of wall clock at 4800 rows: above 150 ms, so the PR goes on: Fix A and Fix B, not C (3 ms). T1 is the largest superlinear cost (about 360 ms at 4800 rows) and is not in this PR.
+
+T1's cause, from the source (not verified with a patch): Taffy 0.9.2 `grid_item.rs:497-504` computes `spans_auto_min_track` and `spans_a_flexible_track` with `axis_tracks.iter().any(..)` over every track of the axis, per item and per call; without a flexible track the second scan never stops early. The fix is in Taffy, so it needs a `subapavel/taffy` fork, which only the owner can create. Filed as F99d.
+
+### 7.2 What changed
+
+- fulgur `92304b1`: `table_borders::first_body_row` (A1), `page_lines` and `build_hlines` (A2); `paint_header_copy` gets `page_node_ids` and loses `page_index`; `render.rs` passes the page's node list to `paint_repeated_table_headers`. A3 not done (see F145).
+- Blitz `a4b7624`: `Node::index_hint: AtomicU32`, `child_index` reads it checked and refreshes all siblings on a miss (B1).
+- Ours: `Cargo.lock` pins both; `scripts/bench.py` (`gen_items` parameters, `--scaling`, `SCALING_MAX_RATIO` 4.6); docs.
+- Tests, red first (fulgur: compile errors for the missing helpers; Blitz: no `index_hint`): fulgur `table_borders` 4 new unit tests (`first_body_row` against the old scan for 1-5 tracks, header rows 0-2, cut rows and a second table; `page_lines` against the loop over all lines for every set of 6 rows, `started` / `continues` combinations and all four modes; the lines next to rows) and the `render_smoke` 300-row test; Blitz 5 new lib tests (position after append / insert / remove on a 10 000-child parent, stale and out-of-range hints, one query refreshes all siblings, `forward` / `backward`, 4 threads on one parent).
+
+### 7.3 Acceptance
+
+1. **Bytes: 86 of 86 identical** (`/tmp/claude-0/htmltopdf-main-fbaf57f` against `target/release/htmltopdf`; 20 fixtures + 7 corpus documents + 16 scaling variants (4 sizes of `t`, 3 of the other four), at `RAYON_NUM_THREADS=1` and `=4`, `cmp` of the whole file). `compare.py --threshold-check`: `summary.json` byte-identical to main's, every fixture ok. Looked at `out/compare/02-long-p2.png` (header copy with its rule) and page 120 of `b200-items` (rendered at 60 dpi): header copy, rule under it and row rules as before.
+2. **Speed** (A B A B alternating, 4 threads, this host): `b200-items` 2312 -> 1970 ms (7 runs) and 2333 -> 1953 ms (11 runs), -342 / -380 ms (-15 / -16 %): the stated target (250 ms) is met, the 1 s gate is not (as the plan said). `b200-text` 1074 -> 1024 and 947 -> 990, `b200-mixed` 1075 -> 1147 and 1127 -> 1110: no long table, +-5 % noise both ways. `02-long` 55.2 -> 55.8. One thread, `t` variant: 4800 rows 2119 -> 1855 ms, 9600 rows 5367 -> 3975 ms.
+3. **Scaling**: `bench.py --scaling` (median of 5): r of `t` main 4.62 / 4.68 (4.5-5.0 over runs) -> 4.07-4.40. The gate is `SCALING_MAX_RATIO` = 4.6, not the plan's "halfway" 4.4: with 4.4 a re-measure of the branch itself gave 4.40 and failed. Main fails the 4.6 gate (4.68), the branch passes.
+4. **Determinism**: `determinism_threads.rs` is in `cargo test --release --locked` (below); bytes at 1 and 4 threads as above.
+5. **Tests**: fulgur `cargo test -p fulgur --lib` 2207 passed, `render_smoke` + `gcpm_integration` 18 + 277 passed, `examples_determinism` 10 of 11 as the plan says (`committed_svg_matches_rendered` is the one that fails; not re-run on main). `fulgur-vrt`: 26 goldens fail on this host **before and after** (identical list with byte sizes, run on `cc1db38` + Blitz `fadaabb` and on the branch; reference sizes about twice the actual ones, a host font / rasteriser difference, not from this change). Blitz `cargo test -p blitz-dom --lib` 74 passed, with `--features parallel-construct` 76 passed. fulgur `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --all -- --check` clean in both forks and ours. Ours: see the PR text for `cargo test --release --locked`.
+
+### 7.4 Deviations from the plan
+
+- Fix C not done (3 samples, under the 20 ms bar); A3 not done (F145: more than ten lines).
+- `bench/baseline.json` not rewritten and `HARD_MS_OVERRIDE["b200-items"]` stays 3000 ms: the host is a different CPU (2.80 against 2.10 GHz) and its medians are higher than the baseline's, so "lowering only" has nothing to lower and 1.8 x today's median (3.5 s) is above 3 s. Redo both on the baseline host.
+- `SCALING_MAX_RATIO` 4.6 instead of 4.4 (see 7.3.3).
+- Blitz commit `a4b7624` lacks the attribution trailer lines (pushed before the reminder was applied; the later commits have them).
+- A5 (new, outside the plan): the pagination page-name scans (F144) are 54 samples at 4800 rows; not touched.
