@@ -5,6 +5,7 @@
     python3 scripts/bench.py --check                   ... and fail on a regression (CI)
     python3 scripts/bench.py --update-baseline         rewrite bench/baseline.json from this run
     python3 scripts/bench.py --generate                rewrite the corpus under bench/corpus/ (deterministic)
+    python3 scripts/bench.py --scaling                 ms at 1200 / 2400 / 4800 rows for the table variants, and r = t(4800)/t(1200)
 
 Options: --runs N (timed runs per gated document, default 7; one untimed warm-up first),
          --slow-runs N (runs per report-only document, default 1, no warm-up), --skip-slow.
@@ -22,6 +23,10 @@ Gate (--check), on gated documents only (fixtures and b200-*):
   * relative, only when the machine label equals the one in bench/baseline.json:
         median <= baseline * REL + ABS_MS.
 A document over its limit is measured once more with twice the runs and the lower median counts.
+Scaling gate (F99c): one long table must cost linear time per row. Variant `t` (the b200-items table without margin boxes) is
+rendered with 1200 and 4800 rows; r = t(4800) / t(1200) is about 4 when the work is linear and tends to 16 when it is quadratic.
+`--check` fails when r > SCALING_MAX_RATIO (re-measured once with twice the runs, the lower r counts); it is self-normalising,
+so it holds on any machine. `--scaling` prints all variants and sizes and does not gate by itself.
 Raising a baseline follows the compare.py rule: only for content that was missing and now renders, with the cause named.
 The corpus is committed so the numbers do not move when this generator changes; --generate must be byte-reproducible.
 """
@@ -58,6 +63,21 @@ HARD_MS_OVERRIDE = {
     "b200-items": 3000.0,
 }
 GOAL_MS_B200 = 1000.0  # reported, not gated
+# t(4800 rows) / t(1200 rows) of variant `t`: linear is about 4, quadratic tends to 16 (F99c). Main measured 4.5-5.0, F99c's
+# branch 4.0-4.4 (median of 5-10 runs, 4 vCPU; the plan's "halfway" 4.4 failed on a re-measure of 4.40), so 4.6 is the
+# first value that does not flake on the branch. It catches a return of the per-page table scans only partly (they add
+# about 0.4-0.6 to r); a worse regression (r towards 5 and more) fails.
+SCALING_MAX_RATIO = 4.6
+SCALING_ROWS = (1200, 2400, 4800)
+# The scaling variants: the b200-items table (gen_items arguments). `t` is gated; the others say where a superlinear cost is.
+SCALING_VARIANTS = {
+    "t": {"boxes": False},  # the corpus table, plain @page
+    "t-sep": {"boxes": False, "collapse": False},  # border-collapse: separate
+    "t-noavoid": {"boxes": False, "avoid": False},  # no row-level break-inside: avoid
+    "t-nohead": {"boxes": False, "thead": False},  # no repeated header
+    "t-boxes": {},  # the corpus shape: with the two margin boxes
+}
+SCALING_GATED = "t"
 B200_PAGES = (195, 205)  # a b200-* document that leaves this range no longer measures "200 pages"
 TIMEOUT_S = 180
 
@@ -175,15 +195,16 @@ def page(title: str, css: str, body: str) -> str:
     )
 
 
-def item_rows(rng: random.Random, n: int, first: int = 1) -> tuple[list[str], float]:
+def item_rows(rng: random.Random, n: int, first: int = 1, avoid: bool = True) -> tuple[list[str], float]:
     rows, subtotal = [], 0.0
+    cls = "border-b border-gray-100 break-inside-avoid" if avoid else "border-b border-gray-100"
     for i in range(first, first + n):
         desc = rng.choice(SERVICES).format(n=f"IF-{1000 + i}")
         qty = rng.choice([1, 2, 3, 4, 6, 8, 12])
         unit = rng.choice([1800.0, 2200.0, 2500.0, 2900.0])
         subtotal += qty * unit
         rows.append(
-            '    <tr class="border-b border-gray-100 break-inside-avoid">'
+            f'    <tr class="{cls}">'
             f'<td class="py-1.5 pr-2 text-gray-500 tabular-nums">{i}</td>'
             f'<td class="py-1.5 pr-2">{desc}</td>'
             f'<td class="py-1.5 px-2 text-right tabular-nums">{qty} h</td>'
@@ -193,15 +214,18 @@ def item_rows(rng: random.Random, n: int, first: int = 1) -> tuple[list[str], fl
     return rows, subtotal
 
 
-def gen_items() -> str:
-    """The 02-long shape x N: one items table with a repeated thead, row-level break-inside:avoid, margin boxes."""
+def gen_items(rows: int = N_ITEM_ROWS, boxes: bool = True, collapse: bool = True, avoid: bool = True,
+              thead: bool = True) -> str:
+    """The 02-long shape x N: one items table with a repeated thead, row-level break-inside:avoid, margin boxes.
+    The defaults are the committed b200-items document; the other values are the scaling variants (F99c, --scaling):
+    `boxes` the two margin boxes (else a plain @page), `collapse` Tailwind's border-collapse (else `separate`),
+    `avoid` the row-level break-inside:avoid, `thead` the header row."""
     rng = random.Random(20260001)
-    rows, subtotal = item_rows(rng, N_ITEM_ROWS)
+    rows, subtotal = item_rows(rng, rows, avoid=avoid)
     vat = subtotal * 0.21
     body = HEADER.format(no="2026-B001") + f"""
 <table class="w-full text-sm">
-{THEAD5}
-  <tbody>
+{THEAD5 + chr(10) if thead else ""}  <tbody>
 {chr(10).join(rows)}
   </tbody>
 </table>
@@ -221,8 +245,11 @@ def gen_items() -> str:
 </section>
 """
     css = (
-        PAGE_BOXES.replace("{no}", "2026-B001")
-        + "\n  thead { display: table-header-group; }\n  tr { break-inside: avoid; }\n  .keep-together { break-inside: avoid; }"
+        (PAGE_BOXES.replace("{no}", "2026-B001") if boxes else PAGE_PLAIN)
+        + "\n  thead { display: table-header-group; }"
+        + ("\n  tr { break-inside: avoid; }" if avoid else "")
+        + "\n  .keep-together { break-inside: avoid; }"
+        + ("" if collapse else "\n  table { border-collapse: separate; }")
     )
     return page("Faktura 2026-B001", css, body)
 
@@ -362,6 +389,60 @@ def generate() -> int:
     return 0
 
 
+def scaling_doc(variant: str, rows: int) -> Doc:
+    """Writes out/bench/scaling/<variant>-<rows>.html (not committed) and returns it as a measurable document."""
+    d = OUT / "scaling"
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{variant}-{rows}.html"
+    path.write_text(gen_items(rows=rows, **SCALING_VARIANTS[variant]), encoding="utf-8")
+    return Doc(f"{variant}-{rows}", "scaling", path)
+
+
+def scaling_ratio(variant: str, runs: int) -> tuple[dict[int, dict], float | None]:
+    """Measures every size of `variant` (1 warm-up, `runs` timed); returns the results and r, or None on an error."""
+    res = {n: measure(scaling_doc(variant, n), runs, warmup=True) for n in SCALING_ROWS}
+    lo, hi = res[SCALING_ROWS[0]], res[SCALING_ROWS[-1]]
+    if lo["error"] or hi["error"]:
+        return res, None
+    return res, hi["median_ms"] / lo["median_ms"]
+
+
+def scaling_report(runs: int, check: bool, full: bool) -> list[str]:
+    """Prints the scaling table (all variants when `full`, else only the gated one). Returns the --check failures."""
+    names = list(SCALING_VARIANTS) if full else [SCALING_GATED]
+    head = (f"{'variant':12} " + " ".join(f"{str(n) + ' rows':>11}" for n in SCALING_ROWS)
+            + f" {'r=t(' + str(SCALING_ROWS[-1]) + ')/t(' + str(SCALING_ROWS[0]) + ')':>15} {'pages':>6}")
+    out, failures = ["", f"scaling: median ms of {runs} runs, r = {SCALING_ROWS[-1]}-row time / {SCALING_ROWS[0]}-row time "
+                     f"(linear about {SCALING_ROWS[-1] / SCALING_ROWS[0]:.0f}); gate: variant {SCALING_GATED} r <= {SCALING_MAX_RATIO}", head], []
+    print("\n".join(out), flush=True)
+    for v in names:
+        res, r = scaling_ratio(v, runs)
+        note = ""
+        if r is None:
+            err = next(x["error"] for x in res.values() if x["error"])
+            failures.append(f"scaling {v}: render failed: {err}")
+            line = f"{v:12} ERROR {err}"
+        else:
+            if check and v == SCALING_GATED and r > SCALING_MAX_RATIO:  # confirm once with twice the runs; the lower r counts
+                res2, r2 = scaling_ratio(v, runs * 2)
+                if r2 is not None and r2 < r:
+                    res, r = res2, r2
+                    note = "  (re-measured)"
+            if check and v == SCALING_GATED:
+                if r > SCALING_MAX_RATIO:
+                    failures.append(f"scaling {v}: r = {r:.2f} > {SCALING_MAX_RATIO} (work per row is not linear in the number of rows)")
+                    note += "  FAIL"
+                else:
+                    note += f"  ok (<= {SCALING_MAX_RATIO})"
+            pages = res[SCALING_ROWS[-1]]["pages"]
+            line = (f"{v:12} " + " ".join(f"{res[n]['median_ms']:11.1f}" for n in SCALING_ROWS)
+                    + f" {r:15.2f} {pages if pages is not None else '?':>6}{note}")
+        out.append(line)
+        print(line, flush=True)
+    (OUT / "scaling.txt").write_text("\n".join(out) + "\n")
+    return failures
+
+
 # --------------------------------------------------------------------------------------------------------------------
 # Measurement
 # --------------------------------------------------------------------------------------------------------------------
@@ -486,12 +567,25 @@ def main() -> int:
     ap.add_argument("--runs", type=int, default=7)
     ap.add_argument("--slow-runs", type=int, default=1)
     ap.add_argument("--skip-slow", action="store_true")
+    ap.add_argument("--scaling", action="store_true",
+                    help="print the scaling variants (ms at 1200/2400/4800 rows, r); only these, unless documents are named too")
     a = ap.parse_args()
 
     if a.generate:
         return generate()
 
     bin_ = binary()
+    if a.scaling and not a.names:
+        if not (os.path.isfile(bin_) and os.access(bin_, os.X_OK)):
+            print(f"no binary at {bin_}: cargo build --release -p htmltopdf-cli (or set HTMLTOPDF_BIN)", file=sys.stderr)
+            return 2
+        if not (ROOT / "fixtures/fonts/Inter-Regular.ttf").exists():
+            subprocess.run([str(ROOT / "scripts/fetch-fonts.sh")], check=True)
+        OUT.mkdir(parents=True, exist_ok=True)
+        failures = scaling_report(a.runs, a.check, full=True)
+        for f in failures:
+            print(f"  {f}")
+        return 1 if failures else 0
     if not (os.path.isfile(bin_) and os.access(bin_, os.X_OK)):
         print(f"no binary at {bin_}: cargo build --release -p htmltopdf-cli (or set HTMLTOPDF_BIN)", file=sys.stderr)
         return 2
@@ -566,6 +660,11 @@ def main() -> int:
                           for n, r in results.items() if not r["error"]},
         }, indent=2) + "\n")
         print(f"wrote {BASELINE.relative_to(ROOT)}")
+
+    if a.check and not a.names:  # the scaling gate; a run of named documents is a quick look and skips it
+        failures += scaling_report(a.runs, True, full=a.scaling)
+    elif a.scaling:
+        failures += scaling_report(a.runs, a.check, full=True)
 
     if a.check:
         if failures:
