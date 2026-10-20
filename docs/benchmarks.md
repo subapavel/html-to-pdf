@@ -50,7 +50,7 @@ under a minute. They are for watching a number go down when a finding is fixed.
 `gen_items(rows, boxes, collapse, avoid, thead)` makes the corpus document with its defaults) and prints the median and
 r = t(4800) / t(1200): about 4 when the work is linear in the rows, tending to 16 when it is quadratic. Variants say where a
 superlinear cost is: `t` (the corpus table with a plain `@page`), `t-sep` (`border-collapse: separate`), `t-noavoid` (no row
-`break-inside: avoid`), `t-nohead` (no repeated header), `t-boxes` (the corpus shape, with the margin boxes).
+`break-inside: avoid`), `t-nohead` (no repeated header), `t-boxes` (the corpus shape, with the margin boxes), `t-names` (F144: the table on a named page, `page: items`, and a forced break before the totals; ungated).
 
 `--check` gates variant `t`: r must not exceed `SCALING_MAX_RATIO` (6.0, a guard against quadratic work only — the branch itself spreads up to 4.6 on a loaded VM, so a tighter gate would flake; re-measured once with twice the runs, the lower r
 counts). It is a ratio of two timings of the same binary, so it holds on any machine; a CI runner is as good as the dev VM.
@@ -80,6 +80,17 @@ cost; `docs/plans/2026-10-20-f99d-taffy-minimum-contribution.md` §7. Same host,
 The ratio moves little because the Taffy cost sat inside the superlinear part only partly (the profile of 1 thread, `t`: `GridItem::minimum_contribution` self time 19 / 53 / 233 / 1107 ms at 1200 / 2400 / 4800 / 9600 rows before,
 1 / 0 / 1 / 3 after; `resolve_intrinsic_track_sizes` inclusive 44 / 113 / 369 / 1453 -> 29 / 60 / 112 / 346, r(4800/1200) 8.4 -> 3.9); the absolute time is what changed (`t` at 4800 rows under perf 2042 -> 1665 ms, at 9600 rows 5012 -> 4037 ms).
 What is left of the table is spread over parse, style, shaping, convert and paint, with the pagination scans of F144 the next known superlinear one.
+
+F144 (2026-10-20, fulgur fork `7ae03d0`: the fragmenter's "forced break below" and "page-name change below" questions are answered from a table built once per pass) took those scans out. Profile, 1 thread, `perf` on a symbolised build, inclusive samples at 1200 / 2400 / 4800 rows
+(`has_forced_break_below` + `has_page_name_change_below` + `walk_used_page_names` + `SubtreeFacts::build`):
+
+| variant | main | F144 |
+|---|---:|---:|
+| `t` | 12 / 27 / 52 | 0 / 0 / 0 |
+| `t-names` (new: the table has `page: items`, the totals `break-before: page`) | 11 / 34 / 58 | 5 / 14 / 21 |
+
+`t-names` still pays for `walk_used_page_names` (5 / 14 / 18, linear: F148) because the document names a page; `SubtreeFacts::build` is 0 / 0 / 3. `--scaling` now prints `t-names` too (ungated). The scans were O(n x levels), not quadratic, so r of `t` does not move; the gain is the work removed: wall clock, 1 thread, 15 interleaved runs, median:
+`t` at 4800 rows 1563 -> 1485 ms (-78 ms, -5.0 %), `t-names` 1588 -> 1523 ms (-65 ms, -4.1 %). With 4 threads the difference is inside the VM's noise (`b200-items`: +24 ms in 15 runs, -44 ms in 25; CPU time unchanged).
 
 ## Current numbers
 
@@ -128,6 +139,7 @@ Reading it:
 - **F99d (2026-10-20, same 2.80GHz host, `bench/baseline.json` and `HARD_MS_OVERRIDE` again not touched: the machine label differs).** Main `6ad12cb` (F99c) against the Taffy fork, alternating, median of 7: `b200-items` 1884 / 1929 -> 1673 / 1619 ms (-211 / -310, -11 / -16 %);
   15 interleaved runs of each binary: 1829 -> 1601 ms wall (-228 ms, -12.5 %), CPU 2080 -> 1860 ms. `b200-mixed` 1223 / 1160 -> 1112 / 1036, `02-long` 51.9 / 48.2 -> 48.0 / 47.3. `b200-text` shows +4 / +6 % in the first two A B pairs and +10 / +3 % in two more (11 runs), but 975 -> 973 ms in the 15-run interleaved comparison:
   it has no table, so this is the VM's noise, not the change. The 1 s goal is not met for `b200-items` here (1.6-1.7 s; scaled by the host ratio of about 1.4 it would be about 1.2 s on the baseline host, an estimate, not measured).
+- **F144 (2026-10-20, same 2.80GHz host, baseline and `HARD_MS_OVERRIDE` not touched).** Main `7397e3a` against the fork, 15 interleaved runs of each binary, 4 threads, median wall (CPU) in ms: `b200-items` 1637 -> 1661 (1906 -> 1902), and 1563 -> 1519 in a second series of 25 runs; `slow-breaks` 3309 -> 3315 (3346 -> 3342); `t-names` at 4800 rows 1331 -> 1365 (1569 -> 1611); `b200-text` 914 -> 904; `b200-mixed` 995 -> 1025. All inside the +-3 % the VM spreads, so the plan's stated target (`b200-items` -20 ms) is not demonstrated with 4 threads; the work removed shows with 1 thread (see the scaling section, `t` -78 ms) and in the profile (52 samples -> 0). `slow-breaks` does not use the table: `break-before: avoid` is not a forced break.
 - The very first render of a large document can be much slower than the rest (`b200-items` took 5.7 s once, then 2.2-2.5 s; cause not investigated, probably cold caches); that is why gated documents get a warm-up.
 
 ## The guard (`--check`)

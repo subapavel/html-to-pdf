@@ -77,6 +77,7 @@ SCALING_VARIANTS = {
     "t-noavoid": {"boxes": False, "avoid": False},  # no row-level break-inside: avoid
     "t-nohead": {"boxes": False, "thead": False},  # no repeated header
     "t-boxes": {},  # the corpus shape: with the two margin boxes
+    "t-names": {"boxes": False, "names": True},  # F144: a named page for the table and a forced break after it
 }
 SCALING_GATED = "t"
 B200_PAGES = (195, 205)  # a b200-* document that leaves this range no longer measures "200 pages"
@@ -216,22 +217,24 @@ def item_rows(rng: random.Random, n: int, first: int = 1, avoid: bool = True) ->
 
 
 def gen_items(rows: int = N_ITEM_ROWS, boxes: bool = True, collapse: bool = True, avoid: bool = True,
-              thead: bool = True) -> str:
+              thead: bool = True, names: bool = False) -> str:
     """The 02-long shape x N: one items table with a repeated thead, row-level break-inside:avoid, margin boxes.
     The defaults are the committed b200-items document; the other values are the scaling variants (F99c, --scaling):
     `boxes` the two margin boxes (else a plain @page), `collapse` Tailwind's border-collapse (else `separate`),
-    `avoid` the row-level break-inside:avoid, `thead` the header row."""
+    `avoid` the row-level break-inside:avoid, `thead` the header row, `names` (F144) a named page: the content is wrapped
+    in <main>, the items table is on page `items` and the totals section has `break-before: page`, so the fragmenter's
+    "forced break below" and "page-name change below" questions are not answered by their fast paths."""
     rng = random.Random(20260001)
     rows, subtotal = item_rows(rng, rows, avoid=avoid)
     vat = subtotal * 0.21
     body = HEADER.format(no="2026-B001") + f"""
-<table class="w-full text-sm">
+<table class="w-full text-sm{" items" if names else ""}">
 {THEAD5 + chr(10) if thead else ""}  <tbody>
 {chr(10).join(rows)}
   </tbody>
 </table>
 
-<section class="keep-together flex justify-end mt-6">
+<section class="keep-together flex justify-end mt-6{" totals" if names else ""}">
   <table class="text-sm w-80">
     <tbody>
       <tr><td class="py-1 text-gray-600">Základ daně</td><td class="py-1 text-right tabular-nums">{czk(subtotal)} Kč</td></tr>
@@ -251,7 +254,10 @@ def gen_items(rows: int = N_ITEM_ROWS, boxes: bool = True, collapse: bool = True
         + ("\n  tr { break-inside: avoid; }" if avoid else "")
         + "\n  .keep-together { break-inside: avoid; }"
         + ("" if collapse else "\n  table { border-collapse: separate; }")
+        + ("\n  table.items { page: items; }\n  .totals { break-before: page; }" if names else "")
     )
+    if names:
+        body = "<main>\n" + body + "</main>\n"
     return page("Faktura 2026-B001", css, body)
 
 
