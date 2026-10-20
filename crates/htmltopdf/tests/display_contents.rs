@@ -497,6 +497,78 @@ fn c14_a_long_wrapper_paginates_like_the_unwrapped_content() {
     assert!(page_count(&with) >= 3, "about 3 pages");
 }
 
+// --- C17: multicol (F150 review: the multicol walks of fulgur read the DOM children, not the box tree) ----------------
+
+#[test]
+fn c17_a_wrapper_in_a_multicol_container_keeps_the_columns() {
+    let css = ".mc { columns: 2; column-gap: 20px }";
+    let paragraphs =
+        |pre: &str, n: usize| -> String { (0..n).map(|i| format!("<p>{pre}{i}</p>")).collect() };
+    let cases: Vec<(&str, String, Vec<String>)> = vec![
+        (
+            "only child",
+            format!("<div class=\"mc\"><w>{}</w></div>", paragraphs("m", 10)),
+            (0..10).map(|i| format!("m{i}")).collect(),
+        ),
+        (
+            "with a plain sibling",
+            format!(
+                "<div class=\"mc\"><w>{}</w><p>sibling</p></div>",
+                paragraphs("m", 8)
+            ),
+            (0..8)
+                .map(|i| format!("m{i}"))
+                .chain(["sibling".to_string()])
+                .collect(),
+        ),
+        (
+            "two wrappers",
+            format!(
+                "<div class=\"mc\"><w><div>{}</div></w><w><div>{}</div></w></div>",
+                paragraphs("m", 5),
+                paragraphs("n", 5)
+            ),
+            (0..5)
+                .map(|i| format!("m{i}"))
+                .chain((0..5).map(|i| format!("n{i}")))
+                .collect(),
+        ),
+        (
+            "nested wrappers",
+            format!("<div class=\"mc\"><w><w>{}</w></w></div>", paragraphs("m", 12)),
+            (0..12).map(|i| format!("m{i}")).collect(),
+        ),
+        (
+            "inline content",
+            "<div class=\"mc\"><w>one two <b>three</b> four five six seven eight nine ten</w></div>"
+                .to_string(),
+            ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
+                .map(String::from)
+                .to_vec(),
+        ),
+        (
+            "taller than a page",
+            format!(
+                "<div class=\"mc\"><w>{}</w></div>",
+                (0..200).map(|i| format!("<p>l{i:03}</p>")).collect::<String>()
+            ),
+            (0..200).map(|i| format!("l{i:03}")).collect(),
+        ),
+    ];
+    for (what, body, expected) in cases {
+        let expected: Vec<&str> = expected.iter().map(String::as_str).collect();
+        let pdf = assert_wrapper_is_invisible(&format!("C17 {what}"), css, &body, &expected);
+        // Two columns: the words sit at two different x positions.
+        let mut xs: Vec<i32> = words(&pdf).iter().map(|w| w.x0.round() as i32).collect();
+        xs.sort_unstable();
+        xs.dedup();
+        assert!(
+            what == "inline content" || xs.len() >= 2,
+            "{what}: one column only: {xs:?}"
+        );
+    }
+}
+
 // --- C15, C16: the panic and the root ---------------------------------------------------------------------------------
 
 #[test]
@@ -645,6 +717,23 @@ impl Gen {
         out
     }
 
+    /// The content of a multicol container: paragraphs, plain divs and wrappers (the flow of F30d carries lines and
+    /// block heights; other content in columns has gaps of its own, F30d-b).
+    fn column_blocks(&mut self, depth: u32) -> String {
+        let n = 1 + self.rng.below(4);
+        let mut out = String::new();
+        for _ in 0..n {
+            out.push_str(self.ws());
+            let pick = if depth == 0 { 0 } else { self.rng.below(6) };
+            match pick {
+                0..=2 => out.push_str(&format!("<p>{}</p>", self.inline_tight(2))),
+                3 => out.push_str(&format!("<div>{}</div>", self.column_blocks(depth - 1))),
+                _ => out.push_str(&format!("<w>{}</w>", self.column_blocks(depth - 1))),
+            }
+        }
+        out
+    }
+
     fn list(&mut self, depth: u32) -> String {
         let tag = if self.rng.chance(50) { "ul" } else { "ol" };
         let n = 1 + self.rng.below(3);
@@ -715,7 +804,16 @@ fn fuzz(from: u64, to: u64) {
             rng: Rng(0x9E37_79B9_7F4A_7C15 ^ seed.wrapping_mul(0xD1B5_4A32_D192_ED03) | 1),
             word: 0,
         };
-        let body = g.blocks(4);
+        let mut body = g.blocks(4);
+        // A multicol container at the top level (nested in flex, tables or other multicol containers the F30d flow
+        // has gaps of its own that are not about wrappers, F30d-b).
+        let has_columns = g.rng.chance(40);
+        if has_columns {
+            let columns = g.column_blocks(3);
+            body.push_str(&format!(
+                "<div style=\"columns:2;column-gap:20px\">{columns}</div>"
+            ));
+        }
         let expected = g.word;
         // `DISPLAY_CONTENTS_FUZZ_DUMP=<dir>` writes every body (with the `<w>` / `<s>` markers), for bisecting.
         if let Ok(dir) = std::env::var("DISPLAY_CONTENTS_FUZZ_DUMP") {
@@ -766,7 +864,8 @@ fn fuzz(from: u64, to: u64) {
                 seen_b.len()
             ));
         }
-        if seen_b.len() * 100 < expected * 97 {
+        // (A multicol container loses words of its own in the plain document too, F161: no floor there.)
+        if !has_columns && seen_b.len() * 100 < expected * 97 {
             failures.push(format!(
                 "seed {seed}: plain prints {} of {expected} words\n{body}",
                 seen_b.len()
