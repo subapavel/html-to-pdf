@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#a4b7624ca4b39fb68b525291bb21ee5878b13941"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#d5d60b79369f10f6b6ae9241336839bea6ae4447"
 dependencies = [
  "accesskit",
  "app_units",
@@ -207,6 +207,7 @@ dependencies = [
  "image",
  "keyboard-types",
  "linebender_resource_handle",
+ "log",
  "markup5ever",
  "objc2",
  "parley",
@@ -230,12 +231,12 @@ dependencies = [
 [[package]]
 name = "blitz-html"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e77adcd3cb60e67d365bc897c6120ecb684627f2e2265c2bb75b12cc6c4bc4de"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#d5d60b79369f10f6b6ae9241336839bea6ae4447"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
  "html5ever",
+ "log",
  "xml5ever",
 ]
 

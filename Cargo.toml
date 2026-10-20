@@ -46,4 +46,5 @@ opt-level = 2
 [patch.crates-io]
 fulgur = { git = "https://github.com/subapavel/fulgur", branch = "htmltopdf/srgb-colours" }
 blitz-dom = { git = "https://github.com/subapavel/blitz", branch = "htmltopdf/blitz-dom-0.2.4" }
+blitz-html = { git = "https://github.com/subapavel/blitz", branch = "htmltopdf/blitz-dom-0.2.4" }
 taffy = { git = "https://github.com/subapavel/taffy", branch = "htmltopdf/minimum-contribution" }
