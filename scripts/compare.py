@@ -32,8 +32,8 @@ THRESHOLDS = {
     # resolved lines; every ruled row used to be short by its rule's width). Worst page, main -> F22 (threshold = new + 1
     # point): 01 4.4 -> 3.0, 02 11.1 -> 4.8 (19 rows on page 1 like Chrome), 03 5.7 -> 4.7, 04 5.7 -> 3.8, 05 3.5 -> 3.3,
     # 06 15.9 -> 11.8, 07 7.2 -> 3.7, 08 13.2 -> 12.1, 09 5.1 -> 4.0, 10 5.9 -> 5.2, 11 6.9 -> 3.1, 12 14.6 -> 8.8,
-    # 14 7.5 -> 3.9, 15 8.7 -> 4.5, 17 12.0 -> 5.7, 18 5.3 -> 3.1, 20 8.9 -> 3.3 %. 13, 16 and 19 did not move (their worst
-    # page has no collapsed table). What is left is text drift and, on 03 and 20, grid lines that sit 1 px off Chrome's.
+    # 14 7.5 -> 3.9, 15 8.7 -> 4.5, 17 12.0 -> 5.7, 18 5.3 -> 3.1, 20 8.9 -> 3.3 %. The worst pages of 13, 16 and 19 did
+    # not move (no collapsed table on them; 13 p1 1.9 -> 1.5 and 16 p1 16.6 -> 9.5 did). What is left is text drift and, on 03 and 20, grid lines that sit 1 px off Chrome's.
     # Lowered in F1 (sRGB colour conversion): 01 5.3 → 4.4, 02 10.6 → 10.4, 03 10.1 → 8.9, 04 9.9 → 5.8,
     # 05 32.3 → 21.5 %.
     "01-basic": 0.04,
