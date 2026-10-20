@@ -1,6 +1,6 @@
 # F100: html5ever parse errors printed on stdout
 
-Date: 2026-10-20. Finding: F100 (`2026-10-15-m0-findings.md`). Status: planned.
+Date: 2026-10-20. Finding: F100 (`2026-10-15-m0-findings.md`). Status: done (§7).
 Forks: `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` (after `a4b7624`, the commit in `Cargo.lock:193`). The fulgur fork does not change. Line references are to the working trees at `/home/user/blitz` and `/home/user/fulgur`, and to the crates.io sources in `~/.cargo/registry`.
 
 ## 1. Problem
@@ -152,4 +152,50 @@ Each step takes one day or less and can be tested on its own.
 
 ## 7. Result
 
-(to be filled)
+Done on branch `f100-stdout-parse-errors`. Output is unchanged: the library now writes nothing to fd 1 on any fixture or corpus document.
+
+**Commits.**
+
+- Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`: `c1c708c` (`blitz-html`: `log` dependency, `finish` -> `log::debug!`, lib test `parse_errors_go_to_log`) and `d5d60b7` (`blitz-dom`: `log` dependency, the four sites of §3, lib test `a_rejected_inline_svg_is_a_warning`). Base `a4b7624`. The Blitz `Cargo.lock` that local runs rewrite was not committed.
+- Ours: red tests, then `[patch.crates-io] blitz-html` with the lock change, then docs.
+
+**Red / green.** All three tests were red on main for the stated reason and are green now.
+
+| Test | Main | Now |
+|---|---|---|
+| `stdout_clean.rs` `no_doctype_and_margin_boxes_write_nothing_to_stdout` | stdout holds `ERROR: Unexpected token` lines and the SVG dump (`286 SVG parse failed` + the markup) | ok |
+| `stdout_clean.rs` `parse_errors_are_visible_at_debug` | same stdout | ok (stderr has "Unexpected token" with `RUST_LOG=blitz_html=debug`) |
+| `parse_error_log.rs` | no record at all | ok: `Debug` record from `blitz_html`, none at `Warn`, one `Warn` from `blitz_dom` for the SVG |
+
+Fork tests: `cargo test -p blitz-dom -p blitz-html --lib` 75 + 2 passed, and 77 + 2 with `--features blitz-dom/parallel-construct`.
+
+**stdout lines** (`htmltopdf render`, bench flags, `RAYON_NUM_THREADS` 1 and 4, same counts):
+
+| Document | Main `f821b67` | Now |
+|---|---|---|
+| `b200-items` | 437 | 0 |
+| `02-long` | 9 | 0 |
+| `17-running-footer`, `18-a5-receipt` | 2 each | 0 |
+| all other 23 documents | 0 | 0 |
+
+stderr is one line per document on both binaries (the timing line; `slow-breaks` has its `@layer` warning, two lines): no new noise. The plan said 416 lines for `b200-items`; main's binary prints 437 (not investigated why the earlier number differs; the PDF is unchanged either way).
+
+**Bytes.** 27 documents (fixtures 01-20, the 7 corpus documents) x 1 and 4 threads = 54 renders: 54 of 54 sha256-identical to `/tmp/claude-0/htmltopdf-main-f821b67`. `compare.py`'s `summary.json` is byte-identical to main's (every fixture's pixel diff is unchanged). `out/compare/02-long-p3.png` was looked at: the footer "Strana 3 / 3" is present.
+
+**Level decisions.**
+
+- Parse errors: `debug` (§3).
+- Text node laid out on its own (`layout/mod.rs`): `warn`. The site did not fire on any fixture or corpus document (stdout would have shown "Tried to lay out"; it did not), so the CLI prints nothing new. The text of such a node is hidden, which is content loss.
+- Rejected inline SVG: `warn` with node id and usvg's error (`InvalidSize` for `width="0" height="0"`, found in step 0); the markup at `debug`.
+- Table descendant without styles, "No DOM": `debug`.
+
+**Other checks.** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test --release --locked` (572 tests) pass; `cargo tree -d` shows no second `blitz-dom` or `blitz-html`, and `Cargo.lock` has `blitz-html` from the git source. `bench.py --check` ok (`b200-items` 1611 ms, `b200-mixed` 1117 ms, the 1 s goal is not met on this machine, as before). `Cargo.lock` changed in blitz-html's source line, the `blitz-dom` pin and the `log` edges only; the `skrifa` rewrite that `cargo update` made was reverted by hand.
+
+**Deviations.**
+
+- 437 lines instead of 416 (above).
+- Step 0's `diff -r` of the fork's `blitz-html/src` against crates.io 0.2.0: identical.
+- The blitz-dom SVG test builds the tree with the mutator (blitz-dom does not depend on `blitz-html`), and the blitz-html test uses `log::set_logger` with a static (the `std` feature of `log` is off in the fork's lock).
+- Not done: `vrt-validator` (run by the caller), `pdf-reviewer` (not required), `eprintln!` sites (F151).
+- Not verified: Blitz `main` may have changed these sites; the cost of rebasing the two fork commits onto a Blitz bump is not measured.
+
