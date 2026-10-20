@@ -1,6 +1,6 @@
 # F99d: one very long table, made linear in Taffy's grid minimum contribution
 
-Date: 2026-10-20. Finding: F99d (speed, AGENTS.md goal 2), step 5 of F99. Status: **planned**. Previous steps: `2026-10-20-f99c-table-scaling.md` (§7.1 has the Step 0 profile this plan uses).
+Date: 2026-10-20. Finding: F99d (speed, AGENTS.md goal 2), step 5 of F99. Status: **done**. Previous steps: `2026-10-20-f99c-table-scaling.md` (§7.1 has the Step 0 profile this plan uses).
 
 Line references are to the working trees I read. I could not check the commits with git.
 
@@ -191,4 +191,58 @@ The four call sites (`:600`, `:607`, `:695`, `:702`) do not change: `IntrinsicSi
 
 ## 7. Result
 
-To be filled in after Step 3.
+Status: **done**. Fork: Taffy `7bbedd5` on `8f30e39` (`subapavel/taffy`, branch `htmltopdf/minimum-contribution`, `version = "0.9.2"` kept). Measured 2026-10-20 on the 4 vCPU Xeon @ 2.80GHz host of F99c (not the baseline's 2.10GHz host: use ratios and A/B deltas).
+
+### 7.1 Step 0
+
+- **Source diff:** `diff -r` of `/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/taffy-0.9.2/src` and `/home/user/taffy/src` at `8f30e39`: **identical**.
+- **Taffy matrix on unchanged `8f30e39`:** `cargo test --tests` 2182 passed, 0 failed; `--all-features` 2184; `--no-default-features --features grid,std,taffy_tree`, `alloc,grid,flexbox,block_layout,taffy_tree`, `taffy_tree` only and `grid,detailed_layout_info,std,taffy_tree` 2182 each (the feature sets give the same count because the `taffy = { path = "." }` dev-dependency turns the default features on for the test targets); `cargo build --no-default-features` and `--features alloc,grid,flexbox,block_layout` ok; `cargo fmt --all -- --check` ok.
+  Failures that were already there: `cargo clippy --workspace -- -D warnings` fails in `scripts/import-yoga-tests` (`useless_borrows_in_formatting`, a lint of the newer clippy 1.97; not the library); `cargo clippy -p taffy --all-targets -- -D warnings` fails in Taffy's own test targets (`f64` to `f32` literal fallback warnings, future-incompat); `cargo clippy -p taffy -- -D warnings` is clean.
+
+### 7.2 What changed
+
+Taffy fork `7bbedd5` (4 files, `compute/grid`): `AxisTrackFlags { any_auto_min, any_flexible_max }` with `AxisTrackFlags::of(axis_tracks)` (the two `any` expressions, verbatim) in `types/grid_track.rs`; `minimum_contribution` and `minimum_contribution_cached` take it after `axis_tracks`; `IntrinsicSizeMeasurer` has the field and passes it on, so the four call sites are unchanged; `resolve_intrinsic_track_sizes` computes it once after the `flex_factor_sum` line and ends with `debug_assert_eq!(AxisTrackFlags::of(axis_tracks), axis_track_flags)`. Only `core` types; MSRV: a copy of `src` + `Cargo.toml` + `README.md` without the workspace builds with `cargo +1.65 build` (default features and `alloc,grid,flexbox,block_layout`). The workspace itself does not resolve with 1.65 (the benches' `web-sys`), as on `8f30e39`.
+Ours: `Cargo.toml` `[patch.crates-io]` `taffy = { git = ..., branch = "htmltopdf/minimum-contribution" }`; `Cargo.lock`: the one `taffy` entry's source (`git+https://github.com/subapavel/taffy?branch=htmltopdf%2Fminimum-contribution#7bbedd5b...`, no checksum), still 0.9.2. `cargo update -p taffy` also rewrote `cssparser-macros`'s `syn 3.0.9` to `syn 2.0.119`; I put that line back by hand so the lock diff is only the taffy entry (`cargo metadata --locked` and `--locked` builds accept it). `cargo tree -i taffy --locked`: one taffy, from the git source, under `blitz-dom`, `fulgur` and `stylo_taffy`. Docs: `docs/upstream.md` (gap row carried, new patches row, bump paragraph), `AGENTS.md` Upstream, findings (F99 step 5, F99d done, F146, F147), `docs/benchmarks.md`; `.gitignore` gets `__pycache__/` (asked by the coordinator).
+
+### 7.3 Acceptance
+
+1. **Bytes: 86 of 86 identical** (`/tmp/claude-0/htmltopdf-main-6ad12cb`, main with F99c, against the branch binary; 20 fixtures + 7 corpus documents + 16 scaling variants, at `RAYON_NUM_THREADS=1` and `=4`; sha256 of the whole PDF). The same 86 were also identical for the F99c branch head `5f95ffe` against a local-path (`--config`) build of the fork before wiring (step 2). `compare.py --threshold-check`: `summary.json` byte-identical to main's, every fixture ok, so the pixel-diff change is 0. Looked at `out/compare/02-long-p2.png` (header copy with its rule, row rules) and page 120 of 210 of `b200-items` (60 dpi): as before.
+2. **The cause is gone** (symbolised build, frame pointers, line tables, scratch target dir deleted; `perf record -e cpu-clock -F 999 -g`, 1 thread, `t`; ms of CPU, before = F99c head, after = the fork):
+
+| rows | 1200 | 2400 | 4800 | 9600 |
+|---|---:|---:|---:|---:|
+| `minimum_contribution` self, before | 19 | 53 | 233 | 1107 |
+| `minimum_contribution` self, after | 1 | 0 | 1 | 3 |
+| `minimum_contribution` inclusive, before -> after | 27 -> 17 | 89 -> 38 | 317 -> 60 | 1308 -> 194 |
+| `resolve_intrinsic_track_sizes` inclusive, before -> after | 44 -> 29 | 113 -> 60 | 369 -> 112 | 1453 -> 346 |
+| all samples, before -> after | 458 -> 468 | 869 -> 879 | 2042 -> 1665 | 5012 -> 4037 |
+
+   Targets: self time at 4800 rows <= 20: **1** (was 233; the F99c profile said 291). `resolve_intrinsic_track_sizes` r(4800/1200) <= 5: **3.9** (before 8.4 in this run; 9.4 in F99c). The remaining 112 samples at 4800 rows are measurements Blitz needs anyway (60 of them inside `minimum_contribution`'s inclusive part).
+3. **Taffy suite on the fork** (branch `7bbedd5`): `cargo test --tests` 2188 passed, 0 failed (2182 + the 6 new unit tests); `--all-features` 2190; the four feature sets 2188 each; `cargo build --no-default-features`, `--features alloc,grid,flexbox,block_layout` ok; `cargo clippy -p taffy -- -D warnings` clean (the two failures of 7.1 are unchanged: no diagnostic points at the changed files); `cargo fmt --all -- --check` ok; MSRV copy builds with 1.65. Not run: `cargo build --features debug`, `--examples`, the doc job (nightly), the `i686-linux-android` build. The `debug_assert` ran in every one of those tests (dev profile).
+4. **Red / green:** the six tests in `grid_track.rs::axis_track_flags_tests` (empty and gutters only; all `auto`; fixed + `auto`, `fr`, `minmax(auto, 1fr)`, `fit-content`; collapsed; an `auto` or `fr` track only at the last index of 1001 tracks; every pair of (5 min, 7 max) sizing functions in vectors of up to three tracks) were written first: `cargo test --lib axis_track_flags` failed to compile (`E0432: unresolved import super::AxisTrackFlags`), then 6 passed.
+5. **Consumers with the local patch** (`--config` `patch.crates-io.taffy.path` and, for fulgur, `blitz-dom.path = /home/user/blitz/packages/blitz-dom`; lockfiles of the forks restored with `git checkout -- Cargo.lock`, forks have no new commits): fulgur `cargo test -p fulgur --lib` 2207 passed, `render_smoke` 18, `gcpm_integration` 277 (the same numbers as F99c); `fulgur-vrt`: 26 goldens fail, the same list with the same byte sizes as before (host fonts, F99c §7.3.5); Blitz `cargo test -p blitz-dom --lib` 74 passed, with `--features parallel-construct` 76 (after `cargo update -p taffy` under the config, because Blitz's lock pins 0.9.1: the first run without it did not use the patch, cargo only warned "patch ... was not used", and I repeated it); ours `cargo test --release --locked` 52 result lines all ok, 569 tests (incl. `determinism_threads`); `cargo clippy --workspace --all-targets --locked -- -D warnings` clean; `cargo fmt --all -- --check` clean.
+6. **Speed** (A B A B, 4 threads, this host; main = F99c):
+
+| document | main | fork | change |
+|---|---:|---:|---:|
+| `b200-items` round 1 / 2 (median of 7) | 1884 / 1929 | 1673 / 1619 | -211 / -310 ms (-11 / -16 %) |
+| `b200-items`, 15 interleaved runs, wall | 1829 | 1601 | -228 ms (-12.5 %); CPU 2080 -> 1860 |
+| `b200-mixed` round 1 / 2 | 1223 / 1160 | 1112 / 1036 | -9 / -11 % |
+| `02-long` round 1 / 2 | 51.9 / 48.2 | 48.0 / 47.3 | within noise |
+| `b200-text` round 1 / 2 (7), 3 / 4 (11 runs), 15 interleaved | 914 / 957, 913 / 905, 975 | 968 / 994, 1007 / 930, 973 | +6 / +4, +10 / +3 %, 0 % |
+
+   The stated target (`b200-items` at least -150 ms) is met; the 1 s goal is **not** (1.6-1.7 s here, about 1.2 s on the baseline host if the 1.4 ratio holds, an estimate). `b200-text` has no table, so its +4 to +10 % in the first four pairs is the VM's spread (the 15-run interleaved comparison is 975 vs 973). `bench.py --check --runs 5` ok (hard budgets and the scaling gate; r of `t` 3.90; `--scaling` all variants 3.85-4.29, F99c 4.0-4.45). `SCALING_MAX_RATIO` stays 6.0. `bench/baseline.json` and `HARD_MS_OVERRIDE["b200-items"]` not changed: the machine label differs from the baseline's (2.80 against 2.10 GHz), so lowering has nothing to lower here. Redo both on the baseline host.
+7. **Reviews:** `vrt-validator` is run by the coordinator; `pdf-reviewer` not required (§4.7).
+
+### 7.4 Deviations
+
+- Disk (7 GB free at the start) made me delete things while working: the Taffy test binaries and `target/debug/incremental` in the fulgur target dir, `target/debug` of our repo (rebuilt by the clippy run), and the symbolised build's scratch target dir (about 4 GB, deleted right after the perf runs, as planned). `CARGO_INCREMENTAL=0` for everything in Taffy and the forks.
+- `cargo +1.65` made rustup install the 1.65 toolchain on the spot (I did not run an install command; the plan allowed it: "if the toolchain installs"). It cannot build the Taffy workspace, so MSRV was checked on a scratch copy of `src`.
+- The byte matrix was run twice: for step 2 against the F99c branch head (the binary I had before F99c was merged), and after wiring against `/tmp/claude-0/htmltopdf-main-6ad12cb`. The latter is bit-for-bit the same file as the first one (`cmp`), because the F99c branch head and `6ad12cb` have the same tree.
+- A `cargo update -p taffy` side effect (`syn 3.0.9` -> `2.0.119` for `cssparser-macros`) was reverted by hand in `Cargo.lock` (7.2).
+- Plan §3.1 said the scan costs `2R+1` checks per item: not re-counted; the profile shows the effect (self time 233 -> 1 ms), which is what matters.
+- New: `.gitignore` `__pycache__/` (coordinator's instruction), not in the plan.
+
+### 7.5 Not verified
+
+`vrt-validator` and the CI run on GitHub. `cargo test` in Taffy was run on one machine, debug profile only. The scaling gate's r moves by 0.4 between runs, so r numbers (3.85-4.29) cannot show a difference of F99d's size; the time deltas can. The claim that Chrome-like semantics are kept rests on byte equality of 86 PDFs, not on spec reading.

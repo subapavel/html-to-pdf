@@ -111,8 +111,8 @@ python3 scripts/bench.py [--check]                       # render time table / s
 
 ## Upstream
 
-We depend on a pinned `fulgur` minor. Fixes that belong in fulgur or Blitz live in our forks
-(`subapavel/fulgur`, `subapavel/blitz`) and are carried via `[patch.crates-io]`; we do not send them upstream.
+We depend on a pinned `fulgur` minor. Fixes that belong in fulgur, Blitz or Taffy live in our forks
+(`subapavel/fulgur`, `subapavel/blitz`, `subapavel/taffy`) and are carried via `[patch.crates-io]`; we do not send them upstream.
 When bumping a dependency, rebase the fork branch onto the new release commit, or drop it if the release
 already contains the fix. Track every fork branch in `docs/upstream.md`.
 Known upstream gaps that hit invoices: `border-collapse` (Blitz #386; carried in our fork since F22), inline-level backgrounds, nested table fragmentation.

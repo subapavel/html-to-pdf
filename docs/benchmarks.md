@@ -66,8 +66,20 @@ Measured 2026-10-20, 4 vCPU Xeon @ 2.80GHz, median of 5, main `fbaf57f` -> F99c 
 | t-nohead | 4.16-5.03 | 4.22-4.30 |
 | t-boxes | 4.44-5.69 | 4.13-4.44 |
 
-What is left is Taffy's grid track sizing (`GridItem::minimum_contribution` scans every track of the axis for every item): about
-360 of 2150 profile samples at 4800 rows, growing as n^1.5-1.8 (F99d, `docs/plans/2026-10-20-f99c-table-scaling.md` §7).
+F99d (2026-10-20, Taffy fork `7bbedd5`: the two per-axis booleans of `GridItem::minimum_contribution` are computed once per axis instead of once per item) took the Taffy part out of that
+cost; `docs/plans/2026-10-20-f99d-taffy-minimum-contribution.md` §7. Same host, binaries alternating, `--scaling` with 5 runs:
+
+| variant | r before (F99c) | r after (F99d) |
+|---|---:|---:|
+| t | 4.07-4.40 | 3.90-4.29 |
+| t-sep | 4.00-4.21 | 4.28 |
+| t-noavoid | 4.37-4.45 | 4.29 |
+| t-nohead | 4.22-4.30 | 3.85 |
+| t-boxes | 4.13-4.44 | 4.08 |
+
+The ratio moves little because the Taffy cost sat inside the superlinear part only partly (the profile of 1 thread, `t`: `GridItem::minimum_contribution` self time 19 / 53 / 233 / 1107 ms at 1200 / 2400 / 4800 / 9600 rows before,
+1 / 0 / 1 / 3 after; `resolve_intrinsic_track_sizes` inclusive 44 / 113 / 369 / 1453 -> 29 / 60 / 112 / 346, r(4800/1200) 8.4 -> 3.9); the absolute time is what changed (`t` at 4800 rows under perf 2042 -> 1665 ms, at 9600 rows 5012 -> 4037 ms).
+What is left of the table is spread over parse, style, shaping, convert and paint, with the pagination scans of F144 the next known superlinear one.
 
 ## Current numbers
 
@@ -113,6 +125,9 @@ Reading it:
   The numbers of this host are about 1.4 times those of the baseline's host for the same binary (main's `b200-items` was 1575 ms there), so the 1 s goal
   cannot be judged here; scaled by that ratio the branch would take about 1.3 s on the baseline host (an estimate, not measured), over the goal. The change removes
   about a seventh of `b200-items`; the rest of the table is mainly Taffy (F99d).
+- **F99d (2026-10-20, same 2.80GHz host, `bench/baseline.json` and `HARD_MS_OVERRIDE` again not touched: the machine label differs).** Main `6ad12cb` (F99c) against the Taffy fork, alternating, median of 7: `b200-items` 1884 / 1929 -> 1673 / 1619 ms (-211 / -310, -11 / -16 %);
+  15 interleaved runs of each binary: 1829 -> 1601 ms wall (-228 ms, -12.5 %), CPU 2080 -> 1860 ms. `b200-mixed` 1223 / 1160 -> 1112 / 1036, `02-long` 51.9 / 48.2 -> 48.0 / 47.3. `b200-text` shows +4 / +6 % in the first two A B pairs and +10 / +3 % in two more (11 runs), but 975 -> 973 ms in the 15-run interleaved comparison:
+  it has no table, so this is the VM's noise, not the change. The 1 s goal is not met for `b200-items` here (1.6-1.7 s; scaled by the host ratio of about 1.4 it would be about 1.2 s on the baseline host, an estimate, not measured).
 - The very first render of a large document can be much slower than the rest (`b200-items` took 5.7 s once, then 2.2-2.5 s; cause not investigated, probably cold caches); that is why gated documents get a warm-up.
 
 ## The guard (`--check`)
