@@ -126,4 +126,40 @@ The new file is `crates/htmltopdf/tests/display_contents.rs`, in the style of `b
 
 ## 7. Result
 
-(to be filled)
+Implemented as planned (Blitz fork `0819dd4`, `b4cbc77`; fulgur fork `2dc4c2b`, a test only; our crate: tests, lock bump, fixture 21).
+
+**Step 0, main `ff67bde` against Chrome** (probes C1-C16 in the order of §4, A4, Inter, positions relative to the first word; Chrome 1.5 pt is the tolerance of the test):
+
+| Probe | Main | Chrome / fixed |
+|---|---|---|
+| C1, C2, C3 | only `end` / only `start` / only `y` | all words, stacked or on one line as in Chrome |
+| C4, C5 | `a d` / `w1 w9 w10` (inner words lost) | `a b c d`, e on the next line; 7 lines like Chrome |
+| C6a | `FakturaCelkem` side by side on one line | two lines, 15 pt apart |
+| C6b | fine | fine (guard) |
+| C7, C8 | `tx three` only / `loose g4` only | `one two tx three` (offsets 28.8 / 57.2 / 75.2 pt, ours 29.3 / 57.8 / 75.8); 2 x 2 grid |
+| C9 a/b/c | fine (x differs by 1.7 pt in cells, table-spacing drift, not this finding) | same |
+| C10 | `1.` and `Treti` only | `1.` `2.` `3.` |
+| C11 | B small, black | B 30 px, red (the line placement differs from Chrome with and without a wrapper: F158) |
+| C12 | pseudos and blocks lost in block and mixed context | `Pred / blk / Po`, `PredinlPo`, `m Predmix iPo` |
+| C14 | 1 page, runs side by side, every line glued | 3 pages like Chrome and like the unwrapped version |
+| C16 | nothing printed (`body{display:contents}`) | both words |
+| F150 a/b/c | `EnginePanic: invalid key` | `Ok`, words preserved |
+
+Causes confirmed with the red Blitz unit tests rather than a dump: `layout_children` of the body in C1 lacks the `<p>`s (F153), and the F150 trees panic at `document.rs:1146` inside `doc.resolve`. `text-decoration` on a contents element: Chrome draws none, we draw it (F156). Chrome keeps the colour and font of the wrapper for its text.
+
+**Red / green.** Blitz `contents_tests` (new, 11 tests; blitz-dom 86 tests in all, 0 failures): on `d5d60b7` 7 of the first 8 fail (the F150 one with "invalid key"), the rest were added with the fixes. Ours `display_contents.rs` (18 tests + 1 `#[ignore]` long fuzz) on Blitz `d5d60b7`: 17 fail, C6b passes (it is the F111 guard); on the fix all 18 pass. Fuzz on main: 94 failure records in the first 64 seeds (12 of them `EnginePanic`); on the fix 0 of seeds 0-1999 (92 s release, 46 ms per seed; CI runs 64 seeds, 3 s release). The fulgur test `tables_under_display_contents_are_stacked_like_tables_outside_it` passes on the fix (4 pages, 19 tables on page 1, same cells as the unwrapped document); not run against the old Blitz. fulgur `cargo test -p fulgur --lib` against the fork: 2220 passed.
+
+**Fixture 21** (`fixtures/invoices/21-display-contents`): Chrome reference committed; 1 page, Chrome 1. Main's binary 7.4 % (the items grid, the notes, two terms and the supplier's lines are missing), the fix 3.7 %; `compare.py` threshold 0.047 (3.7 + 1 point). Fixtures 01-20 keep their numbers (the threshold check passes on all 21). I looked at `out/compare/21-display-contents-p1.png`: the page matches Chrome except the bold amount in the monospace `dd` (the bundled mono has no bold).
+
+**Bytes.** Fixtures 01-20, the bench corpus (`b200-*`, `slow-*`) and the scaling variants against main's binary, 1 and 4 threads: 92 of 92 identical.
+
+**Deviations from the plan.**
+
+- A contents element opens a Parley style span only when it changes the text (`contents_needs_span`: other font / colour / white-space mode, a text decoration, or an `<a>`). The plan wrapped always; Parley trims the whitespace at both edges of every span (F154, also on main for ordinary `<span>`s), so an unstyled wrapper glued words. With this the oracle (wrapper without styles moves nothing, 0.01 pt) holds.
+- In flex and grid containers only whitespace that would start a run of text is hidden (a run reaches across a contents boundary). The plan did not foresee it; the fuzz test found it (48 of 1500 seeds).
+- The classification includes the `::before` / `::after` of contents children; `flush_inline_pseudos_recursive` also recurses into contents children.
+- The fuzz test compares the wrapped render with the plain one (same words, same boxes) and requires at least 97 % of the words in the plain one, instead of "each word exactly once" in both: a `flex-wrap` row in a table cell runs off the page in 4 of 1500 seeds on both renders (F155). The generator adds `gap`, `padding`, `flex-wrap`, `table-layout: fixed` and `p { max-width: 150px }` so that items do not touch and rows do not overflow the page, and never puts whitespace inside the edges of an inline element (F154).
+- Chrome constants are offsets from the first word, not absolute positions (the host's Inter differs from the bundled one by a constant).
+- New findings: F154 (Parley edge trimming, medium-high), F155 (flex-wrap in a fixed table cell), F156 (decoration on a contents element), F157 (first `li` marker), F158 (larger inline span in a fixed line-height), F159 (leftovers of the plan's non-goals).
+
+**Not verified.** No `pdf-reviewer` run: `<a style="display:contents">` now gets a link annotation (1 in the probe, as in Chrome), not otherwise inspected. The fulgur test against the old Blitz. The fuzz test in the debug profile (only `--release` was timed). The spec statements of §2 are still from memory. Pagination of a contents wrapper that straddles a page break was covered only by C14 and the fuzz test.

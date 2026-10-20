@@ -149,6 +149,11 @@ THRESHOLDS = {
     #     than Chrome's because collapsed `<tr>` borders are not painted (Blitz #386 / F22), which adds up to 7 px at the last item.
     #     Worst page + 1 point; F22 brings it down.
     "20-tfoot-first": 0.044,
+    # 21: new in F150 / F153 (a Czech invoice whose address blocks, item-grid rows, notes and list items sit in
+    #     `display: contents` wrappers, one page like Chrome's). 3.7 %: the text drift every fixture has. On main's binary
+    #     the item grid, the notes, the first two terms and the supplier's lines were lost and the rest was misplaced
+    #     (7.4 %, though most of the page was missing). Worst page + 1 point.
+    "21-display-contents": 0.047,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

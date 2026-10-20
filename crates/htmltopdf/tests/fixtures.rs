@@ -260,6 +260,63 @@ fn tfoot_first_invoice_prints_the_totals_below_the_last_item() {
     );
 }
 
+/// F150 / F153: fixture 21 puts its address blocks, the rows of its item grid, its notes and some list items inside
+/// `display: contents` wrappers. On main's binary the items grid, the notes, the first terms and the supplier's lines
+/// were missing from the PDF (7.4 % against Chrome); every word must be printed, in one page.
+#[test]
+fn display_contents_invoice_prints_everything_the_wrappers_hold() {
+    let name = "21-display-contents";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "21");
+    for needle in [
+        "Dodavatel",
+        "IČO 12345678",
+        "Odběratel",
+        "IČO 87654321",
+        "Servisní paušál",
+        "Cestovné",
+        "46 340,00 Kč",
+        "Poznámky",
+        "Splatnost faktury je 2. 11. 2026",
+        "Fakturu jsme vystavili",
+        "Cena zahrnuje DPH",
+        "Reklamace uplatněte",
+        "Dodávka služeb",
+        "20260021",
+    ] {
+        assert!(
+            text.contains(needle),
+            "{name}: `{needle}` missing from the PDF text: {text}"
+        );
+    }
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-21p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           1"),
+        "{name}: one page like Chrome"
+    );
+}
+
 #[test]
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.

@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#d5d60b79369f10f6b6ae9241336839bea6ae4447"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#b4cbc770cca9858919a1ae2eec4e07fe50b8c40a"
 dependencies = [
  "accesskit",
  "app_units",
@@ -231,7 +231,7 @@ dependencies = [
 [[package]]
 name = "blitz-html"
 version = "0.2.0"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#d5d60b79369f10f6b6ae9241336839bea6ae4447"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#b4cbc770cca9858919a1ae2eec4e07fe50b8c40a"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -958,7 +958,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#7ae03d0e4fff757495ea03318a443d3dc548c896"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#2dc4c2b16c2933a89a5f29c3ba991571ee1182de"
 dependencies = [
  "blitz-dom",
  "blitz-html",
