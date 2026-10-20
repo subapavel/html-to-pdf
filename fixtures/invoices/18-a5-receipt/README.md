@@ -19,9 +19,9 @@ Exercises (F6, `@page` half; css-page-3 "Page context" and the `size` property):
 - the document's `@page { margin: 10mm }` decides the content box: text starts 38 px from the left and top edge (Chrome: the same).
 - a margin box on a non-A4 page: the footer sits in the bottom 38 px band of the A5 page.
 
-The remaining diff (5.3 %) is the text drift every fixture has, the `border-b` rules Chrome paints on the item rows (`<tr>` borders,
-Blitz #386 / F22) and the footer: Chrome centres it in the margin box, ours starts at the box's left edge and sits about 11 px higher
-(centre margin box alignment, F110, and vertical centring, F103). The threshold in `scripts/compare.py` is the worst page + 1 point.
+The remaining diff (2.9 %; 3.1 % before F103 / F110 centred the footer in its box) is the text drift every fixture has and the `border-b`
+rules Chrome paints on the item rows (`<tr>` borders, Blitz #386 / F22). The footer is where Chrome's is: centred in the box both ways.
+The threshold in `scripts/compare.py` is the worst page + 1 point.
 
 Every class is in the compiled `fixtures/tailwind/tailwind.css` (no inline styles, no rebuild). The tests that pin the sizes without
 Tailwind are in `crates/htmltopdf/tests/page_from_css.rs`.

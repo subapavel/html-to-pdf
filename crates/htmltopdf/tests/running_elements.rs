@@ -235,6 +235,19 @@ struct Shows {
     link: bool,
 }
 
+/// The words inside the content area, sorted by position and not left in pdftotext's reading order: where a margin
+/// box prints (F103 centres it in its band) changes how pdftotext groups the words of the first table row, and the same
+/// page then lists them in another order. The positions are compared word by word by the caller.
+fn content_words(all: &[Word], band: Band) -> Vec<&Word> {
+    let mut v: Vec<&Word> = all.iter().filter(|w| w.in_content(band)).collect();
+    v.sort_by(|a, b| {
+        (a.page, a.y0.round() as i32, a.x0.round() as i32)
+            .cmp(&(b.page, b.y0.round() as i32, b.x0.round() as i32))
+            .then_with(|| a.text.cmp(&b.text))
+    });
+    v
+}
+
 /// The checks (a) to (d) for one case: `x` is the document with the running elements, `x_ref` without.
 fn check(name: &str, band: Band, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden: &[&str]) {
     let wx = words(x);
@@ -246,8 +259,11 @@ fn check(name: &str, band: Band, x: &[u8], x_ref: &[u8], shows: &[Shows], hidden
     );
 
     // (a) the content area is the one of the document without the running element.
-    let cx: Vec<&Word> = wx.iter().filter(|w| w.in_content(band)).collect();
-    let cr: Vec<&Word> = wr.iter().filter(|w| w.in_content(band)).collect();
+    // Sorted by position, not in pdftotext's reading order: where a margin box prints (F103 centres it in its band)
+    // changes how pdftotext groups the words of the first table row, and the same page then lists them in another
+    // order. The positions are compared word by word below.
+    let cx: Vec<&Word> = content_words(&wx, band);
+    let cr: Vec<&Word> = content_words(&wr, band);
     let texts = |v: &[&Word]| v.iter().map(|w| w.text.clone()).collect::<Vec<_>>();
     if texts(&cx) != texts(&cr) {
         let first = cx
