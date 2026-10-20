@@ -284,14 +284,14 @@ fn display_contents_invoice_prints_everything_the_wrappers_hold() {
         .unwrap_or_else(|e| panic!("{name}: {e}"));
     let text = pdf_text(&pdf, "21");
     for needle in [
-        "Dodavatel",
+        "DODAVATEL",
         "IČO 12345678",
-        "Odběratel",
+        "ODBĚRATEL",
         "IČO 87654321",
         "Servisní paušál",
         "Cestovné",
         "46 340,00 Kč",
-        "Poznámky",
+        "POZNÁMKY",
         "Splatnost faktury je 2. 11. 2026",
         "Fakturu jsme vystavili",
         "Cena zahrnuje DPH",
