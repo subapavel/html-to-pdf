@@ -400,6 +400,147 @@ fn table_border_collapses_with_cells() {
     assert_pixel(&page, (5, 20), WHITE, "inside the line");
 }
 
+// -- review fixes: header copy tie, inline boxes, div tables ---------------------------------------
+
+#[test]
+fn line_under_a_repeated_header_is_the_cut_line_at_equal_width() {
+    // M1. `thead tr` has a 3 px blue rule, the body rows 3 px red ones. Page 1 shows blue under the header; on the
+    // continuation pages the copy of the header stands on the line the page break cut, which is the body row's red
+    // (Chrome 141, probe `brk_head`; fixtures 02 and 09: gray-300 header rule, gray-100 row rules). Rows hold text,
+    // so the break is between them.
+    let rows: String = (0..120)
+        .map(|_| "<tr style=\"border-bottom: 3px solid red\"><td>x</td></tr>")
+        .collect();
+    let html = format!(
+        "<table><thead><tr style=\"border-bottom: 3px solid blue\"><td>H</td></tr></thead>\
+         <tbody>{rows}</tbody></table>"
+    );
+    let pdf = render_text_grid(&html);
+    let pages = page_count(&pdf);
+    assert!(pages >= 3, "expected a multi-page table, got {pages}");
+    assert_pixel(
+        &rasterise(&pdf, 1, 96),
+        (50, 41),
+        BLUE,
+        "page 1, rule under the header",
+    );
+    for n in 2..=pages {
+        assert_pixel(
+            &rasterise(&pdf, n, 96),
+            (50, 41),
+            RED,
+            &format!("page {n}, line under the header copy"),
+        );
+    }
+}
+
+/// A 2 x 2 table whose cells have 1 px borders and `5px 8px` padding.
+fn small_table(table_style: &str) -> String {
+    let cell = |t: &str| format!("<td style=\"border: 1px solid #000; padding: 5px 8px\">{t}</td>");
+    format!(
+        "<table style=\"border-collapse: collapse; {table_style}\"><tr>{}{}</tr><tr>{}{}</tr></table>",
+        cell("a"),
+        cell("b"),
+        cell("c"),
+        cell("d")
+    )
+}
+
+/// The three horizontal lines of `small_table` are where the words say: one above `a` and `b`, one between the rows and
+/// one below `c` and `d`. Sampled in the left padding of the first column, at 72 dpi, where device pixels are pt.
+fn assert_small_table_boxes_hold_the_words(pdf: &[u8], what: &str) {
+    let found = words(pdf);
+    let (a, c) = (word(&found, "a"), word(&found, "c"));
+    let page = rasterise(pdf, 1, 72);
+    let x = (a.x_min - 3.0) as usize;
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for y in 0..400 {
+        if page.pixel(x, y).iter().all(|&v| v < 200) {
+            match runs.last_mut() {
+                Some(last) if last.1 + 1 == y => last.1 = y,
+                _ => runs.push((y, y)),
+            }
+        }
+    }
+    assert_eq!(runs.len(), 3, "{what}: dark runs at x {x}: {runs:?}");
+    assert!(
+        (runs[0].1 as f32) < a.y_min,
+        "{what}: top line {runs:?} is not above `a` ({:.1})",
+        a.y_min
+    );
+    assert!(
+        (runs[1].0 as f32) > a.y_max - 1.0 && (runs[1].1 as f32) < c.y_min + 1.0,
+        "{what}: middle line {runs:?} is not between the rows ({:.1} .. {:.1})",
+        a.y_max,
+        c.y_min
+    );
+    assert!(
+        (runs[2].0 as f32) > c.y_max - 1.0,
+        "{what}: bottom line {runs:?} is not below `c` ({:.1})",
+        c.y_max
+    );
+}
+
+#[test]
+fn collapsed_table_in_an_inline_block_is_painted_where_its_text_is() {
+    // M2. The cells of an inline box are dispatched under the box's own translation; their collapsed lines have to
+    // follow, or the boxes stand away from the text.
+    let table = small_table("");
+    for (what, html) in [
+        (
+            "inline-block",
+            format!("<div style=\"display: inline-block\">{table}</div>"),
+        ),
+        (
+            "inline-block, table width",
+            format!(
+                "<div style=\"display: inline-block\">{}</div>",
+                small_table("width: 150px")
+            ),
+        ),
+        ("inline-table", small_table("display: inline-table")),
+    ] {
+        assert_small_table_boxes_hold_the_words(&render_g(&html), what);
+    }
+}
+
+#[test]
+fn div_tables_collapse_like_tables() {
+    // M3. `display: table` boxes get the half borders from Blitz like a `<table>`, so they have to be painted from
+    // the table: a cell's `border-left: 2px` is 2 px wide, a row's `border-bottom: 3px solid red` is there.
+    let html = "<div style=\"display: table; border-collapse: collapse\">\
+        <div style=\"display: table-row; border-bottom: 3px solid red\">\
+        <div style=\"display: table-cell; padding: 5px\">a</div>\
+        <div style=\"display: table-cell; padding: 5px\">b</div></div>\
+        <div style=\"display: table-row\">\
+        <div style=\"display: table-cell; border-left: 2px solid #000; padding: 5px\">c</div>\
+        <div style=\"display: table-cell; padding: 5px\">d</div></div></div>";
+    let pdf = render_g(html);
+    // 144 dpi: 2 CSS px are 3 device px; half of it would be 1.5.
+    let page = rasterise(&pdf, 1, 144);
+    let found = words(&pdf);
+    let c = word(&found, "c");
+    let y = (((c.y_min + c.y_max) / 2.0) * 2.0) as usize;
+    let dark = (0..(c.x_min * 2.0) as usize)
+        .filter(|&x| page.pixel(x, y).iter().all(|&v| v < 100))
+        .count();
+    assert!(
+        dark >= 3,
+        "the 2 px border-left of `c` is {dark} dark device px wide at 144 dpi, expected 3"
+    );
+    let red = (0..300)
+        .flat_map(|y| (0..400).map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let p = page.pixel(x, y);
+            p[0] > 200 && p[1] < 60 && p[2] < 60
+        })
+        .count();
+    assert!(
+        red > 100,
+        "the row rule is not painted ({red} red device px)"
+    );
+}
+
 // -- helpers --------------------------------------------------------------------------------------
 
 fn root() -> PathBuf {
@@ -526,6 +667,7 @@ struct Word {
     page: usize,
     x_min: f32,
     y_min: f32,
+    y_max: f32,
     text: String,
 }
 
@@ -564,6 +706,7 @@ fn words(pdf: &[u8]) -> Vec<Word> {
                 page,
                 x_min: attr(attrs, "xMin"),
                 y_min: attr(attrs, "yMin"),
+                y_max: attr(attrs, "yMax"),
                 text: word.to_string(),
             });
         }
