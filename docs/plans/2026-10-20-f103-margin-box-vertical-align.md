@@ -1,6 +1,6 @@
 # F103: margin-box content is not aligned in its box (vertical; folds in F110, horizontal)
 
-Date: 2026-10-20. Findings: F103 (`2026-10-15-m0-findings.md:609-612`) and F110 (`:646-648`), folded in (§3.3). Status: planned.
+Date: 2026-10-20. Findings: F103 (`2026-10-15-m0-findings.md:609-612`) and F110 (`:646-648`), folded in (§3.3). Status: done (§7).
 
 - The fix goes on the fulgur fork `subapavel/fulgur` `htmltopdf/srgb-colours`, after `0779580`.
 - Blitz is not changed: the fix uses the F13 cell `vertical-align` and the F48 table height that are already in the fork.
@@ -269,4 +269,64 @@ Other tests in ours:
 
 ## 7. Result
 
-(to be filled)
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `9e72c5b` (the change and its tests) and `cc1db38` (re-blessed snapshots, VRT goldens and `examples/header-footer{,-split}`), after `0779580`. No Blitz change. Ours: red tests `4765237`, then the lock pin to `cc1db38`, the compare thresholds, docs.
+
+### Step 0: Chrome (Playwright Chromium, `pdftotext -bbox`, y from the top of the page, pt)
+
+Chrome centres by default, top and bottom, so the stop rule did not fire. Probe files and output: scratch `f103/` (`probes.py`, `step0.txt`). Main = binary of `84f15a4`; "now" = the pinned fulgur `cc1db38`.
+
+| Probe | Chrome | main | now |
+|---|---|---|---|
+| P1 `@top-left/center/right` 9 pt, 15 mm | y 15.28..26.17; TL x 42.52, TC centre 298.0, TR ends 553.49 | y 1.03; TC at 207, TR ends 403 | y 15.28; TC centre 297.6, TR ends 552.76 |
+| P2 bottom, same | y 815.53..826.42 | y 800.40 | y 814.65 |
+| P3 10 / 20 / 30 mm (top centre y, bottom centre y) | 13.98 / 28.23 / 42.48, 827.73 / 813.48 / 799.23 | 6.48 (all) | within 0.3 of Chrome |
+| P4 7 / 9 / 14 pt | centres 20.71 / 20.73 / 20.41 | 4.95 / 6.48 / 9.91 | 20.71 / 20.73 / 20.41 (identical to Chrome) |
+| P5 `"A\A B"` and a wrapped third-width box | A 8.53..19.42, B 22.03..32.92, wrapped lines 8.53 / 22.03, TR5 15.28 | 1.03 | identical to Chrome |
+| P6 author `vertical-align` | `top`, `baseline`, `4px`, `super`: top (yMin 1.03); `bottom`: yMax 41.17; `middle`: 15.28. Bottom band: top 801.28, bottom 840.67, middle 815.53 | all top | same as Chrome (bottom band 0.88 higher, below) |
+| P7 five lines in 10 mm | centred, overflowing both ends: L3 L4 L5 at 8.53 / 22.03 / 35.53, L1 L2 off the page; bottom M1-M3 at 795.28.. | L1 L2 at 1.03 / 14.53, M1 M2 | same words as main (L1 L2 M1 M2), first line at the top: spec, not Chrome (F139) |
+| P8 side boxes, 25 mm | LT/RT 43.78, LM/RM 415.78, LB/RB 787.78 (y min); x centre 35.24 / 559.84 | LT 43.55, LM 295.83, LB 548.12; x 0 / 524.41 | LT 43.55, LM 415.08, LB 786.62; x 30.4 / 554.1 |
+| P9 corners | TLC x 53.27..70.49, TRC from 524.41, y 15.28 | all x at the corner edge, y 1.03 | TLC 53.65..70.87, TRC 524.41, y 15.28 |
+| P11 `counter(page)`, 3 pages | same y, centre 298.0 every page | x 42.52, y 800.40 | y 814.65, centre 297.6 |
+| P12 author `text-align: left` | x 42.52 | same | same |
+| P13 `CENTRE13` alone / between left and right | 275.51..320.50 both | 42.52 / 196.27 | 275.14..320.14 both |
+| P14 shape of 02 (20 mm bottom) | Faktura x 42.52, `Strana 1 / 1` ends 553.50, y 808.03 | Strana at 303.76, y 786.23 | ends 552.76, y 807.98 |
+| P10 `element()` footer | not available in Chrome (it ignores `running()`); a string box with the same rule and padding is 20.25 pt high | text line at 806.40 | 818.40 = main + (42.52 - 18.75) / 2 |
+| P10 background and border | not measured in Chrome (no text); pixel probe `t15` | band-height only at the text | whole 15 mm band |
+
+Two Chrome artefacts, not ours, set the tolerances: its 15 mm bottom band (and its side boxes) sit 0.88 pt (0.7 / 1.2 pt for the side ones) lower than the mm geometry, and its content area ends 0.74 pt further right (553.50, not 552.76). The tests allow 1 pt there and 0.5 pt elsewhere.
+
+### Gate A / B (step 2)
+
+**A chosen.** On the prototype: P1-P14 paint and match Chrome; the 16 tests pass (13 were red on main); `t07` prints exactly main's words (the row grows, page 0 keeps the lines that fit); `t16` (tagged, with a link in the footer) has the same two `/StructElem` as main and no Table / TR / TD; fixtures 17, `running_elements` (R4 table and flex footers) and `body_inline_split` are green; a band of 25.4 mm, 7.5 pt, 13.37 pt and 10.3 mm paints (`render_smoke`); `b200-items` +1.4 % (below). `t15` (background and border fill the band) is on, not ignored.
+
+### Red and green
+
+`margin_box_align.rs` on main's binary: `t01`-`t06`, `t08`-`t11`, `t13`-`t15` red (13); `t07` (overflow words), `t12` (author `text-align`), `t16` (tagged) are guards, green before and after. `page_from_css.rs` `t11` (centred on the page, was "starts at the margin edge") red before. All green now. `t17` (the `leader()` page number stays in the box) and `t18` (an author margin does not hide the box) were added after the golden audit found both bugs in the first wrapper (below); both fail on that first wrapper. Fork: 2203 lib tests (4 new: the 16-row table, `ResolvedBox`, `margin_box_cell_html`, the cache keys), 276 `render_smoke` (2 new), every other integration test, `fulgur-vrt` and `gcpm_snapshot` pass.
+
+### Compare, per page, `out/compare/summary.json`, main `84f15a4` -> pinned `cc1db38`
+
+02 4.84 / 4.76 / 4.58 -> 4.61 / 4.53 / 4.35; 17 5.72 / 4.64 -> 5.68 / 4.59; 18 3.10 -> 2.86 %. Thresholds: 02 0.059 -> 0.057, 17 0.068 -> 0.067, 18 0.041 -> 0.039. 01, 03-16, 19 and 20 are byte-identical to main (`cmp` of `htmltopdf.pdf`), so are `b200-text`, `b200-mixed` and the four `slow-*` documents. The PNGs `02-long-p1..3`, `17-running-footer-p1..2`, `18-a5-receipt-p1` were looked at: the footers sit at Chrome's height and are centred in the band; `Strana n / 3` ends at the right content edge; 18's footer is centred. 17's footer is still two wrapped lines of two flex halves against Chrome's one line of two strings (the reference shape, see the fixture README), so it moves 0.05 points only.
+
+### Goldens (fork), `pdftotext -bbox` before / after
+
+- 18 gcpm snapshots (the 19th has no margin box), 12 VRT goldens (exactly the 12 the plan listed), `examples/header-footer` and `header-footer-split`.
+- In every file the word lists and page assignments are identical, and no word in the content area moved: only words of margin boxes, top and bottom ones by (band - line) / 2 (+21.00, +23.25, +22.50, +14.25 ... pt) with `-center` and `-right` boxes to the centre and the right edge, side boxes to top / middle / bottom, corners opposite. Examples: `gcpm_multipage_counter` 16 of 1216 words (the footer), `string-set` 6 of 158, `running-element` 14 of 130. `element-policy-*`: the string `first:` stays at y -1.22 (the box is 40 pt, its content taller: starts at the top) and only moves in x.
+- The audit caught two bugs in the first wrapper before anything was blessed: `gcpm/leader-toc` lost the page number (`flex: 1; min-width: 0` leader fill of 400 characters stretched a cell that took its width from its content: fixed with `box-sizing: border-box; width: W` on the cell) and `examples/header-footer-split` lost `Page 2 / 2` (`@top-right { margin-top: 12px }`: Blitz puts a cell with a margin-top below its row and the fragmenter moves it off the margin document's page: fixed by forcing the cell's margin to 0).
+- `examples/svg` and `examples/wasm-demo` differ from their committed PDFs on this host with and without the change (no margin box in them); not touched.
+
+### Speed (`scripts/bench.py`, this VM: 4x Xeon 2.80 GHz, baseline machine 2.10 GHz, so only hard budgets apply)
+
+`b200-items` median, four alternating rounds of 11 runs, main -> now: 2334 / 2249 / 2314 / 2382 (mean 2320) -> 2355 / 2355 / 2324 / 2373 ms (mean 2352), +1.4 % (gate +3 %). `bench.py --check` ok (b200-text 953, b200-mixed 1100, fixtures 22-55 ms). 210 pages and 604.5 kB as on main. The 2100 words that moved on `b200-items` are the footers, at y 808.0 instead of 786.2; no body word moved. The per-page cache counts of F99b (201 / 215) were not re-counted: `ResolvedBox::measure_html` is what stages 1a, 1b and 2 always measured (unit test), the render cache keys gain the position's defaults.
+
+### Deviations from the plan
+
+1. The cell also carries `box-sizing: border-box; width: <W>px` (the plan had only the table width): without it Blitz sizes the cell from its content (leader fill).
+2. The cell's margin is forced to 0 with `!important` after the author's declarations (the plan accepted "author margin no longer moves it"; the real effect was that the box vanished). Blitz honours `!important` in a style attribute (probed).
+3. `margin_box_content_offset` (option B) was not written. The "measure cache unchanged" test is a unit test of `ResolvedBox::new`, not a run of `render_page`.
+4. Chrome cannot show `element()`, so `t13` asserts main's position plus (band - block height) / 2 (0.75 pt) and that the link rectangle still contains its word. Whether a child's margin in a running element counts in the centred height (plan §6, `mb-4`) was not compared with Chrome.
+5. Tolerances: 1 pt for Chrome's 15 mm bottom band, right edges and the middle / bottom side boxes (Chrome's px snapping, above); 0.5 pt otherwise.
+6. `vrt-validator` and `pdf-reviewer` were not run (the first is run by the owner's agent, the second was not needed: `t16` shows no structure change).
+7. `running_elements.rs` `check` (a) compared the content-area words in pdftotext's reading order; with the footer and header centred in their bands pdftotext lists the first table row of R2 in another order (`Cena` before `Položka`, same positions). It now sorts the content words by page, y, x before the word-by-word comparison (still within 0.5 pt). Found by the full `cargo test`, not by the plan.
+8. Not verified: `examples_determinism` of the fork's CLI gives 10 of 11 as before (`committed_svg_matches_rendered` fails with and without the change, no margin box in `examples/svg`); `@page :first` merging (F140) and Chrome's `display: flex` margin box (F141) were not probed; no Windows / macOS; the per-page cache counts of F99b were not re-counted. The fork's `Cargo.lock` was changed by the local Blitz path and not committed. Ours: `cargo test --release --locked` 569 passed, 0 failed, 4 ignored (as before); fmt, clippy `-D warnings` and `bench.py --check` ok.
+
+New findings: F139 (lines past the box are dropped without a warning; Chrome centres the overflow), F140 (`@page :first` replaces the whole box), F141 (author margin / width / height / display on a margin box).
