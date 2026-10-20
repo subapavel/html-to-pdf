@@ -271,11 +271,9 @@ fn t03_centring_follows_margin_height() {
 fn t04_centring_follows_font_size() {
     let pdf = render(
         "size:A4;margin:15mm;",
-        &format!(
-            "@top-left{{content:\"S7\";font-family:Inter;font-size:7pt}}\
-             @top-center{{content:\"S9\";font-family:Inter;font-size:9pt}}\
-             @top-right{{content:\"S14\";font-family:Inter;font-size:14pt}}"
-        ),
+        "@top-left{content:\"S7\";font-family:Inter;font-size:7pt}\
+         @top-center{content:\"S9\";font-family:Inter;font-size:9pt}\
+         @top-right{content:\"S14\";font-family:Inter;font-size:14pt}",
         BODY,
     );
     let all = margin_words(&pdf);

@@ -43,7 +43,9 @@ THRESHOLDS = {
     #     10.2 / 11.4 / 9.8 %. F6 (`@page` margin honoured: the document's 20 mm bottom margin, not the renderer's 15 mm)
     #     10.2 / 11.4 / 9.8 -> 10.2 / 11.1 / 9.5 %; 16 words move from page 2 to page 3 and the footer sits in the 20 mm band like
     #     Chrome's (ours is not centred vertically in it, F103). Worst page + 1 point.
-    "02-long": 0.059,
+    #     F103 + F110 (margin-box content aligned in its box: the footer is centred in the 20 mm band, `Strana n / 3` ends at the
+    #     right content edge, both where Chrome puts them) 4.84 / 4.76 / 4.58 -> 4.61 / 4.53 / 4.35 %. Worst page + 1 point.
+    "02-long": 0.057,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %; F19 (row backgrounds) 03 8.2 → 6.2 %.
     # F9 (<img> natural size: the logo renders) 03 6.2 → 5.7 %.
     "03-logo-qr": 0.058,
@@ -125,13 +127,17 @@ THRESHOLDS = {
     #     every fixture has and the `border-b` Chrome paints on every item row (`<tr>` borders, Blitz #386 / F22; ours rows are
     #     about 0.5 px shorter, so page 1 has 24 rows against Chrome's 23); the footer itself is once per page, in the margin.
     #     On main's binary the footer was painted in the body as well. Worst page + 1 point; F22 brings it down.
-    "17-running-footer": 0.068,
+    #     F103 (the footer block is centred in its 15 mm band, not on its top edge) 5.72 / 4.64 -> 5.68 / 4.59 %. Worst page + 1 point.
+    #     Little moves: the footer is two wrapped lines here (a flex container in a third of the band) against Chrome's one line
+    #     of two strings, so only the vertical position approaches Chrome's, not the shape (the fixture README, reference shape).
+    "17-running-footer": 0.067,
     # 18: new in F6 (an A5 receipt, `@page { size: A5; margin: 10mm }` with a `@bottom-center` string, one page; Chrome's page is
     #     420 x 594.96 pt, ours 419.53 x 595.28, both 560 x 794 px). 5.3 %: the text drift every fixture has, the `border-b` rules
     #     Chrome paints on the item rows (`<tr>` borders, Blitz #386 / F22) and the footer, which Chrome centres in the margin box
     #     while ours starts at its left edge and sits about 11 px higher (centre margin box alignment, F110, and vertical centring, F103). On main's binary the page was
     #     A4 with 15 mm margins. Worst page + 1 point.
-    "18-a5-receipt": 0.041,
+    #     F103 + F110 (the footer is centred in its box both ways, in Chrome's place) 3.10 -> 2.86 %. Worst page + 1 point.
+    "18-a5-receipt": 0.039,
     # 19: new in F111 (a plain-text invoice: 85 lines of text and `<br>` directly in `<body>`, no block around them, 2 pages like
     #     Chrome's; the shape of e-mail and ERP templates). 3.1 / 2.8 %: only the text drift every fixture has (glyph edges), page 2
     #     starts with the same line as Chrome's (`PLATEBNÍ ÚDAJE`). On main's binary this printed 1 page with the first 50 lines
