@@ -20,6 +20,7 @@ const MM15: f32 = 42.52;
 struct Word {
     page: usize,
     x_min: f32,
+    x_max: f32,
     y_min: f32,
     y_max: f32,
     text: String,
@@ -110,6 +111,7 @@ fn words(pdf: &[u8]) -> Vec<Word> {
             found.push(Word {
                 page,
                 x_min: attr(attrs, "xMin"),
+                x_max: attr(attrs, "xMax"),
                 y_min: attr(attrs, "yMin"),
                 y_max: attr(attrs, "yMax"),
                 text: word.to_string(),
@@ -452,8 +454,13 @@ fn t11_margin_box_sits_in_the_bottom_band_of_the_page_size() {
         w.y_min,
         w.y_max
     );
-    // (The text starts at the left margin edge, 28.35 pt, as on A4: a centre margin box is not centred, F110; change this when it is.)
-    assert_near(w.x_min, 28.35, "margin box starts at the left margin edge");
+    // A lone `@bottom-center` box is as wide as the content area (28.35..391.18 pt) and centres its text (css-page-3
+    // margin-box table, F110): the word is centred on the page (A5 is 419.53 pt wide, centre 209.76).
+    let centre = (w.x_min + w.x_max) / 2.0;
+    assert!(
+        (centre - 209.76).abs() <= 0.5,
+        "margin box text is centred at {centre} pt, want 209.76"
+    );
 }
 
 // --- T12 ------------------------------------------------------------------------------------------------------
