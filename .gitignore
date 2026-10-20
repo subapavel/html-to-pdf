@@ -33,3 +33,6 @@ Thumbs.db
 
 # Claude Code local state
 .claude/settings.local.json
+
+# Python
+__pycache__/
