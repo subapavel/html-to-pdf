@@ -11,6 +11,7 @@ python3 scripts/bench.py b200-text 02-long    # only these
 python3 scripts/bench.py --check --runs 5     # what CI runs (about 45 s): exit 1 on a regression
 python3 scripts/bench.py --update-baseline    # rewrite bench/baseline.json from a full run
 python3 scripts/bench.py --generate           # rewrite bench/corpus/ (byte-reproducible; commit the result)
+python3 scripts/bench.py --scaling            # one long table at 1200 / 2400 / 4800 rows, five variants, and r = t(4800) / t(1200) (about 40 s)
 HTMLTOPDF_BIN=/path/to/binary python3 scripts/bench.py   # measure another binary (same variable as render-fixtures.sh)
 ```
 
@@ -42,6 +43,31 @@ corpus change is a baseline change: regenerate, `--update-baseline`, say so in t
 
 The slow documents are sized to take a few seconds, not the minutes the findings quote (F82: 120 000 words), so a full run stays
 under a minute. They are for watching a number go down when a finding is fixed.
+
+## Scaling of one long table (F99c)
+
+`--scaling` renders the `b200-items` table with 1200, 2400 and 4800 rows (generated into `out/bench/scaling/`, not committed;
+`gen_items(rows, boxes, collapse, avoid, thead)` makes the corpus document with its defaults) and prints the median and
+r = t(4800) / t(1200): about 4 when the work is linear in the rows, tending to 16 when it is quadratic. Variants say where a
+superlinear cost is: `t` (the corpus table with a plain `@page`), `t-sep` (`border-collapse: separate`), `t-noavoid` (no row
+`break-inside: avoid`), `t-nohead` (no repeated header), `t-boxes` (the corpus shape, with the margin boxes).
+
+`--check` gates variant `t`: r must not exceed `SCALING_MAX_RATIO` (6.0, a guard against quadratic work only — the branch itself spreads up to 4.6 on a loaded VM, so a tighter gate would flake; re-measured once with twice the runs, the lower r
+counts). It is a ratio of two timings of the same binary, so it holds on any machine; a CI runner is as good as the dev VM.
+Resolution: r moves by about 0.25 between runs on the dev VM, so the gate catches a table that is clearly superlinear (main before F99c:
+4.5-5.0, 5.0 on one thread; F99c: 4.0-4.4) and only partly a single per-page scan creeping back (it adds 0.4-0.6).
+Measured 2026-10-20, 4 vCPU Xeon @ 2.80GHz, median of 5, main `fbaf57f` -> F99c (`b200-items` 4800 rows: 1.6-2.3 s, so the table is most of it):
+
+| variant | main r | F99c r |
+|---|---:|---:|
+| t | 4.62-4.68 | 4.07-4.40 |
+| t-sep | 4.19-4.26 | 4.00-4.21 |
+| t-noavoid | 4.69-4.98 | 4.37-4.45 |
+| t-nohead | 4.16-5.03 | 4.22-4.30 |
+| t-boxes | 4.44-5.69 | 4.13-4.44 |
+
+What is left is Taffy's grid track sizing (`GridItem::minimum_contribution` scans every track of the axis for every item): about
+360 of 2150 profile samples at 4800 rows, growing as n^1.5-1.8 (F99d, `docs/plans/2026-10-20-f99c-table-scaling.md` §7).
 
 ## Current numbers
 
@@ -81,6 +107,12 @@ Reading it:
   (F78's measurement). `b200-items` without its two margin boxes takes about 1.4 s, so the table alone is over the goal and the footers, which cost about 1.1 s (5 ms per page) before F99b, are
   down to roughly 0.2 s (inferred from 1.57 s minus 1.4 s, not re-measured without the footers). Filed as F99 in the findings; `docs/plans/2026-10-19-f99-speed-profile.md` says where the time goes,
   F99a (`2026-10-19-f99a-parallel-construct.md`) and F99b (`2026-10-19-f99b-margin-documents.md`) took the first two steps.
+- **F99c (2026-10-20, a different host: 4 vCPU Xeon @ 2.80GHz, so `bench/baseline.json`, recorded on the 2.10GHz host, was not rewritten: `--check` here applies only
+  the hard budgets).** Main `fbaf57f` against the F99c branch, alternating, median of 7-11: `b200-items` 2312-2333 -> 1953-1970 ms (-342 / -380 ms, -15 / -16 %),
+  `b200-text` 1074 / 947 -> 1024 / 990 and `b200-mixed` 1075 / 1127 -> 1147 / 1110 ms (no long table in them: within the +-5 % noise of the VM), `02-long` 55.2 -> 55.8 ms.
+  The numbers of this host are about 1.4 times those of the baseline's host for the same binary (main's `b200-items` was 1575 ms there), so the 1 s goal
+  cannot be judged here; scaled by that ratio the branch would take about 1.3 s on the baseline host (an estimate, not measured), over the goal. The change removes
+  about a seventh of `b200-items`; the rest of the table is mainly Taffy (F99d).
 - The very first render of a large document can be much slower than the rest (`b200-items` took 5.7 s once, then 2.2-2.5 s; cause not investigated, probably cold caches); that is why gated documents get a warm-up.
 
 ## The guard (`--check`)
@@ -92,6 +124,8 @@ Applies to gated documents (fixtures and `b200-*`). A document fails when its me
 - **baseline x 1.30 + 5 ms**, only when the machine label (`nproc` + CPU model) equals the one in `bench/baseline.json`. A CI runner has a
   different label, so there only the hard budgets apply until a `bench/baseline-ci.json` exists (plan §4 step 4: commit it from the first CI
   artifact).
+
+Separately, the **scaling ratio** of variant `t` must not exceed `SCALING_MAX_RATIO` (see "Scaling of one long table"); a full `--check` run does it at the end.
 
 A document over its limit is measured once more with twice the runs and the lower median counts, so one noisy sample does not fail a PR.
 The failure message names the document, the median and the limit. Also a failing render (exit code != 0, or a timeout of a gated document) fails the check.
