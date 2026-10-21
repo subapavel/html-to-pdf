@@ -182,7 +182,7 @@ The oracle stays wrapped against plain, plus the pseudo tokens present. Every 8t
 
 ## 7. Result
 
-Done 2026-10-21. Fork commits: Blitz `0ae4886` (A, the crash) and `71de9c0` (B, the pseudo boxes as table children), fulgur `182ffb7` (C). Both pushed to `subapavel/*`; nothing sent upstream.
+Done 2026-10-21. Fork commits: Blitz `2d2ed41` (A, the crash) and `71de9c0` (B, the pseudo boxes as table children), fulgur `182ffb7` (C). Both pushed to `subapavel/*`; nothing sent upstream.
 
 **Step 0 (measured, Chrome 148, bundled Inter through `@font-face`, `border-spacing: 0` because of F21).**
 
