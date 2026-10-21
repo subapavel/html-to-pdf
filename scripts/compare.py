@@ -154,6 +154,11 @@ THRESHOLDS = {
     #     the item grid, the notes, the first two terms and the supplier's lines were lost and the rest was misplaced
     #     (7.4 %, though most of the page was missing). Worst page + 1 point.
     "21-display-contents": 0.047,
+    # 22: new in F154 (a Czech invoice whose labels are written `<b>Splatnost: </b>2. 11. 2026`, with spaces at the inner edges
+    #     of `<strong>`, `<em>`, `<a>` and `<span>`, a `::before` / `::after` label, `pre-line` notes and NBSP amounts; one page like
+    #     Chrome's). 3.5 %: the text drift every fixture has. On main's binary every label was glued to its value (`Splatnost:2. 11.`,
+    #     `portálu zákazníkanebo`; 4.0 %). Worst page + 1 point.
+    "22-inline-spacing": 0.046,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
