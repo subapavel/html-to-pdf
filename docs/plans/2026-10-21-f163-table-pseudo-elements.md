@@ -1,6 +1,6 @@
 # F163: `::before` / `::after` on a table box panics Blitz or is silently not painted
 
-Date: 2026-10-21. Finding: F163 (`2026-10-15-m0-findings.md:884-886`). This also closes the pseudo-element bullet of F30e-b (`:297`). That bullet says "a real `<table>` is not affected", which is wrong: `<table></table>` panics. Status: planned.
+Date: 2026-10-21. Finding: F163 (`2026-10-15-m0-findings.md:884-886`). This also closes the pseudo-element bullet of F30e-b (`:297`). That bullet says "a real `<table>` is not affected", which is wrong: `<table></table>` panics. Status: done (§7).
 
 **Owner action: none.** Both forks already exist:
 
@@ -182,4 +182,37 @@ The oracle stays wrapped against plain, plus the pseudo tokens present. Every 8t
 
 ## 7. Result
 
-(to be filled)
+Done 2026-10-21. Fork commits: Blitz `0ae4886` (A, the crash) and `71de9c0` (B, the pseudo boxes as table children), fulgur `182ffb7` (C). Both pushed to `subapavel/*`; nothing sent upstream.
+
+**Step 0 (measured, Chrome 148, bundled Inter through `@font-face`, `border-spacing: 0` because of F21).**
+
+- Blitz head was `d04479a`, Taffy `7bbedd5`; the Taffy loop (`compute/grid/mod.rs:530`) is the one cited and F99d does not touch it.
+- `child_count` was wrong even without pseudo-elements: the table's layout children are its cells (not its rows), so `<table><tr><td>` had `child_count` 1 and 2 grid items. Taffy's loop therefore visited only the first items. With (A) it visits all of them; no item is hidden or absolute, so nothing changes (96 of 96 PDFs byte-identical with (A) alone).
+- **T13 needs no `width_row`.** With a `::before` row Chrome keeps the columns of an automatic table where they are (widths in row 1 or in row 2: same x as the table without the pseudo), and in a fixed table the generated row is the first row (the `width` of the first real cell is ignored; second column at 150 pt of 400 px). Ours does the same without a rule, so the conditional part of (B) was not written.
+- Chrome and ours agree to 0.2 pt on T1, T2, T4-T7, T9, T11, T12 (2 pages, header on both, `B` on page 1, `A` on page 2), T13, T15 float / empty / counter and T17. T3: Chrome prints "xA" as one word (the cells touch); ours has a 0.2 pt gap.
+- Differences that are not about this change: `inline-table` baseline (T10, F172), caption pseudo (T8, F30e-b), pseudos of `tr` / `tbody` (T14, F163b), `position: absolute` pseudo (T15, F170).
+
+**Implementation.**
+
+- (A) `TableTreeWrapper::child_count` is `ctx.items.len()`. Four Blitz tests, red before.
+- (B) `table_children_with_pseudos` and the `Table` arm of `collect_layout_children` (no more pushing of `before` / `after`). Eight more tests in `pseudo_tests` (twelve in all), red without the `construct.rs` change.
+- (C) `table_box_children`, `is_table_pseudo`; `convert_table` skips a pseudo with no box in the table. `anonymous_table_cells_are_told_from_real_cells_and_pseudo_boxes` changed: the `::before` of that table is now in an anonymous cell (`[true, false]`, was `[false, false]`). Three lib tests and `table_pseudo_elements_render` in `render_smoke`.
+- Ours: `table_pseudo.rs` (17 tests, 3 ignored with the finding id), fixture 23, `fixtures.rs`, the fuzz generator of `display_contents.rs` (pseudo-elements with their own word, tables with no rows, bare cells; a pseudo keeps a space or padding because two pseudos next to each other glue their words in Chrome too).
+
+**Numbers.**
+
+| Gate | Main (`37ed552`) | This change |
+|---|---|---|
+| `table_pseudo.rs` | 14 of 17 fail | 17 pass, 3 ignored |
+| `gen.py` seeds 0-499 | 176 panics | 0 panics, 0 timeouts |
+| Fuzz, 64 seeds (CI) | fails: "index out of bounds" from seed 2 on (the count was not taken) | pass |
+| Fuzz `fuzz_long`, 2000 seeds | not run | 1 failure: seed 1823, 238 of 285 words, the same without the pseudo rules on main (F166) |
+| Fixture 23 vs Chrome | `EnginePanic`, no PDF | 3.5 % (3.46), 1 page = Chrome's; threshold 4.5 % |
+| Fixtures 01-22, bench corpus, scaling variants | | byte-identical, 96 of 96, 1 and 4 threads (also with (A) alone) |
+| fulgur `cargo test -p fulgur --lib`, `render_smoke`, `fulgur-vrt` | | pass; the same 26 of 64 VRT goldens fail before and after (byte sizes equal) |
+
+Fixture 23 first drafts showed two differences that are not about pseudo-elements and were designed around, not hidden: Chrome's automatic layout gives the note's long text to column 1 and squeezes the amounts (so the items table has explicit widths), and a one-side coloured border is painted black (F171; the recap uses full borders). Both are in the fixture README.
+
+Findings filed: F163b, F168 and F169 (from the F154 validator, pre-existing), F170 (absolute table pseudo), F171 (single-side border colour), F172 (inline-table baseline). F30e-b's pseudo bullet was wrong about real tables and is corrected and closed.
+
+Not verified: the spec items in §2 were never checked against the spec text (Chrome is the oracle for every number here); WPT was not run; `pdf-reviewer` was not run (no writer, font or metadata change); `vrt-validator` is the owner's step.

@@ -317,6 +317,58 @@ fn display_contents_invoice_prints_everything_the_wrappers_hold() {
     );
 }
 
+/// F163: fixture 23 has `::before` / `::after` boxes on a `<table>` and on a `display: table` box. Main's binary panics
+/// on it (`EnginePanic`); with only the crash fixed the note under the items and the label and closing cell of the VAT
+/// recap are missing. Every generated text must be printed, in one page.
+#[test]
+fn table_pseudo_invoice_prints_the_generated_content() {
+    let name = "23-table-pseudo";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "23");
+    for needle in [
+        "Cestovné",
+        "Celkem bez DPH",
+        "Ceny jsou uvedeny v korunách českých bez DPH",
+        "Rekapitulace DPH",
+        "Základ 21 %",
+        "9 731,40 Kč",
+        "56 071,40 Kč",
+        "Uhrazeno",
+        "20260023",
+    ] {
+        assert!(
+            text.contains(needle),
+            "{name}: `{needle}` missing from the PDF text: {text}"
+        );
+    }
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-23p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           1"),
+        "{name}: one page like Chrome"
+    );
+}
+
 /// F154: fixture 22 writes its labels as `<b>Splatnost: </b>2. 11. 2026`. On main's binary the space at the inner edge of
 /// each element was deleted and the label was glued to its value (`Splatnost:4. 11. 2026`; 4.0 % against Chrome).
 #[test]

@@ -159,6 +159,11 @@ THRESHOLDS = {
     #     Chrome's). 3.5 %: the text drift every fixture has. On main's binary every label was glued to its value (`Splatnost:2. 11.`,
     #     `portálu zákazníkanebo`; 4.0 %). Worst page + 1 point.
     "22-inline-spacing": 0.046,
+    # 23: new in F163 (a Czech invoice whose items table has a block `::after` note and whose `display: table` VAT recap has a
+    #     table-cell `::before` and `::after` around bare cells; one page like Chrome's). 3.46 %: the text drift every fixture has
+    #     and the explicit column widths (Chrome 4 to 20 px off per column). Main's binary panics on it (`EnginePanic`, no PDF);
+    #     a build with only the crash fixed (Blitz commit A) prints none of the generated texts. Worst page + 1 point.
+    "23-table-pseudo": 0.045,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
