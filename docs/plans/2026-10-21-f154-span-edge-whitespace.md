@@ -1,6 +1,6 @@
 # F154: whitespace at the inner edges of inline elements is dropped (collapse across element boundaries)
 
-Date: 2026-10-21. Finding: F154 (`2026-10-15-m0-findings.md:848-850`). It also closes F159(f), the trailing space in `content: "Pred "`. Status: planned.
+Date: 2026-10-21. Finding: F154 (`2026-10-15-m0-findings.md:848-850`). It also closes F159(f), the trailing space in `content: "Pred "`. Status: done (§7).
 
 **Owner action: none.** The fix goes in the existing Blitz fork only (`subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`). No Parley fork is needed (§3). Our crate gets tests, a fixture and the lock bump. Line numbers refer to `/home/user/blitz` on that branch and to Parley 0.6.0 (`Cargo.lock:1897`, `~/.cargo/registry/src/index.crates.io-*/parley-0.6.0`).
 
@@ -154,4 +154,45 @@ There are two oracles:
 
 ## 7. Result
 
-(to be filled)
+Implemented as planned, in the Blitz fork only (`d04479a`, after `b4cbc77`; new `layout/whitespace.rs`: `InlineOp`, `collapse_white_space`, `replay`; `construct.rs` records ops, one `Preserve` mode, `pre-line` and `text-transform` folded into the pass). fulgur fork `945667d`: one snapshot re-blessed (a test commit). Our crate: tests, fixture 22, the lock bump.
+
+**Step 0, main `87d18ff` against Chrome 148.** The probes (`inline_whitespace.rs` W1-W17) were rendered by Chrome with the two bundled Inter files loaded through `@font-face`, so the constants are exact, not offsets between two Inter versions (tolerance 0.3 pt on gaps, one `xMax`-to-`xMin` distance per pair; flat text `a b d` has a 3.38 pt gap in both engines). Main's output is in the second column.
+
+| Probe | Main | Chrome / fixed |
+|---|---|---|
+| W1, W2, W3 | `a bd`, `ab d`, `a b cd` | gaps 3.38 pt |
+| W4a, W4b | `Splatnost:2.`, `úhradě:12` | bold space 2.85 / 2.84 pt, the rest 3.38 |
+| W5a / W5b | one space / `ab` | one space / 6.33 pt (the 30 px space) |
+| W6 right, centre | fine (guard) | `x` of the first word 165.06 / 103.90 pt (ours 0.23 pt left) |
+| W7 (`br`, `pre-line`) | fine (guard) | `a` and `b` on separate lines at the left edge; `a b` then `c` |
+| W8 | second gap 6.75 pt | both gaps 10.12 pt (three spaces) |
+| W9, W16 | fine (guards) | 3.38 pt; `x` after an inside marker at the same place with and without the leading spaces |
+| W10a, W10b | `PredmidPo`, `PrediPo` | gaps 3.38 pt |
+| W11, W12, W14, W15 | glued | gaps 3.38 pt (`A B D` in W15); link annotation present |
+| W13 | `č.2026` | 3.38 and 2.48 pt (kerning around the bold `.` and space; ours matches within 0.3) |
+| W17 | gap 3.38 pt (one NBSP deleted) | 6.22 pt (two NBSPs) |
+| X1 `a <br>b` centred | `b` 1.38 pt right of `a` | `b` 0.30 pt left of `a` |
+| X3 `<u>aaa bbb </u>ccc` at 60 px | `aaa`, `bbbccc` | three lines |
+
+**Red / green.** Ours `inline_whitespace.rs` (19 tests): on Blitz `b4cbc77` 15 fail (the 4 guards pass: W6, W7 break, W9, W16), on `d04479a` 19 pass. Blitz `whitespace.rs` unit tests (17), run against a `collapse_white_space` stub that returns its input: 8 fail, the other 9 hold on a stub because their input already holds the spaces; with the collapser 17 pass. Blitz `construct.rs` `whitespace_tests` (11): on the old `construct.rs` 8 fail, 11 pass now; `cargo test -p blitz-dom` 111 passed, 0 failed. F150 fuzz, generator changed (below): on `b4cbc77` 161 failure records in the 64 CI seeds (words glued), on the fix 0; `fuzz_long` (2000 seeds, 92 s release): 1 failure, seed 2767, which is not about white space (F166).
+
+**Bytes.** Fixtures 01-21, the bench corpus (`b200-*`, `slow-*`) and the scaling variants against main's binary, 1 and 4 threads: 94 of 94 identical. No file changed, so there is nothing to explain; the scan (`html.parser` over `fixtures/`, `bench/`, fulgur's 94 HTML files) found edge whitespace only in fixture 19 (a newline-only text between two `<br>`, which was already removed at a line start) and in two fulgur VRT files whose spans are inline-block roots. `compare.py` numbers of 01-21 unchanged (all 22 pass); no threshold lowered.
+
+**Fixture 22** (`fixtures/invoices/22-inline-spacing`, Czech invoice: `<b>…: </b>` labels, `<strong>`, `<em>`, `<a>` with trailing spaces, `::before` / `::after` labels, a `pre-line` note, NBSP amounts, spaces before `<br>`). 1 page, Chrome 1, main 1. Chrome diff: main's binary 4.0 % (3.96), fix 3.5 % (3.54); threshold 0.046. I looked at the side-by-side of both: on main every label touches its value (`Datum vystavení:21. 10. 2026`, `portálu zákazníkanebo`), with the fix the lines match Chrome's, and the link's underline runs under the space after `zákazníka` as in Chrome's. The rest is the text drift every fixture has and the synthetic italic of `<em>`.
+
+**Bench.** `bench.py --check` ok. Medians, main -> fix (noisy machine, 4 cores): `01-basic` 22.0 -> 20.6 ms, `b200-text` 950 -> 916 ms, `b200-mixed` 971 -> 1060 ms, `b200-items` 1470 -> 1527 ms, `slow-paragraph` 3480 -> 3661 ms (one run each of seven): within the noise between two runs of the same binary, no measurable cost for the extra `Vec` per inline context.
+
+**fulgur against the fork.** `cargo test -p fulgur` (every test target, the lib 2223): 2730 passed, 1 failed: `gcpm_snapshot::gcpm_counters_function_nested_ol_snapshot`, whose `li::before { content: counters(item, ".") ". " }` lost its trailing space on main (F159f); the PDF now holds the space glyph (`ToUnicode <0003> <0020>`, 19 instead of 18 glyphs); re-blessed in the fulgur fork `945667d` (only the glyph table and the stream change). `fulgur-vrt`: 26 of 64 goldens differ byte-wise on `b4cbc77` and on `d04479a` alike (the goldens are stale for our forks, not touched by this change); the same 26, two of them (`gcpm/toc-target-counter*.html`) 2-3 bytes larger: the restored space. Not re-blessed.
+
+**Deviations from the plan.**
+
+- W17 was marked "fine" in §4; it was not: Parley's `trim_start` / `trim_end` are Unicode trims and deleted an NBSP at an edge (Chrome 6.22 pt, main 3.38 pt). Fixed by the same change. W6, W7, W9 and W16 already matched Chrome on main and stay guards.
+- A space before `<br>` was kept on main (the text is committed before the break without trimming): a centred `a <br>b` was shifted by 1.7 pt (X1/X4). Removed now, as §4.1.3 says.
+- The old fuzz oracle did not see glue: wrapped and plain documents glue the same words, and the 97 % word floor tolerates a few. The generator now puts white space at element edges, sometimes *instead of* the separator (`w0001<b> w0002</b>`), and the test fails when one extracted word holds two tokens.
+- `Marker` is its own op (it must not move the `capitalize` word start), and `stylo_to_parley::white_space_collapse` was removed (dead after the change). `push_forced_break` keeps its empty span but no longer switches modes.
+- The comment of `contents_needs_span` changed as planned; the function stays (it saves style runs and keeps bytes stable).
+- Chrome constants use `@font-face` with the bundled fonts instead of "relative offsets"; `FLAT_PT` 0.05 held with no relaxation (kerning risk did not materialise).
+
+**New findings** (in the findings file): F166 (nested fixed `display: table` loses words, found by the long fuzz), F167 (inside list marker narrower than Chrome's, about 6.6 pt).
+
+**Not verified.** The spec statements of §2 (still from memory). Underline over a space that hangs at a soft wrap (X3 checks the words only; fixture 22's link has the underline over the trailing space on one line, like Chrome). Right-to-left text. `break-spaces` wrapping after preserved spaces (non-goal). The fuzz test in the debug profile (only `--release` was run). `fulgur-vrt` goldens: they are stale at the base, so only "the same 26 fail" was compared, not their content.
