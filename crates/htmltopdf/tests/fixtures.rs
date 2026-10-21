@@ -317,6 +317,59 @@ fn display_contents_invoice_prints_everything_the_wrappers_hold() {
     );
 }
 
+/// F154: fixture 22 writes its labels as `<b>Splatnost: </b>2. 11. 2026`. On main's binary the space at the inner edge of
+/// each element was deleted and the label was glued to its value (`Splatnost:4. 11. 2026`; 4.0 % against Chrome).
+#[test]
+fn inline_spacing_invoice_keeps_its_label_spaces() {
+    let name = "22-inline-spacing";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "22");
+    for needle in [
+        "Datum vystavení: 21. 10. 2026",
+        "Splatnost: 4. 11. 2026",
+        "Variabilní symbol: 20260022 (shodný",
+        "IČO: 12345678",
+        "DIČ: CZ87654321",
+        "Číslo objednávky: Příkladná integrace – smluvní servis (dle smlouvy o dílo)",
+        "Celkem bez DPH: 35 500,00 Kč",
+        "Celkem k úhradě: 42 955,00 Kč",
+        "portálu zákazníka nebo ji najdete",
+        "Poznámka: dodání do 14 dnů od potvrzení objednávky. Platba převodem na účet níže.",
+        "IBAN: CZ65",
+    ] {
+        assert!(
+            text.contains(needle),
+            "{name}: `{needle}` missing from the PDF text: {text}"
+        );
+    }
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-22p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           1"),
+        "{name}: one page like Chrome"
+    );
+}
+
 #[test]
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.

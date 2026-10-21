@@ -694,6 +694,22 @@ impl Rng {
     }
 }
 
+/// Whether the first (`start`) or the last character of `html` outside its tags is white space.
+fn visible_edge_is_space(html: &str, start: bool) -> bool {
+    let mut text = Vec::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let edge = if start { text.first() } else { text.last() };
+    edge.is_some_and(|c| c.is_ascii_whitespace())
+}
+
 struct Gen {
     rng: Rng,
     word: usize,
@@ -710,24 +726,42 @@ impl Gen {
         ["", " ", "\n  ", " ", "\n\t "][self.rng.below(5) as usize]
     }
 
-    /// Inline content that starts and ends with a word or an element, never with whitespace: Parley trims the
-    /// whitespace at the edges of a span (F154), which would glue words together in wrapped and plain alike.
+    /// Inline content: words and elements separated by white space. Every element may start and end with white
+    /// space of its own (`<b>w0001 </b>`): the space collapses with its neighbours across the boundary (F154), so
+    /// the words are never glued and wrapped and plain documents agree.
     fn inline_tight(&mut self, depth: u32) -> String {
         let n = 1 + self.rng.below(3);
         let mut out = String::new();
         for i in 0..n {
-            if i > 0 {
-                out.push_str(if self.rng.chance(20) { "\n  " } else { " " });
-            }
             let pick = if depth == 0 { 0 } else { self.rng.below(6) };
-            match pick {
-                0..=2 => out.push_str(&self.word()),
-                3 => out.push_str(&format!("<span>{}</span>", self.inline_tight(depth - 1))),
-                4 => out.push_str(&format!("<b>{}</b>", self.inline_tight(depth - 1))),
-                _ => out.push_str(&format!("<s>{}</s>", self.inline_tight(depth - 1))),
+            let (head, tail) = (self.edge(), self.edge());
+            let item = match pick {
+                0..=2 => self.word(),
+                3 => format!("<span>{head}{}{tail}</span>", self.inline_tight(depth - 1)),
+                4 => format!("<b>{head}{}{tail}</b>", self.inline_tight(depth - 1)),
+                _ => format!("<s>{head}{}{tail}</s>", self.inline_tight(depth - 1)),
+            };
+            if i > 0 {
+                // The words stay apart: white space between the items, or only at the inner edge of an element
+                // (`w0001<b> w0002</b>`), which is the case F154 is about.
+                let edge_space =
+                    visible_edge_is_space(&out, false) || visible_edge_is_space(&item, true);
+                out.push_str(if edge_space && self.rng.chance(60) {
+                    ""
+                } else if self.rng.chance(20) {
+                    "\n  "
+                } else {
+                    " "
+                });
             }
+            out.push_str(&item);
         }
         out
+    }
+
+    /// White space at the inner edge of an inline element, or none.
+    fn edge(&mut self) -> &'static str {
+        ["", "", " ", "\n  ", "\t"][self.rng.below(5) as usize]
     }
 
     /// A run of inline content in a block context: it has whitespace at both ends, so two runs, or a run and a
@@ -895,6 +929,15 @@ fn fuzz(from: u64, to: u64) {
             }
         };
         let (a, b) = (words(&with), words(&without));
+        // Two tokens in one word: the white space between them was deleted (F154).
+        for (what, found) in [("wrapped", &a), ("plain", &b)] {
+            if let Some(w) = found.iter().find(|w| w.text.matches('w').count() > 1) {
+                failures.push(format!(
+                    "seed {seed}: {what} glues words: {}\n{body}",
+                    w.text
+                ));
+            }
+        }
         // The tokens of each document, each at most once (the numbers of a list are words too: dropped).
         let tokens_of = |found: &[Word]| -> Vec<String> {
             let mut seen: Vec<String> = found
@@ -969,6 +1012,8 @@ fn fuzz_wrappers_never_panic_lose_words_or_move_anything() {
 }
 
 /// The long run: `cargo test --release --test display_contents -- --ignored fuzz_long`.
+/// Seed 2767 fails on main's binary too, with the white space moved out of the elements: nested fixed tables lose
+/// words past the page edge (F166).
 #[test]
 #[ignore = "2000 seeds, about two minutes"]
 fn fuzz_long() {

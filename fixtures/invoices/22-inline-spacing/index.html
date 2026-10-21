@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0022</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0; }
+  h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
+  p { margin: 0; }
+  .muted { color: #6b7280; }
+  .head { display: flex; justify-content: space-between; margin-bottom: 24px; }
+  .meta { margin-bottom: 22px; font-size: 13px; }
+  .meta p + p { margin-top: 3px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; margin-bottom: 24px; font-size: 13px; }
+  table.items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+  table.items th { text-align: left; background: #f3f4f6; padding: 6px 10px; border-bottom: 1px solid #d1d5db; }
+  table.items td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; }
+  table.items .num { text-align: right; }
+  .sum { text-align: right; font-size: 14px; margin-bottom: 22px; }
+  /* Labels written the way a template engine emits them: the space after the colon is part of the element. */
+  .ref { font-size: 13px; margin-bottom: 10px; }
+  .ref::before { content: "Číslo objednávky: "; font-weight: 700; }
+  .ref::after { content: " (dle smlouvy o dílo)"; color: #6b7280; }
+  .note { font-size: 13px; white-space: pre-line; margin-bottom: 10px; }
+  .link { font-size: 13px; margin-bottom: 10px; }
+  .link a { color: #1d4ed8; text-decoration: underline; }
+  .pay { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+  .pay p + p { margin-top: 3px; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<header class="head">
+  <div>
+    <h1>Faktura 2026-0022</h1>
+    <p class="muted">Daňový doklad</p>
+  </div>
+  <div style="text-align:right;font-size:13px">
+    <p style="font-weight:600">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+  </div>
+</header>
+
+<section class="meta">
+  <p><b>Datum vystavení: </b>21. 10. 2026</p>
+  <p><b>Datum zdanitelného plnění: </b>21. 10. 2026</p>
+  <p><b>Splatnost: </b><span style="color:#b91c1c"><b>4. 11. 2026</b></span></p>
+  <p><b>Variabilní symbol: </b>20260022 <span class="muted"> (shodný s číslem faktury)</span></p>
+</section>
+
+<section class="parties">
+  <div>
+    <h2>Dodavatel</h2>
+    <p style="font-weight:600">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov <br>
+       <strong>IČO: </strong>12345678 <br>
+       <strong>DIČ: </strong>CZ12345678</p>
+  </div>
+  <div>
+    <h2>Odběratel</h2>
+    <p style="font-weight:600">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1 <br>
+       <strong>IČO: </strong>87654321 <br>
+       <strong>DIČ: </strong>CZ87654321</p>
+  </div>
+</section>
+
+<p class="ref">Příkladná integrace – smluvní servis</p>
+
+<table class="items">
+  <thead>
+    <tr><th>Popis</th><th class="num">Množství</th><th class="num">Cena/ks</th><th class="num">Celkem</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Servisní paušál – <em> říjen 2026 </em></td><td class="num">1 ks</td><td class="num">12&nbsp;000,00</td><td class="num">12&nbsp;000,00</td></tr>
+    <tr><td>Správa serverů <span class="muted"> a monitoring </span></td><td class="num">1 ks</td><td class="num">8&nbsp;500,00</td><td class="num">8&nbsp;500,00</td></tr>
+    <tr><td>Konzultace – <b> architektura integrace </b></td><td class="num">6 h</td><td class="num">2&nbsp;500,00</td><td class="num">15&nbsp;000,00</td></tr>
+  </tbody>
+</table>
+
+<p class="sum"><span> Celkem bez DPH: </span><b>35&nbsp;500,00&nbsp;Kč </b><br>
+  <span class="muted"> DPH 21 %: </span><span>7&nbsp;455,00&nbsp;Kč </span><br>
+  <strong>Celkem k úhradě: </strong><strong style="color:#111827">42&nbsp;955,00&nbsp;Kč </strong></p>
+
+<p class="link">Fakturu si můžete stáhnout na <a href="https://example.cz/faktury/2026-0022">portálu zákazníka </a>nebo ji najdete v příloze e-mailu.</p>
+
+<p class="note">Poznámka: <span>dodání do 14 dnů </span>
+  od potvrzení objednávky.
+  Platba převodem <b>na účet </b>
+  níže.</p>
+
+<section class="pay">
+  <h2>Platební údaje</h2>
+  <p><b>Účet: </b>123456789/0300</p>
+  <p><b>IBAN: </b>CZ65 0300 0000 0001 2345 6789</p>
+  <p><b>Částka: </b>42&nbsp;955,00 CZK</p>
+</section>
+
+</body>
+</html>
