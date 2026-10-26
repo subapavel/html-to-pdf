@@ -2,7 +2,7 @@
 
 Date: 2026-10-21 (rewritten 2026-10-26 after the first copy was lost with its container). Findings: F161 (HIGH,
 silent) and F165 (medium-high) in `2026-10-15-m0-findings.md`. Status: **done** in
-`subapavel/fulgur` `htmltopdf/srgb-colours` `5aa953f6` + `1c1c164b` (on `182ffb73`); our part (lock, tests, fixture 24, fuzz
+`subapavel/fulgur` `htmltopdf/srgb-colours` `5aa953f6` + `1c1c164b` + `49e16712` (on `182ffb73`); our part (lock, tests, fixture 24, fuzz
 floor) on branch `f161-multicol-lost-words`.
 
 ## 1. Problem
@@ -132,7 +132,7 @@ table cells.
 
 ## 7. Result
 
-- Fork `5aa953f6` (steps 1–5) and `1c1c164b` (review fixes, below); lock bumped from `182ffb73`.
+- Fork `5aa953f6` (steps 1–5), `1c1c164b` and `49e16712` (review fixes, below); lock bumped from `182ffb73`.
 - `cargo test` found the risk 2 regression: `display_contents.rs` C17 ("span-all in a wrapper, then a long
   paragraph", a `<div>` a page and a half tall under a spanner) lost 44 of 300 words. A 2000-seed comparison of
   the `fuzz_long` documents against main's binary found one more (seed 2434: a `<div>` shorter than a page in the
@@ -156,3 +156,12 @@ table cells.
   (`cargo test --config 'patch.crates-io.blitz-dom.git="https://github.com/subapavel/blitz"' --config
   'patch.crates-io.blitz-dom.branch="htmltopdf/blitz-dom-0.2.4"' …`, the same for `blitz-html` and `taffy`); the
   fork's own `Cargo.toml` and `Cargo.lock` are not changed.
+- `vrt-validator` (about 330 hand-written documents and 920 of its own multicol fuzz documents against main's
+  binary) found a HIGH regression: a spanner taller than a page was not cut by the fragmenter (one page instead of
+  three, the spanner drawn over the group above it, up to 136 words lost), and a MEDIUM one: a spanner of about a
+  page that did not fit the room was moved whole to the next page, leaving most of the page above it blank. Fork
+  `49e16712`: a container with a spanner taller than a quarter of a page keeps the old path (main's behaviour for
+  it); every repro of both findings now renders like main's binary. Over its whole corpus the branch prints more
+  words than main in 94 documents and fewer in one (`f416`, 917 against 919: a box in a column of a container with
+  padding and a border overflows the page bottom, which main does for the same container without a spanner too;
+  F173 (h)). All 2200 fuzz documents still: 0 fewer words, 33 more.
