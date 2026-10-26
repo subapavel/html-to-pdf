@@ -1,7 +1,7 @@
 # F174 — a table inside a multicol container loses most of its rows
 
 Date: 2026-10-26. Finding: F174 (`2026-10-15-m0-findings.md`). Status: **done**, fork `subapavel/fulgur`
-`htmltopdf/srgb-colours` `fa457165`, `d281ee1d`, `f8adc101`, `5f831cd2` after `49e16712`; Blitz fork (`f4132d5`) unchanged. No `css-spec-researcher` output: §2 is
+`htmltopdf/srgb-colours` `fa457165`, `d281ee1d`, `f8adc101`, `5f831cd2`, `c41518b5` after `49e16712`; Blitz fork (`f4132d5`) unchanged. No `css-spec-researcher` output: §2 is
 from memory and unverified.
 
 ## 1. Problem
@@ -165,3 +165,10 @@ Fixtures 01-24, the bench corpus and the fork's VRT goldens stay byte-identical.
   this container before and after, their outputs byte-identical).
 - Not verified: `rowspan` band joining against a real layout (Blitz ignores `rowspan`; unit tests on synthetic
   extents only); Chrome draws a separate-model border at a cut to the page bottom, ours closes each piece.
+- Reviews: `pdf-reviewer` found no PDF defect (qpdf clean, fonts embedded and subset with ToUnicode, one `/Table` per
+  table, the source header's `/TH` once, header copies inside `/Artifact`, ParentTree consistent, fixtures 01-24
+  untagged and tagged byte-identical) and one new visual defect, fixed in `c41518b5`: a separate-model table border
+  of a non-last piece was drawn inside its last row (covered by a row background painted after it). `vrt-validator`
+  (about 90 hand-written shapes, 300 fuzz cases, 24 multicol shapes without tables): no regression against main, no
+  lost or duplicated cell, nothing past the content box, multicol without tables and long one-column tables
+  byte-identical to main. Its other findings are filed: F174b-e.
