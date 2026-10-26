@@ -5,7 +5,7 @@ A two-page Czech invoice (the header, parties, items and total of fixture 12) wh
 `table.plan` (collapsed borders, a `thead` Splátka · Splatnost · Částka, 56 rows, zebra rows), then clauses 5–8.
 
 Chrome breaks the table between its rows across the columns and the page and repeats its header at the top of each
-column piece: Splátka 1–14 at the bottom of column 1 of page 1, 15–42 in column 2, 43–56 at the top of column 1 of
+column piece: Splátka 1–14 at the bottom of column 1 of page 1, 15–44 in column 2, 45–56 at the top of column 1 of
 page 2, then the clauses.
 
 Exercises (F174; css-break-3 §2 and §4.1, css-multicol-1 §7.1 / §8.2, CSS 2.1 §17.2):
@@ -22,3 +22,6 @@ that is not as wide as its column (F174b: tables in columns are laid out at the 
 Everything multicol and table is in the fixture's `<style>`; `fixtures/tailwind/tailwind.css` is not rebuilt. Tests
 that pin the behaviour without a fixture: `crates/htmltopdf/tests/multicol_tables.rs`; `fixtures.rs` has
 `terms_table_columns_invoice_prints_every_instalment`.
+
+Compare: 8.3 % worst page (2 pages, Chrome 2). The column pieces, the repeated headers, the zebra rows and the page
+break are where Chrome puts them; the rest is the text drift every fixture has.

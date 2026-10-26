@@ -1,7 +1,7 @@
 # F174 — a table inside a multicol container loses most of its rows
 
-Date: 2026-10-26. Finding: F174 (`2026-10-15-m0-findings.md`). Status: planned. Fork `subapavel/fulgur`
-`htmltopdf/srgb-colours` after `49e16712`; Blitz fork (`f4132d5`) unchanged. No `css-spec-researcher` output: §2 is
+Date: 2026-10-26. Finding: F174 (`2026-10-15-m0-findings.md`). Status: **done**, fork `subapavel/fulgur`
+`htmltopdf/srgb-colours` `fa457165`, `d281ee1d`, `f8adc101`, `5f831cd2` after `49e16712`; Blitz fork (`f4132d5`) unchanged. No `css-spec-researcher` output: §2 is
 from memory and unverified.
 
 ## 1. Problem
@@ -143,3 +143,25 @@ Fixtures 01-24, the bench corpus and the fork's VRT goldens stay byte-identical.
   child the known width `col_w`); F174c (a table inside a wrapper in the columns stays one block, the warning stays);
   footer repeat (F12b); caption kept with its table; child margins in columns (F30d-b); exact slice drawing of a
   separate-model table border at a cut (each piece is a closed box).
+
+## 7. Result
+
+- Chrome 148 (step 0, with `p{margin:0}`): A page 1 r1-r49 / r50-r98, page 2 r99-r114 / r115-r130, `Head1` at the top
+  of each of the 4 pieces; B r1-r50 / r51-r100 / r101-r115 / r116-r130; C r1-r10 / r11-r20 + `after`; D (p0-p29 in
+  column 1) r1-r20 / r21-r70 / r71-r100 / r101-r130; E (collapsed) r1-r47 / r48-r94 / r95-r112 / r113-r130; F as A.
+  The header repeats in every column piece, so the plan stands.
+- `multicol_tables.rs` A-G red on main (every shape: 107 words or the whole table in column 1; G3: rows after a row
+  taller than a page lost), green after; each piece's row range within one row of Chrome's (here: equal).
+- Deviations taken by the implementation: (1) `table_borders` slots are keyed by the table piece that contains a cell
+  (its x in 1/64 px), not by each cell's `x_off` (under collapsed borders cells are 1-2 px off their track, which broke
+  fixture 05 and a golden); a table without pieces has one slot and the old rows. (2) Row backgrounds: each piece
+  paints the cells whose middle lies in it. (3) "Header + row must fit the column" is judged against the page's
+  column height (`head_limit`), not a balancing trial budget (else balancing the last rows dropped the header). (4)
+  `McAtom::Row` carries `first` / `end`, the first atom holds the header bands and the first body band. (5)
+  `multicol_cuts` keeps `break-inside: avoid` on a container that does not fit its room moving whole.
+- Fixture 25: 2 pages like Chrome, Splátka 1-14 / 15-44 / 45-56, the header in each piece; worst page 8.3 %
+  (threshold 9.3 %). Fixtures 01-24 and the bench corpus byte-identical to main's binary. Fork: 2256 lib tests (2232
+  before), 287 `render_smoke` (283), clippy clean; the fork's VRT output unchanged (the same 26 of 64 goldens differ in
+  this container before and after, their outputs byte-identical).
+- Not verified: `rowspan` band joining against a real layout (Blitz ignores `rowspan`; unit tests on synthetic
+  extents only); Chrome draws a separate-model border at a cut to the page bottom, ours closes each piece.
