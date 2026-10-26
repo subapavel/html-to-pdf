@@ -14,6 +14,7 @@
 !fixtures/**/golden/*.png
 !fixtures/invoices/*/*.png
 !docs/**/*.png
+!crates/*/tests/data/*.png
 
 # Fonts are fetched by scripts/fetch-fonts.sh, not committed
 /fixtures/fonts/*.ttf
