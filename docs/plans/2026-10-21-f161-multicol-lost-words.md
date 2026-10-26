@@ -1,8 +1,8 @@
 # F161 + F165 — multicol loses words at a column end, around `column-span: all`, and before a `display: contents` sibling
 
 Date: 2026-10-21 (rewritten 2026-10-26 after the first copy was lost with its container). Findings: F161 (HIGH,
-silent) and F165 (medium-high) in `2026-10-15-m0-findings.md`. Status: **fork part implemented** in
-`subapavel/fulgur` `htmltopdf/srgb-colours` `5aa953f6` (on `182ffb73`); our part (lock, tests, fixture 24, fuzz
+silent) and F165 (medium-high) in `2026-10-15-m0-findings.md`. Status: **done** in
+`subapavel/fulgur` `htmltopdf/srgb-colours` `5aa953f6` + `1c1c164b` (on `182ffb73`); our part (lock, tests, fixture 24, fuzz
 floor) on branch `f161-multicol-lost-words`.
 
 ## 1. Problem
@@ -129,3 +129,27 @@ table cells.
 3. F165 edge cases: `shift_box_roots` follows DOM children; a multicol that is itself inside a contents wrapper
    (`<w><div columns>…</div></w><p>Q</p>`) and siblings in anonymous blocks are untested.
 4. Determinism: only `BTreeMap` / `BTreeSet` and source-order `Vec`s are added, fixed tolerances.
+
+## 7. Result
+
+- Fork `5aa953f6` (steps 1–5) and `1c1c164b` (review fixes, below); lock bumped from `182ffb73`.
+- `cargo test` found the risk 2 regression: `display_contents.rs` C17 ("span-all in a wrapper, then a long
+  paragraph", a `<div>` a page and a half tall under a spanner) lost 44 of 300 words. A 2000-seed comparison of
+  the `fuzz_long` documents against main's binary found one more (seed 2434: a `<div>` shorter than a page in the
+  last group under a spanner was put whole in the second column and ran six lines past the page bottom, 257 of 263
+  words; main 263). `1c1c164b`: `fill_multicol_columns` lets the first atom of a column overflow only on a fresh
+  page or as the page's first atom (on a partial page it ends the page), and a container with spanners whose flow
+  holds a box taller than a page keeps the old path. Fork tests: a planner unit test, the tiny-room test updated
+  to the rule, a `render_smoke` case.
+- After the fix, all 2200 fuzz documents (the 2000 of `fuzz_long` and the 200 of the CI generator) against main's
+  binary: **0 print fewer words, 33 print more**. Still lossy on both binaries alike (pre-existing, filed under
+  F173 (e)): seeds 134 and 153 of the CI generator, 1590, 1726, 1823 (F166) and 1908 of `fuzz_long`.
+- Shapes of §4 (b) on main's binary / the branch: 4 / 8, 29 / 32 (k = 7), 180 / 243, 295 pt / 109 pt.
+- Fixtures 01–23 byte-identical to main's binary; fixture 24 prints 948 of 948 words (main 862), 8.6 % worst
+  page, 2 pages like Chrome. Fork: 2232 lib tests, 283 `render_smoke`, clippy clean; of the fork's 64 VRT goldens
+  the same 26 differ byte-wise on `182ffb73`, `5aa953f6` and `1c1c164b` in this container (environment), and their
+  output is byte-identical between `5aa953f6` and `1c1c164b`.
+- Fork tests are run with the Blitz and Taffy forks patched in on the command line
+  (`cargo test --config 'patch.crates-io.blitz-dom.git="https://github.com/subapavel/blitz"' --config
+  'patch.crates-io.blitz-dom.branch="htmltopdf/blitz-dom-0.2.4"' …`, the same for `blitz-html` and `taffy`); the
+  fork's own `Cargo.toml` and `Cargo.lock` are not changed.
