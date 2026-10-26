@@ -585,11 +585,7 @@ fn t18d_a_table_cell_after_sits_above_the_footer() {
     assert_eq!(pages_of(&found, "Head1"), all);
     assert_eq!(pages_of(&found, "AFT"), [pages]);
     let (aft, last_row) = (word(&found, "AFT"), word(&found, "r130"));
-    let foot = found
-        .iter()
-        .filter(|w| w.text == "Foot")
-        .last()
-        .expect("Foot");
+    let foot = found.iter().rfind(|w| w.text == "Foot").expect("Foot");
     assert_eq!(foot.page, pages);
     assert!(
         last_row.y0 < aft.y0 && aft.y0 < foot.y0,
