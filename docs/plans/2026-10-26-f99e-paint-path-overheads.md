@@ -113,4 +113,10 @@ features -i krilla` shows `rayon`; gates. 2. C (1 day): red test, `FontBytes`, s
   `b200-text` 897 -> 773 ms, `b200-mixed` 878 -> 788 ms; A trades a few % of CPU for wall time, B and C remove CPU. B
   gave less than estimated (about −30 ms on items, not −60…−90), C about −5…−15 ms of CPU and −4 MB of peak RSS (not
   −90 MB: the estimate was wrong). `b200-items` is still over 1 s.
-- Reviews: pdf-reviewer no defect (found F177, F178 on main); vrt-validator in §7 of the PR.
+- Reviews: pdf-reviewer no defect (found F177, F178 on main). vrt-validator: about 1300 documents (generated, fixtures,
+  corpus, scaling variants, earlier validators' sets, 260 random multicol, 300 random mixed, 1000-page documents) at 1 /
+  2 / 4 / 16 threads, concurrent renders and `taskset`: 0 byte differences; 36 error cases and 3100 mutated images:
+  identical exit codes and messages; `bench --check` ok on a quiet machine; one low finding, the pool start-up on
+  many-core hosts (F179).
+- `bench/baseline.json` rewritten on the dev VM (same machine label): `b200-items` 1190 ms, `b200-text` 787,
+  `b200-mixed` 785, `02-long` 29.4; `slow-breaks` (report only) keeps its old value.
