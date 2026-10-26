@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0023</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0; }
+  h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
+  p { margin: 0; }
+  .muted { color: #6b7280; }
+  .head { display: flex; justify-content: space-between; margin-bottom: 28px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; margin-bottom: 28px; font-size: 13px; }
+  .party p + p { margin-top: 2px; }
+  /* The items table. The note under the last row is generated: `::after` is a block in an anonymous row and cell of the
+     table (CSS 2.1 section 17.2.1), so it is as wide as the first column. */
+  .items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; }
+  .items th { background: #f3f4f6; font-weight: 600; text-align: left; padding: 7px 10px; border-bottom: 1px solid #d1d5db; }
+  .items td { padding: 7px 10px; border-bottom: 1px solid #d1d5db; }
+  .items .num { text-align: right; }
+  .items tbody tr:nth-child(even) td { background: #f9fafb; }
+  .items tfoot td { background: #111827; color: #fff; font-weight: 700; border-bottom-color: #111827; }
+  .items::after { content: "Ceny jsou uvedeny v korunách českých bez DPH. DPH je rekapitulováno níže."; display: block; padding: 8px 10px 0; font-size: 11px; color: #6b7280; }
+  /* The VAT recap is a `display: table` box of divs: a label from `::before` (a table cell), the figures as bare cells
+     (one anonymous row holds them all) and a closing cell from `::after`. */
+  .recap { display: table; width: 100%; font-size: 13px; margin-bottom: 24px; border: 1px solid #e5e7eb; }
+  .recap::before { content: "Rekapitulace DPH"; display: table-cell; padding: 8px 12px; background: #f3f4f6; font-weight: 600; }
+  .recap::after { content: "Uhrazeno"; display: table-cell; padding: 8px 12px; text-align: right; color: #6b7280; }
+  .recap .cell { display: table-cell; padding: 8px 12px; border: 1px solid #e5e7eb; }
+  .recap .cell b { display: block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 2px; }
+  .pay { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+  .pay dl { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 2px; margin: 0; }
+  .pay dt { color: #6b7280; }
+  .pay dd { margin: 0; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<header class="head">
+  <div>
+    <h1>Faktura 2026-0023</h1>
+    <p class="muted">Daňový doklad</p>
+  </div>
+  <div style="text-align:right;font-size:13px">
+    <p style="font-weight:600">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+  </div>
+</header>
+
+<section class="parties">
+  <div class="party">
+    <h2>Dodavatel</h2>
+    <p style="font-weight:600">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div class="party">
+    <h2>Odběratel</h2>
+    <p style="font-weight:600">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1</p>
+    <p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<table class="items">
+  <thead>
+    <tr><th>Popis</th><th class="num" style="width:80px">Množství</th><th class="num" style="width:90px">Cena/ks</th><th class="num" style="width:60px">DPH</th><th class="num" style="width:110px">Celkem</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Servisní paušál – listopad 2026</td><td class="num">1 ks</td><td class="num">12 000,00</td><td class="num">21 %</td><td class="num">12 000,00</td></tr>
+    <tr><td>Správa serverů a monitoring</td><td class="num">1 ks</td><td class="num">8 500,00</td><td class="num">21 %</td><td class="num">8 500,00</td></tr>
+    <tr><td>Zálohování dat (500 GB)</td><td class="num">1 ks</td><td class="num">1 900,00</td><td class="num">21 %</td><td class="num">1 900,00</td></tr>
+    <tr><td>Konzultace – architektura integrace</td><td class="num">6 h</td><td class="num">2 500,00</td><td class="num">21 %</td><td class="num">15 000,00</td></tr>
+    <tr><td>Úprava exportu do účetního systému</td><td class="num">3 h</td><td class="num">2 500,00</td><td class="num">21 %</td><td class="num">7 500,00</td></tr>
+    <tr><td>Cestovné – Trutnov, Praha</td><td class="num">120 km</td><td class="num">12,00</td><td class="num">21 %</td><td class="num">1 440,00</td></tr>
+  </tbody>
+  <tfoot>
+    <tr><td colspan="4" class="num">Celkem bez DPH</td><td class="num">46 340,00 Kč</td></tr>
+  </tfoot>
+</table>
+
+<div class="recap">
+  <div class="cell"><b>Základ 21 %</b>46 340,00 Kč</div>
+  <div class="cell"><b>DPH 21 %</b>9 731,40 Kč</div>
+  <div class="cell"><b>Celkem k úhradě</b>56 071,40 Kč</div>
+</div>
+
+<section class="pay">
+  <h2>Platební údaje</h2>
+  <dl>
+    <dt>Účet</dt><dd>123456789/0300</dd>
+    <dt>IBAN</dt><dd>CZ65 0300 0000 0001 2345 6789</dd>
+    <dt>VS</dt><dd>20260023</dd>
+    <dt>Částka</dt><dd style="font-weight:600">56 071,40 CZK</dd>
+  </dl>
+</section>
+
+</body>
+</html>

@@ -713,6 +713,8 @@ fn visible_edge_is_space(html: &str, start: bool) -> bool {
 struct Gen {
     rng: Rng,
     word: usize,
+    /// The CSS rules of this seed: the `::before` / `::after` of the generated tables (F163).
+    rules: String,
 }
 
 impl Gen {
@@ -845,10 +847,45 @@ impl Gen {
         format!("<{tag}>{items}</{tag}>")
     }
 
-    /// A `display: table` made of divs (a `<table>` tag would make html5ever move a `<div>` out of it).
+    /// A `display: table` made of divs (a `<table>` tag would make html5ever move a `<div>` out of it). Some tables
+    /// have a `::before` and / or `::after` with a word of their own (F163), some have no row at all, and some have
+    /// a bare cell that is not in a row (CSS 2.1 §17.2.1: it sits in an anonymous row).
     fn table(&mut self, depth: u32) -> String {
+        let mut class = String::new();
+        if self.rng.chance(40) {
+            // One class per table that has a rule: a class without one would pick up the rules of the next table.
+            let id = self.rules.matches("::").count();
+            let mut rules = String::new();
+            for side in ["before", "after"] {
+                if self.rng.chance(60) {
+                    // Two pseudo-elements next to each other glue their words in Chrome too (an empty table: one
+                    // anonymous cell holds both, or two cells touch), so the inline ones keep a space and the cells
+                    // have padding like the cells of the tree.
+                    let (display, space) = [
+                        ("", " "),
+                        (";display:block", ""),
+                        (";display:table-cell;padding:0 8px", ""),
+                        (";display:table-row", " "),
+                    ][self.rng.below(4) as usize];
+                    let word = self.word();
+                    rules.push_str(&format!(
+                        ".p{id}::{side} {{ content: \"{space}{word}{space}\"{display} }}\n"
+                    ));
+                }
+            }
+            if !rules.is_empty() {
+                class = format!(" class=\"p{id}\"");
+                self.rules.push_str(&rules);
+            }
+        }
         let mut rows = String::new();
-        for _ in 0..1 + self.rng.below(2) {
+        if self.rng.chance(15) {
+            rows.push_str(&format!(
+                "<div style=\"display:table-cell;padding:0 8px\">{}</div>",
+                self.blocks(depth.min(1))
+            ));
+        }
+        for _ in 0..self.rng.below(3) {
             let mut cells = String::new();
             for _ in 0..1 + self.rng.below(2) {
                 let cell = format!(
@@ -870,7 +907,7 @@ impl Gen {
                 rows.push_str(&row);
             }
         }
-        format!("<div style=\"display:table;width:100%;table-layout:fixed\">{rows}</div>")
+        format!("<div{class} style=\"display:table;width:100%;table-layout:fixed\">{rows}</div>")
     }
 }
 
@@ -894,6 +931,7 @@ fn fuzz(from: u64, to: u64) {
         let mut g = Gen {
             rng: Rng(0x9E37_79B9_7F4A_7C15 ^ seed.wrapping_mul(0xD1B5_4A32_D192_ED03) | 1),
             word: 0,
+            rules: String::new(),
         };
         let mut body = g.blocks(4);
         // A multicol container at the top level (nested in flex, tables or other multicol containers the F30d flow
@@ -906,22 +944,23 @@ fn fuzz(from: u64, to: u64) {
             ));
         }
         let expected = g.word;
-        // `DISPLAY_CONTENTS_FUZZ_DUMP=<dir>` writes every body (with the `<w>` / `<s>` markers), for bisecting.
+        // `DISPLAY_CONTENTS_FUZZ_DUMP=<dir>` writes every body (with the `<w>` / `<s>` markers and the seed's rules), for bisecting.
         if let Ok(dir) = std::env::var("DISPLAY_CONTENTS_FUZZ_DUMP") {
             std::fs::write(
                 std::path::Path::new(&dir).join(format!("{seed:04}.txt")),
-                &body,
+                format!("<style>{}</style>\n{body}", g.rules),
             )
             .expect("write dump");
         }
-        let with = match try_render(FUZZ_CSS, &wrapped(&body)) {
+        let css = format!("{FUZZ_CSS}\n{}", g.rules);
+        let with = match try_render(&css, &wrapped(&body)) {
             Ok(pdf) => pdf,
             Err(e) => {
                 failures.push(format!("seed {seed}: wrapped render failed: {e}\n{body}"));
                 continue;
             }
         };
-        let without = match try_render(FUZZ_CSS, &plain(&body)) {
+        let without = match try_render(&css, &plain(&body)) {
             Ok(pdf) => pdf,
             Err(e) => {
                 failures.push(format!("seed {seed}: plain render failed: {e}\n{body}"));
