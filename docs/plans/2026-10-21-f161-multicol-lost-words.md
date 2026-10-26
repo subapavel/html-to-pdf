@@ -142,8 +142,11 @@ table cells.
   holds a box taller than a page keeps the old path. Fork tests: a planner unit test, the tiny-room test updated
   to the rule, a `render_smoke` case.
 - After the fix, all 2200 fuzz documents (the 2000 of `fuzz_long` and the 200 of the CI generator) against main's
-  binary: **0 print fewer words, 33 print more**. Still lossy on both binaries alike (pre-existing, filed under
-  F173 (e)): seeds 134 and 153 of the CI generator, 1590, 1726, 1823 (F166) and 1908 of `fuzz_long`.
+  binary: **0 print fewer words, 33 print more** (among them seeds 134 of the CI generator and 1726, 1908 of
+  `fuzz_long`, which main printed with 22 to 44 words missing). Still lossy (pre-existing, filed under F173 (e)):
+  seed 153 of the CI generator (no multicol, 171 of 180 on both), `fuzz_long` 1590 (multicol: main 195, branch
+  228 of 259), 1823 (F166), and one or two words in 1295, 1907, 2039, 2289 (the same on both). So
+  `DISPLAY_CONTENTS_FUZZ_SEEDS=200` fails on seed 153 only, and `fuzz_long` on 1590 and 1823.
 - Shapes of §4 (b) on main's binary / the branch: 4 / 8, 29 / 32 (k = 7), 180 / 243, 295 pt / 109 pt.
 - Fixtures 01–23 byte-identical to main's binary; fixture 24 prints 948 of 948 words (main 862), 8.6 % worst
   page, 2 pages like Chrome. Fork: 2232 lib tests, 283 `render_smoke`, clippy clean; of the fork's 64 VRT goldens
