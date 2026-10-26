@@ -512,3 +512,52 @@ fn columns_span_invoice_prints_every_clause() {
         "{name}: two pages like Chrome"
     );
 }
+
+/// F174: fixture 25's payment schedule (56 rows, a `thead`) sits in a two-column terms block and crosses a column and
+/// a page break. Chrome repeats the header at the top of each of its 3 column pieces.
+#[test]
+fn terms_table_columns_invoice_prints_every_instalment() {
+    let name = "25-terms-table-columns";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "25");
+    for i in 1..=56 {
+        let needle = format!("Splátka {i} ");
+        assert_eq!(
+            text.matches(&needle).count(),
+            1,
+            "{name}: `{needle}` must be printed once: {text}"
+        );
+    }
+    assert_eq!(
+        text.matches("Částka").count(),
+        3,
+        "{name}: the header once per column piece, as in Chrome"
+    );
+    for part in html.split("<p class=\"text-gray-600\">").skip(1) {
+        let para = part.split_once("</p>").unwrap().0;
+        let words: Vec<&str> = para.split_whitespace().collect();
+        let tail = words[words.len().saturating_sub(2)..].join(" ");
+        assert!(text.contains(&tail), "{name}: `{tail}` missing: {text}");
+    }
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-25p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           2"),
+        "{name}: two pages like Chrome"
+    );
+}

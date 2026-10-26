@@ -168,6 +168,11 @@ THRESHOLDS = {
     #     pages, then a `display: contents` signature; two pages like Chrome's). 8.6 %: the text drift every fixture has, over a
     #     page of small text in columns. Main's binary loses 86 of the 948 words. Worst page + 1 point.
     "24-columns-span": 0.096,
+    # 25: new in F174 (a Czech invoice whose two-column terms hold a 56-row payment schedule that Chrome breaks between its
+    #     rows across the columns and the page, repeating its header in each of the 3 column pieces; two pages like Chrome's).
+    #     8.3 %: the text drift every fixture has. Main's binary places the table whole in column 1 and loses most of its rows.
+    #     Worst page + 1 point.
+    "25-terms-table-columns": 0.093,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

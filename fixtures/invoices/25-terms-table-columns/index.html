@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0025</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  /* The terms are a two-column container holding a payment schedule table that is broken between its rows across the
+     columns and the pages, with its header repeated at the top of each column piece (F174). No margins inside the
+     columns (F30d-b); orphans / widows are 1 because fulgur does not implement them in columns. */
+  .terms { columns: 2; column-gap: 24px; }
+  .terms h3 { margin: 0; }
+  .terms p { margin: 0; orphans: 1; widows: 1; }
+  .terms h2 { margin: 0; padding: 6px 0 2px; font-size: 12px; font-weight: 700; }
+  .plan { width: 100%; border-collapse: collapse; }
+  .plan th { text-align: left; font-weight: 600; padding: 2px 4px; border-bottom: 1px solid #9ca3af; }
+  .plan td { padding: 2px 4px; border-bottom: 1px solid #e5e7eb; }
+  .plan .num { text-align: right; }
+  .plan tbody tr:nth-child(odd) td { background: #f9fafb; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0025</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 29. 10. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<table class="w-full text-sm mb-4">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+      <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+      <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold mb-6">Celkem k úhradě <span class="tabular-nums ml-1">88 000,00 Kč</span></p>
+
+<!-- Obchodní podmínky ve dvou sloupcích se splátkovým kalendářem, který se láme mezi sloupci a stránkami -->
+<section class="terms text-xs">
+  <h3 class="font-semibold text-gray-900">1. Předmět plnění</h3>
+  <p class="text-gray-600">Tyto všeobecné obchodní podmínky upravují vzájemná práva a povinnosti dodavatele a odběratele při poskytování služeb uvedených na této faktuře a jsou její nedílnou součástí.</p>
+  <h3 class="font-semibold text-gray-900">2. Odborná péče</h3>
+  <p class="text-gray-600">Dodavatel se zavazuje poskytnout služby s odbornou péčí, v dohodnutém rozsahu a v termínech odpovídajících písemně potvrzenému harmonogramu prací.</p>
+  <h3 class="font-semibold text-gray-900">3. Součinnost odběratele</h3>
+  <p class="text-gray-600">Odběratel je povinen poskytnout dodavateli včas veškerou součinnost potřebnou k řádnému plnění, zejména přístup do testovacích a produkčních systémů, kontaktní osoby a podklady k rozhraním.</p>
+  <h3 class="font-semibold text-gray-900">4. Cena a platební podmínky</h3>
+  <p class="text-gray-600">Pokud odběratel součinnost neposkytne ani po písemné výzvě v přiměřené lhůtě, prodlužují se dohodnuté termíny o dobu, po kterou součinnost chyběla, a dodavatel má nárok na úhradu prokazatelně vynaložených nákladů.</p>
+  <h2>Splátkový kalendář</h2>
+  <table class="plan">
+    <thead><tr><th>Splátka</th><th>Splatnost</th><th class="num">Částka</th></tr></thead>
+    <tbody>
+      <tr><td>Splátka 1</td><td>15. prosince 2026</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 2</td><td>15. ledna 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 3</td><td>15. února 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 4</td><td>15. března 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 5</td><td>15. dubna 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 6</td><td>15. května 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 7</td><td>15. června 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 8</td><td>15. července 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 9</td><td>15. srpna 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 10</td><td>15. září 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 11</td><td>15. října 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 12</td><td>15. listopadu 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 13</td><td>15. prosince 2027</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 14</td><td>15. ledna 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 15</td><td>15. února 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 16</td><td>15. března 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 17</td><td>15. dubna 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 18</td><td>15. května 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 19</td><td>15. června 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 20</td><td>15. července 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 21</td><td>15. srpna 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 22</td><td>15. září 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 23</td><td>15. října 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 24</td><td>15. listopadu 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 25</td><td>15. prosince 2028</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 26</td><td>15. ledna 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 27</td><td>15. února 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 28</td><td>15. března 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 29</td><td>15. dubna 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 30</td><td>15. května 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 31</td><td>15. června 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 32</td><td>15. července 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 33</td><td>15. srpna 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 34</td><td>15. září 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 35</td><td>15. října 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 36</td><td>15. listopadu 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 37</td><td>15. prosince 2029</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 38</td><td>15. ledna 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 39</td><td>15. února 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 40</td><td>15. března 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 41</td><td>15. dubna 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 42</td><td>15. května 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 43</td><td>15. června 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 44</td><td>15. července 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 45</td><td>15. srpna 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 46</td><td>15. září 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 47</td><td>15. října 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 48</td><td>15. listopadu 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 49</td><td>15. prosince 2030</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 50</td><td>15. ledna 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 51</td><td>15. února 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 52</td><td>15. března 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 53</td><td>15. dubna 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 54</td><td>15. května 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 55</td><td>15. června 2031</td><td class="num">2 444,44 Kč</td></tr>
+      <tr><td>Splátka 56</td><td>15. července 2031</td><td class="num">2 444,44 Kč</td></tr>
+    </tbody>
+  </table>
+  <h3 class="font-semibold text-gray-900">5. Splatnost a úrok z prodlení</h3>
+  <p class="text-gray-600">Cena služeb je sjednána jako cena za odpracovanou hodinu podle vykázaného rozsahu a je uvedena bez daně z přidané hodnoty, která bude účtována ve výši stanovené právními předpisy platnými v den uskutečnění zdanitelného plnění.</p>
+  <h3 class="font-semibold text-gray-900">6. Dodací lhůty</h3>
+  <p class="text-gray-600">Podkladem pro vyúčtování je měsíční výkaz práce, který dodavatel předá odběrateli nejpozději do pátého pracovního dne následujícího měsíce a který odběratel schválí nebo písemně reklamuje do pěti pracovních dnů od doručení.</p>
+  <h3 class="font-semibold text-gray-900">7. Převzetí plnění</h3>
+  <p class="text-gray-600">Neobdrží-li dodavatel ve lhůtě podle předchozí věty žádnou připomínku, považuje se výkaz práce za schválený a odpovídající skutečně provedeným činnostem.</p>
+  <h3 class="font-semibold text-gray-900">8. Reklamace</h3>
+  <p class="text-gray-600">Faktura je splatná ve lhůtě uvedené na jejím prvním listu; za okamžik úhrady se považuje připsání celé fakturované částky na bankovní účet dodavatele pod správným variabilním symbolem.</p>
+</section>
+
+</body>
+</html>
