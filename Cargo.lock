@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#f4132d51589ae7fa3dc984dae51cdafd3b696fd6"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#b9a0fa8cd2d68a749ee40da52a7174913e855c47"
 dependencies = [
  "accesskit",
  "app_units",
@@ -231,7 +231,7 @@ dependencies = [
 [[package]]
 name = "blitz-html"
 version = "0.2.0"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#f4132d51589ae7fa3dc984dae51cdafd3b696fd6"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#b9a0fa8cd2d68a749ee40da52a7174913e855c47"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -958,7 +958,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#6069832dd1cb09ea668cd0297adbed1828d2d42f"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#7dc1160061e9f280079ce30b149f1df3c177a026"
 dependencies = [
  "blitz-dom",
  "blitz-html",
@@ -967,6 +967,7 @@ dependencies = [
  "getrandom",
  "gif",
  "image",
+ "image-webp",
  "krilla",
  "krilla-svg",
  "log",
