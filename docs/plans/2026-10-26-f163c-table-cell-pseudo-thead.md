@@ -2,7 +2,7 @@
 
 Date: 2026-10-26. Finding: F163c (`2026-10-15-m0-findings.md`). Follows F163
 (`2026-10-21-f163-table-pseudo-elements.md` §7), F12 (`2026-10-16-f12-repeat-thead.md`) and F36
-(`2026-10-19-f36-tfoot-order.md`). The fix goes in the Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`
+(`2026-10-19-f36-tfoot-order.md`). Status: **done** in the Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4` `f4132d5`
 (after `71de9c0`); the fulgur fork is unchanged.
 
 ## 1. Problem
@@ -76,3 +76,17 @@ so it does not change. No fixture uses `order`.
 - R3: the sort is upstream Blitz code; the hunk is one condition, named in `docs/upstream.md`.
 
 Non-goals: F163b (pseudos of rows and groups), F127, F12b (footer repeat), `paint_children` order.
+
+## 7. Result
+
+- Blitz `f4132d5`: the guard and its comment, lib test
+  `a_tables_layout_children_stay_in_visual_order_whatever_their_order` (red without the guard: the layout children
+  were `[::before cell, th, …]`; all 124 `blitz-dom` lib tests green with it). Lock bumped from `71de9c0`.
+- `table_pseudo.rs` T18a-d, measured in Chrome 148 with the same CSS (cells get `padding: 0 6px` so that
+  `pdftotext` keeps neighbouring cells apart): T18a / T18b 3 pages, `Head1` on each, `BEFORE-ONCE` once between the
+  header and `r1`, 4.5 pt (4.9 pt collapsed) left of `r1` because the pseudo cell is not a `td` and has no padding;
+  T18c 3 pages, the same words in the same order as without the `order` rule; T18d `AFT` once on the last page
+  between `r130` and the footer (Chrome also repeats the footer on every page; F12b). Red on main: T18a (header on
+  page 1 only), T18c (2 pages, 8 words); T18d passes on main and after.
+- Fixtures 01-24 and the bench corpus (7 documents) byte-identical to main's binary; compare numbers unchanged.
+- No fulgur lib test was added (the plan's optional one): the fulgur fork is unchanged, and T18 covers the path.

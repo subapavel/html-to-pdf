@@ -470,3 +470,129 @@ fn t17_empty_nested_and_row_less_tables_around_each_other() {
         ],
     );
 }
+
+// --- T18: a table-cell pseudo, or `order` on a cell, keeps the header repeating (F163c) -----------------------------
+
+/// Cells have 6 px of horizontal padding so that `pdftotext` keeps neighbouring cells apart.
+/// A table of a two-cell `thead` (`Head1`, `Head2`) and 130 body rows `rN` / `vN`, plus `extra` after the body.
+fn long_table(extra: &str) -> String {
+    let rows: String = (1..=130)
+        .map(|i| format!("<tr><td>r{i}</td><td>v{i}</td></tr>"))
+        .collect();
+    format!(
+        "<table><thead><tr><th>Head1</th><th>Head2</th></tr></thead><tbody>{rows}</tbody>{extra}</table>"
+    )
+}
+
+/// The pages `text` is printed on.
+fn pages_of(found: &[Word], text: &str) -> Vec<usize> {
+    found
+        .iter()
+        .filter(|w| w.text == text)
+        .map(|w| w.page)
+        .collect()
+}
+
+/// Every body word of [`long_table`] exactly once, and the header at the top of every page.
+fn assert_rows_once_and_header_on_every_page(what: &str, pdf: &[u8], pages: usize) {
+    let found = words(pdf);
+    assert_eq!(page_count(pdf), pages, "{what}: pages (Chrome)");
+    for i in 1..=130 {
+        for text in [format!("r{i}"), format!("v{i}")] {
+            assert_eq!(pages_of(&found, &text).len(), 1, "{what}: {text} once");
+        }
+    }
+    let all: Vec<usize> = (1..=pages).collect();
+    assert_eq!(
+        pages_of(&found, "Head1"),
+        all,
+        "{what}: the header on every page"
+    );
+    for page in 1..=pages {
+        let first = found.iter().find(|w| w.page == page).unwrap();
+        assert_eq!(
+            first.text, "Head1",
+            "{what}: page {page} starts with the header"
+        );
+    }
+}
+
+#[test]
+fn t18a_a_table_cell_before_keeps_the_header_repeating() {
+    for (what, css) in [
+        ("separate", ""),
+        (
+            "collapse",
+            "table { border-collapse: collapse } td, th { border: 1px solid #000 }",
+        ),
+    ] {
+        let css = format!(
+            "table::before {{ content: \"BEFORE-ONCE\"; display: table-cell }} td, th {{ padding: 0 6px }} {css}"
+        );
+        let pdf = render(&css, &long_table(""));
+        // Chrome 148: 3 pages, the header on each, the pseudo once, in an anonymous row under the header, in the
+        // first column.
+        assert_rows_once_and_header_on_every_page(what, &pdf, 3);
+        let found = words(&pdf);
+        assert_eq!(pages_of(&found, "BEFORE-ONCE"), [1], "{what}");
+        let (head, before, r1) = (
+            word(&found, "Head1"),
+            word(&found, "BEFORE-ONCE"),
+            word(&found, "r1"),
+        );
+        assert!(
+            head.y0 < before.y0 && before.y0 < r1.y0,
+            "{what}: the pseudo row is between the header and the first row"
+        );
+        // Chrome: 4.5 pt (separate) and 4.9 pt (collapse) left of `r1`: the pseudo cell is not a `td` and has no
+        // padding.
+        assert!(
+            (before.x0 - (r1.x0 - 4.5)).abs() <= CHROME_PT,
+            "{what}: in the first column, {:.1} pt left of r1",
+            r1.x0 - before.x0
+        );
+    }
+}
+
+#[test]
+fn t18c_order_on_a_cell_does_not_move_it() {
+    // `order` does not apply to table cells (css-flexbox-1 §5.4 / css-display-3): Chrome prints the table as without
+    // the rule. Before F163c the cell was walked first by the fragmenter: 8 of 266 words on 2 pages.
+    let css = "td, th { padding: 0 6px } tbody tr:last-child td:first-child { order: -1 }";
+    let pdf = render(css, &long_table(""));
+    assert_rows_once_and_header_on_every_page("order", &pdf, 3);
+    let plain = render("td, th { padding: 0 6px }", &long_table(""));
+    assert_eq!(
+        texts(&words(&pdf)),
+        texts(&words(&plain)),
+        "the same words in the same order as without the rule"
+    );
+}
+
+#[test]
+fn t18d_a_table_cell_after_sits_above_the_footer() {
+    let css = "table::after { content: \"AFT\"; display: table-cell } td, th { padding: 0 6px }";
+    let pdf = render(
+        css,
+        &long_table("<tfoot><tr><td>Foot</td><td>F2</td></tr></tfoot>"),
+    );
+    let found = words(&pdf);
+    let pages = page_count(&pdf);
+    // Chrome 148: 3 pages, `AFT` once on the last page, directly above the footer (it also repeats the footer on
+    // every page, which fulgur does not do yet, F12b).
+    assert_eq!(pages, 3);
+    let all: Vec<usize> = (1..=pages).collect();
+    assert_eq!(pages_of(&found, "Head1"), all);
+    assert_eq!(pages_of(&found, "AFT"), [pages]);
+    let (aft, last_row) = (word(&found, "AFT"), word(&found, "r130"));
+    let foot = found
+        .iter()
+        .filter(|w| w.text == "Foot")
+        .last()
+        .expect("Foot");
+    assert_eq!(foot.page, pages);
+    assert!(
+        last_row.y0 < aft.y0 && aft.y0 < foot.y0,
+        "AFT between the last row and the footer"
+    );
+}
