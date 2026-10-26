@@ -80,9 +80,14 @@ features -i krilla` shows `rayon`; gates. 2. C (1 day): red test, `FontBytes`, s
 
 ## 6. Risks and non-goals
 
-- A: a panic in a job on a worker goes to rayon's panic handler (abort), not to our `catch_unwind`; the jobs are zlib
-  (does not panic on input) and krilla's image decoders, which F32a already runs on the main thread to validate
-  images. `image_robustness.rs` is the guard; if any test aborts, drop A and write a postmortem.
+- A: a panic in a job on a worker goes to rayon's panic handler (abort; with a host-set handler the render would
+  hang in `Deferred::wait` instead), not to our `catch_unwind`. The jobs are zlib (does not panic on input) and
+  krilla's image decoding. A top-level `<img>` or background reaches krilla only through `fulgur::image::krilla_image`,
+  whose F32a `validate` decodes PNG / GIF fully on the main thread first; **rasters embedded in an SVG skip F32a**
+  (krilla-svg calls `Image::from_png` / `jpeg` / `gif` / `webp` directly) and are now decoded on a worker. The
+  pdf-reviewer found no panic there in 660 mutated PNG / GIF / WebP / JPEG files embedded as `data:` URLs (exit codes
+  and messages identical to main); the remaining risk is a bug in png / gif / image-webp on a crafted SVG-embedded
+  image. `image_robustness.rs` is the guard for the top-level path.
 - A: the jobs use rayon's global pool (shared with a binding's caller); pages are committed in order and every chunk is
   waited for when visited, object refs are allocated on the main thread, so bytes cannot depend on scheduling (§4.1).
 - B: an address as a key: each entry holds its `Arc`, so a freed buffer never aliases; the map is only looked up, never
@@ -92,3 +97,20 @@ features -i krilla` shows `rayon`; gates. 2. C (1 day): red test, `FontBytes`, s
   (C2b: `render_page` is 12.2 %, about 225 ms, the next step F99f, needs a `Sync` margin environment); Stylo
   revalidation (7.3 %); `column_css::walk` (re-profile); `Box<TextLayout>::clone`; promising 1000 ms for
   `b200-items`.
+
+## 7. Result
+
+- Fork `5d370fd7` (A), `b8435360` (C), `6069832d` (B); `crates/htmltopdf` enables `parallel-pdf`. Lock bumped from
+  `c41518b5`.
+- Bytes: fixtures 01-25 and the 7 corpus documents byte-identical to main's binary at 1 and 4 threads (our gate); the
+  implementation's gate also at 2 threads, the 18 scaling-variant documents and 5 repeated renders of `b200-text` /
+  `b200-items`; the pdf-reviewer's at 1 / 2 / 4 threads, untagged and tagged, with every Inter weight, a TTC, bundled
+  monospace, broken fonts, 30 image kinds, 5000 x 5000 scans and 660 mutated images inside SVG: no difference, exit
+  codes and messages identical.
+- Profile (callgrind, `b200-items`, 1 thread, 7.33 G Ir, was 7.74 G): `Page::drop` 0.3 M Ir (was 421 M; deflate runs in
+  rayon jobs), `Font::new_variable` 8 calls (was 27 355), no font memcpy.
+- Speed (dev VM, 15 interleaved runs, median wall / CPU): `b200-items` 1355 -> 1227 ms (CPU 1605 -> 1547),
+  `b200-text` 897 -> 773 ms, `b200-mixed` 878 -> 788 ms; A trades a few % of CPU for wall time, B and C remove CPU. B
+  gave less than estimated (about −30 ms on items, not −60…−90), C about −5…−15 ms of CPU and −4 MB of peak RSS (not
+  −90 MB: the estimate was wrong). `b200-items` is still over 1 s.
+- Reviews: pdf-reviewer no defect (found F177, F178 on main); vrt-validator in §7 of the PR.
