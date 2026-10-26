@@ -119,3 +119,57 @@ fn parse_errors_are_visible_at_debug() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("Unexpected token"), "{err}");
 }
+
+/// F152: SVG text (inline and as `<img>`) is shaped with the bundled fonts. It writes nothing to stdout, and the
+/// `<img>` SVG no longer makes usvg warn "No match for 'sans-serif' font-family" (its text used to be dropped).
+#[test]
+fn svg_text_writes_nothing_to_stdout_and_finds_its_fonts() {
+    let root = root();
+    let font = root.join("fixtures/fonts/Inter-Regular.ttf");
+    assert!(font.is_file(), "run scripts/fetch-fonts.sh");
+    let dir = std::env::temp_dir().join(format!("htmltopdf-stdout-svgtext-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let svg = |attrs: &str| {
+        format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"60\" viewBox=\"0 0 300 60\">\
+             <text x=\"10\" y=\"35\" font-size=\"20\" font-family=\"sans-serif\" {attrs}>Faktura text</text>\
+             <text x=\"10\" y=\"55\" font-size=\"12\" font-family=\"monospace\">0123456789</text></svg>"
+        )
+    };
+    std::fs::write(dir.join("card.svg"), svg("")).unwrap();
+    let html = dir.join("in.html");
+    std::fs::write(
+        &html,
+        format!(
+            "<!doctype html><body style=\"font-family: Inter\"><p>Before</p>{}<img src=\"card.svg\"></body>",
+            svg("font-weight=\"bold\"")
+        ),
+    )
+    .unwrap();
+    let out = dir.join("out.pdf");
+    let o = Command::new(env!("CARGO_BIN_EXE_htmltopdf"))
+        .env_remove("RUST_LOG")
+        .arg("render")
+        .arg(&html)
+        .arg("-o")
+        .arg(&out)
+        .arg("--font")
+        .arg(&font)
+        .arg("--image")
+        .arg(format!("card.svg={}", dir.join("card.svg").display()))
+        .output()
+        .expect("run htmltopdf");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(
+        o.stdout.is_empty(),
+        "stdout must stay empty, got: {:?}",
+        String::from_utf8_lossy(&o.stdout)
+    );
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        !err.contains("No match for"),
+        "usvg found no font for an SVG's text: {err}"
+    );
+    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

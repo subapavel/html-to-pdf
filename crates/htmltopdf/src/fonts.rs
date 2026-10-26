@@ -111,6 +111,8 @@ pub enum Origin {
     StyleElement,
     /// A `style=""` attribute in the document.
     StyleAttribute,
+    /// A `font-family` list on SVG `<text>` (inline `<svg>`, or an SVG used as an image).
+    Svg,
 }
 
 impl std::fmt::Display for Origin {
@@ -119,6 +121,7 @@ impl std::fmt::Display for Origin {
             Origin::Stylesheet => "bundled stylesheet",
             Origin::StyleElement => "<style> element",
             Origin::StyleAttribute => "style attribute",
+            Origin::Svg => "SVG text",
         })
     }
 }
