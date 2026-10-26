@@ -1003,8 +1003,7 @@ fn fuzz(from: u64, to: u64) {
                 seen_b.len()
             ));
         }
-        // (A multicol container loses words of its own in the plain document too, F161: no floor there.)
-        if !has_columns && seen_b.len() * 100 < expected * 97 {
+        if seen_b.len() * 100 < expected * 97 {
             failures.push(format!(
                 "seed {seed}: plain prints {} of {expected} words\n{body}",
                 seen_b.len()

@@ -164,6 +164,10 @@ THRESHOLDS = {
     #     and the explicit column widths (Chrome 4 to 20 px off per column). Main's binary panics on it (`EnginePanic`, no PDF);
     #     a build with only the crash fixed (Blitz commit A) prints none of the generated texts. Worst page + 1 point.
     "23-table-pseudo": 0.045,
+    # 24: new in F161 / F165 (a Czech invoice whose terms are a `columns:2` block with two `column-span: all` headings over two
+    #     pages, then a `display: contents` signature; two pages like Chrome's). 8.6 %: the text drift every fixture has, over a
+    #     page of small text in columns. Main's binary loses 86 of the 948 words. Worst page + 1 point.
+    "24-columns-span": 0.096,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

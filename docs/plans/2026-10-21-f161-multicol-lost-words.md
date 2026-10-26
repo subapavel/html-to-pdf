@@ -56,9 +56,9 @@ Tailwind rebuild. Under the total a `<section class="text-xs" style="columns:2;c
 - group A: clauses 1–6, one of them a one-line paragraph followed by a 50-word one (the F161 shape), balanced above
 - spanner 1: `<h2 style="column-span:all;margin:0;padding:6px 0;border-bottom:1px solid #d1d5db">Reklamační řád</h2>`
   on page 1 (spacing as padding: spanner margins are dropped, risk 3);
-- group B: clauses 7–22, crossing the page break (the multi-page span-all path);
+- group B: clauses 7–23, crossing the page break (the multi-page span-all path);
 - spanner 2 "Ochrana osobních údajů" on page 2 (a continuation page with two column rows, `McPage.y > 0`);
-- group C: clauses 23–26, balanced as the last group;
+- group C: clauses 24–27, balanced as the last group;
 - after the section, the F165 shape: `<div style="display:contents"><p class="text-sm mt-4">…signature…</p></div>`.
 
 No bare text or `<div>` of text in the section (that sends the container to the old path, review point 3). Tune

@@ -433,3 +433,70 @@ fn every_invoice_fixture_passes_the_font_check() {
         }
     }
 }
+
+/// F161 / F165: fixture 24's terms are a two-column container with two `column-span: all` headings, over two pages,
+/// followed by a `display: contents` wrapper. On main's binary (`182ffb73`) 86 of its 948 words were lost (the clauses
+/// after the first spanner that crossed the page break), silently.
+#[test]
+fn columns_span_invoice_prints_every_clause() {
+    let name = "24-columns-span";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "24");
+    let chrome = pdf_text(&std::fs::read(dir.join("reference/chrome.pdf")).unwrap(), "24c");
+    // Every clause heading and both spanners, in source order.
+    let mut needles: Vec<String> = Vec::new();
+    for (i, part) in html.split("<h3").skip(1).enumerate() {
+        let heading = part.split_once('>').unwrap().1.split_once("</h3>").unwrap().0;
+        if i == 6 {
+            needles.push("Reklamační řád".into());
+        }
+        if i == 23 {
+            needles.push("Ochrana osobních údajů".into());
+        }
+        needles.push(heading.to_string());
+        // The last two words of the clause's paragraph.
+        let para = part.split("<p").nth(1).unwrap().split_once('>').unwrap().1;
+        let para = para.split_once("</p>").unwrap().0;
+        let words: Vec<&str> = para.split_whitespace().collect();
+        let tail = words[words.len().saturating_sub(2)..].join(" ");
+        assert!(text.contains(&tail), "{name}: the end of clause `{heading}` (`{tail}`) is missing: {text}");
+    }
+    assert_eq!(needles.len(), 29, "{name}: 27 clauses and 2 spanners");
+    let mut at = 0;
+    for n in &needles {
+        let pos = text[at..]
+            .find(n.as_str())
+            .unwrap_or_else(|| panic!("{name}: `{n}` missing or out of order: {text}"));
+        at += pos + n.len();
+    }
+    assert!(
+        text.contains("Fakturu vystavila Jana Nováková"),
+        "{name}: the signature in the contents wrapper is missing"
+    );
+    assert_eq!(
+        text.split(' ').count(),
+        chrome.split(' ').count(),
+        "{name}: as many words as Chrome's reference"
+    );
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-24p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           2"),
+        "{name}: two pages like Chrome"
+    );
+}
