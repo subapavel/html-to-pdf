@@ -121,3 +121,11 @@ probes byte-identical to main; pixel-diff change 0; no new fixture.
   does not match its bytes is dropped as corrupt; (5) `SvgImageChecks` holds its mutex while decoding (parse thread
   only).
 - F177b (non-`data:` hrefs read from the host disk) is unchanged: such rasters are now validated, still not offline.
+- `vrt-validator`: valid SVG content (shapes, gradients, filters, clipPath, mask, pattern, `<use>`, text, every raster
+  kind at every site, 50 SVGs per page, margin-box running element, tagged, A5 landscape) byte-identical to main;
+  fixtures 01-25 and the corpus byte-identical; 1900 broken-raster cases (truncated, flipped, huge headers, wrong MIME,
+  empty, junk, at every site incl. `<picture>`, `srcset`, tables): no abort, non-strict always exit 0 (main: about 15 %
+  exit 1, some 134), strict exit 1 naming the SVG; deterministic at 1 / 4 / 8 threads. Cost of the double decode: about
+  +10 % (+9 to +44 ms) for one large raster inline; a net gain where a raster repeats (the verdict cache: 50 logos
+  −20 to −45 %, 100 `<image>` of one 2000 x 1000 PNG 6.46 -> 1.66 s). Behaviour change: a valid raster over the pixel
+  limit inside an SVG is now dropped with a warning (as a top-level image has been since F32a).
