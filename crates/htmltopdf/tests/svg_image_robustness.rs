@@ -9,7 +9,9 @@
 //! docs/plans/2026-10-26-f177-svg-image-checks.md.
 //!
 //! The SVG is 100 x 50 with a blue rect and the `<image>`; a 10 px green `div` after it marks where the next content
-//! starts. Asserted on image XObjects (`pdfimages -list`) and pixels (`pdftoppm`, 96 dpi).
+//! starts. Asserted on image XObjects (`pdfimages -list`) and pixels (`pdftoppm`, 96 dpi). The logger is global to the
+//! process and the tests run in parallel: the other tests cut their rasters at another length, so a warning names its
+//! raster by its byte count.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -21,6 +23,8 @@ const RED_PNG: &[u8] = include_bytes!("data/red16.png");
 const RED_GIF: &[u8] = include_bytes!("data/red16.gif");
 const RED_WEBP: &[u8] = include_bytes!("data/red16.webp");
 const RED_JPG: &[u8] = include_bytes!("data/red16.jpg");
+/// A 64 x 64 gradient JPEG (F32a's), for a cut in the scan data.
+const GRADIENT_JPG: &[u8] = include_bytes!("data/gradient64.jpg");
 
 // --- log capture (global to the process: every warning assertion is in one test) -----------------------
 
@@ -292,7 +296,7 @@ fn broken_rasters_in_svg_are_left_out_valid_ones_drawn_and_strict_mode_refuses()
             assert_eq!(
                 warnings
                     .iter()
-                    .filter(|w| w.contains(&format!("data:{mime}")))
+                    .filter(|w| w.contains(&format!("data:{mime} ({} bytes)", bytes.len())))
                     .count(),
                 1,
                 "{what}: one warning naming the image: {warnings:?}"
@@ -307,10 +311,15 @@ fn broken_rasters_in_svg_are_left_out_valid_ones_drawn_and_strict_mode_refuses()
                 other => panic!("{what}: strict mode must refuse, got {:?}", other.map(|p| p.len())),
             }
         }
-        // A damaged JPEG is embedded with a warning, in strict mode too (F32a M1).
+        // A JPEG cut in its scan data is embedded with a warning, in strict mode too (F32a M1).
         let what = format!("truncated JPEG in an SVG ({site:?})");
         take();
-        let pdf = try_render(site, &svg("image/jpeg", &cut(RED_JPG, 0.7)), true)
+        let sos = GRADIENT_JPG
+            .windows(2)
+            .position(|w| w == [0xff, 0xda])
+            .unwrap();
+        let in_scan = &GRADIENT_JPG[..sos + (GRADIENT_JPG.len() - sos) / 2];
+        let pdf = try_render(site, &svg("image/jpeg", in_scan), true)
             .unwrap_or_else(|e| panic!("{what}: {e}"));
         assert_eq!(xobjects(&pdf), 1, "{what}: embedded as main and Chrome do");
         let warnings = take();
@@ -341,7 +350,7 @@ fn broken_rasters_in_svg_are_left_out_valid_ones_drawn_and_strict_mode_refuses()
 
 #[test]
 fn broken_rasters_in_a_pattern_or_mask_are_left_out() {
-    let bad = format!("data:image/png;base64,{}", b64(&cut(RED_PNG, 0.6)));
+    let bad = format!("data:image/png;base64,{}", b64(&cut(RED_PNG, 0.5)));
     for (what, svg) in [
         (
             "pattern",
@@ -382,7 +391,7 @@ fn a_nested_svgs_image_is_never_loaded() {
 
 #[test]
 fn a_broken_raster_in_svg_renders_deterministically() {
-    let s = svg("image/png", &cut(RED_PNG, 0.6));
+    let s = svg("image/png", &cut(RED_PNG, 0.5));
     assert_eq!(
         try_render(Site::Inline, &s, false).unwrap(),
         try_render(Site::Inline, &s, false).unwrap()

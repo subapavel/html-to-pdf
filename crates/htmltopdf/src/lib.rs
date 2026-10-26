@@ -319,6 +319,19 @@ impl Renderer {
             Ok(Err(fulgur::Error::TextWithoutFont(found))) => Err(Error::TextWithoutFont(
                 found.iter().map(|d| d.to_string()).collect(),
             )),
+            // F177: rasters inside an SVG that do not decode, found while the document is built (strict only).
+            Ok(Err(fulgur::Error::SvgImages(dropped))) => Err(Error::Images(
+                dropped
+                    .into_iter()
+                    .map(|d| ImageProblem {
+                        src: d.svg,
+                        kind: ImageProblemKind::InSvg {
+                            image: d.image,
+                            why: d.reason,
+                        },
+                    })
+                    .collect(),
+            )),
             Ok(r) => Ok(r?),
             Err(payload) => Err(Error::EnginePanic(
                 payload
@@ -436,6 +449,8 @@ impl Renderer {
             // Text no face covers is what the static check cannot see (F70): an error exactly when
             // `strict_fonts` makes the static findings errors.
             .strict_text(self.strict_fonts)
+            // A raster inside an SVG that does not decode is left out with a warning, or refused (F177).
+            .strict_images(self.strict_images)
             .tagged(opts.tagged);
         // Only what the caller set overrides the document. With no size fulgur's default (A4 portrait, the page
         // box of `@page { size: A4 }`) stands unless an `@page` rule says otherwise.

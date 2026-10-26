@@ -96,3 +96,28 @@ probes byte-identical to main; pixel-diff change 0; no new fixture.
 - Non-goals: SVG text and fonts (F152); F177b (usvg reads host files for non-`data:` hrefs: now validated, but not
   offline — resolve through `AssetBundle` or refuse); partial rows of a truncated raster (F32l); WebP for top-level
   `<img>`; `preserveAspectRatio` (F32d).
+
+## 7. Result
+
+- Blitz `b9a0fa8c` (the resolver factory in `DocumentConfig`, `parse_svg(source, resolver)`, 3 tests); fulgur
+  `bb91c75e` (`validate_svg_raster`, `validate_webp`, `image-webp = "0.2.1"`, 6 unit tests) and `7dc11600`
+  (`svg_images.rs`, every parse site, both `DocumentConfig`s, engine reporting, `strict_images`, `Error::SvgImages`;
+  3 unit tests, 11 `render_smoke`). Ours: `engine()` passes `strict_images`, `fulgur::Error::SvgImages` maps to
+  `Error::Images` with `ImageProblemKind::InSvg { image, why }` (`src` names the SVG: `<svg id="logo">`, `<svg> no.
+  2`, `<img src="x.svg">`, `background-image: url(x.svg)`).
+- Probes (main → branch): huge PNG header in an inline `<svg>` exit 134 → exit 0, 0 images, the rest painted, one
+  warning ("… is more than the 134217728 pixel limit"); truncated PNG / GIF / WebP at the three sites exit 1 → exit 0
+  with one warning each, strict exit 1; truncated JPEG embedded with a warning (strict too); broken rasters in a
+  pattern / mask exit 134 / 1 → exit 0; feImage exit 1 → exit 0 (a filtered group is rasterised by resvg, so image
+  XObjects remain: the test does not assert 0 there); nested SVG unchanged; valid PNG / JPEG / GIF / WebP at the
+  three sites cmp-equal to main; deterministic at 1 / 4 / 8 threads.
+- `svg_image_robustness.rs`: 5 tests, red on main (the child process aborted with "memory allocation of 40000000000
+  bytes failed"), green after. Fixtures 01-25 and the 7 corpus documents byte-identical to main's binary. Fork: 127
+  (129 with `parallel-construct`) blitz-dom lib tests, 2273 fulgur lib, 299 `render_smoke`, 18 `gcpm_integration`;
+  VRT output unchanged.
+- Deviations: (1) feImage, see above; (2) margin-box documents are converted after the engine reports, so their SVG
+  rasters are checked and warned about but `strict_images` does not refuse them (documented on `strict_images`); (3)
+  WebP's header can express at most 16383 x 16383, so the WebP size limit is tested there; (4) a raster whose MIME type
+  does not match its bytes is dropped as corrupt; (5) `SvgImageChecks` holds its mutex while decoding (parse thread
+  only).
+- F177b (non-`data:` hrefs read from the host disk) is unchanged: such rasters are now validated, still not offline.
