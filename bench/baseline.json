@@ -2,133 +2,187 @@
   "machine": "4x Intel(R) Xeon(R) Processor @ 2.10GHz",
   "runs": 7,
   "slow_runs": 1,
-  "startup_ms": 3.1,
+  "startup_ms": 2.4,
   "documents": {
     "01-basic": {
       "kind": "fixture",
       "pages": 1,
-      "min_ms": 21.1,
-      "median_ms": 22.1
+      "min_ms": 14.4,
+      "median_ms": 15.0
     },
     "02-long": {
       "kind": "fixture",
       "pages": 3,
-      "min_ms": 37.9,
-      "median_ms": 41.6
+      "min_ms": 28.0,
+      "median_ms": 29.4
     },
     "03-logo-qr": {
       "kind": "fixture",
       "pages": 1,
-      "min_ms": 23.7,
-      "median_ms": 27.8
+      "min_ms": 18.4,
+      "median_ms": 19.1
     },
     "04-bilingual-vat": {
       "kind": "fixture",
       "pages": 1,
-      "min_ms": 23.1,
-      "median_ms": 25.7
+      "min_ms": 17.2,
+      "median_ms": 17.8
     },
     "05-fancy": {
       "kind": "fixture",
       "pages": 1,
-      "min_ms": 24.3,
-      "median_ms": 29.1
+      "min_ms": 21.4,
+      "median_ms": 24.9
     },
     "06-long-notes": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 23.6,
-      "median_ms": 25.8
+      "min_ms": 17.8,
+      "median_ms": 24.8
     },
     "07-heading-margin": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 21.8,
-      "median_ms": 25.0
+      "min_ms": 17.2,
+      "median_ms": 18.1
     },
     "08-terms-grid": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 29.7,
-      "median_ms": 32.8
+      "min_ms": 22.2,
+      "median_ms": 24.7
     },
     "09-fixed-row-height": {
       "kind": "fixture",
       "pages": 3,
-      "min_ms": 23.3,
-      "median_ms": 25.6
+      "min_ms": 19.5,
+      "median_ms": 20.4
     },
     "10-stacked-items": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 19.9,
-      "median_ms": 21.4
+      "min_ms": 15.8,
+      "median_ms": 17.0
     },
     "11-full-width-rows": {
       "kind": "fixture",
       "pages": 1,
-      "min_ms": 17.1,
-      "median_ms": 17.9
+      "min_ms": 13.6,
+      "median_ms": 14.9
     },
     "12-terms-columns": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 25.6,
-      "median_ms": 27.9
+      "min_ms": 18.4,
+      "median_ms": 19.5
     },
     "13-terms-keep-together": {
       "kind": "fixture",
       "pages": 3,
-      "min_ms": 27.0,
-      "median_ms": 28.2
+      "min_ms": 19.4,
+      "median_ms": 21.2
     },
     "14-totals-keep-together": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 19.3,
-      "median_ms": 21.2
+      "min_ms": 15.1,
+      "median_ms": 15.5
     },
     "15-paid-stamp": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 20.4,
-      "median_ms": 22.0
+      "min_ms": 17.5,
+      "median_ms": 21.2
     },
     "16-terms-card": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 22.7,
-      "median_ms": 25.1
+      "min_ms": 18.1,
+      "median_ms": 20.2
     },
     "17-running-footer": {
       "kind": "fixture",
       "pages": 2,
-      "min_ms": 25.0,
-      "median_ms": 28.0
+      "min_ms": 23.0,
+      "median_ms": 24.4
+    },
+    "18-a5-receipt": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 15.4,
+      "median_ms": 16.8
+    },
+    "19-plain-text-invoice": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 13.7,
+      "median_ms": 14.6
+    },
+    "20-tfoot-first": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 19.7,
+      "median_ms": 21.3
+    },
+    "21-display-contents": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 15.0,
+      "median_ms": 19.6
+    },
+    "22-inline-spacing": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 14.3,
+      "median_ms": 14.8
+    },
+    "23-table-pseudo": {
+      "kind": "fixture",
+      "pages": 1,
+      "min_ms": 13.6,
+      "median_ms": 15.2
+    },
+    "24-columns-span": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 20.4,
+      "median_ms": 21.6
+    },
+    "25-terms-table-columns": {
+      "kind": "fixture",
+      "pages": 2,
+      "min_ms": 22.2,
+      "median_ms": 23.1
     },
     "b200-items": {
       "kind": "b200",
-      "pages": 200,
-      "min_ms": 1442.7,
-      "median_ms": 1575.2
-    },
-    "b200-mixed": {
-      "kind": "b200",
-      "pages": 201,
-      "min_ms": 811.0,
-      "median_ms": 861.9
+      "pages": 210,
+      "min_ms": 1182.3,
+      "median_ms": 1190.1
     },
     "b200-text": {
       "kind": "b200",
       "pages": 200,
-      "min_ms": 786.7,
-      "median_ms": 878.5
+      "min_ms": 773.1,
+      "median_ms": 787.0
     },
-    "slow-avoid": {
+    "b200-mixed": {
+      "kind": "b200",
+      "pages": 203,
+      "min_ms": 753.7,
+      "median_ms": 785.0
+    },
+    "slow-paragraph": {
       "kind": "slow",
-      "pages": 399,
-      "min_ms": 1246.9,
-      "median_ms": 1246.9
+      "pages": 59,
+      "min_ms": 3537.9,
+      "median_ms": 3537.9
+    },
+    "slow-multicol": {
+      "kind": "slow",
+      "pages": 21,
+      "min_ms": 2364.9,
+      "median_ms": 2364.9
     },
     "slow-breaks": {
       "kind": "slow",
@@ -136,17 +190,11 @@
       "min_ms": 2808.9,
       "median_ms": 2808.9
     },
-    "slow-multicol": {
+    "slow-avoid": {
       "kind": "slow",
-      "pages": 21,
-      "min_ms": 2460.3,
-      "median_ms": 2460.3
-    },
-    "slow-paragraph": {
-      "kind": "slow",
-      "pages": 59,
-      "min_ms": 3777.2,
-      "median_ms": 3777.2
+      "pages": 399,
+      "min_ms": 889.7,
+      "median_ms": 889.7
     }
   }
 }

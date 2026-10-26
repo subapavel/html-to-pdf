@@ -958,7 +958,7 @@ checksum = "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629"
 [[package]]
 name = "fulgur"
 version = "0.40.0"
-source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#c41518b587fd69887606ee4da62cb776492fc56a"
+source = "git+https://github.com/subapavel/fulgur?branch=htmltopdf%2Fsrgb-colours#6069832dd1cb09ea668cd0297adbed1828d2d42f"
 dependencies = [
  "blitz-dom",
  "blitz-html",
@@ -1507,6 +1507,7 @@ dependencies = [
  "once_cell",
  "pdf-writer",
  "png",
+ "rayon",
  "rustc-hash",
  "rustybuzz",
  "siphasher",

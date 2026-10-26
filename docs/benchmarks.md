@@ -130,6 +130,15 @@ Reading it:
   (F78's measurement). `b200-items` without its two margin boxes takes about 1.4 s, so the table alone is over the goal and the footers, which cost about 1.1 s (5 ms per page) before F99b, are
   down to roughly 0.2 s (inferred from 1.57 s minus 1.4 s, not re-measured without the footers). Filed as F99 in the findings; `docs/plans/2026-10-19-f99-speed-profile.md` says where the time goes,
   F99a (`2026-10-19-f99a-parallel-construct.md`) and F99b (`2026-10-19-f99b-margin-documents.md`) took the first two steps.
+- **F99e (2026-10-26, the 2.10 GHz dev VM, so `bench/baseline.json` was rewritten from this run: every gated row went
+  down; `slow-breaks`, report-only, keeps its old value).** Krilla deflates page streams on rayon's pool (`parallel-pdf`),
+  each font face is parsed once per render, the bundled font bytes are shared instead of copied per conversion; output
+  byte-identical. `--update-baseline` medians: `b200-items` 1575 -> 1190 ms, `b200-text` 879 -> 787 ms, `b200-mixed`
+  862 -> 785 ms, `02-long` 41.6 -> 29.4 ms, the single-page fixtures 15-25 ms (part of the drop on the fixtures and
+  `slow-*` rows is earlier work since the 2026-10-18 baseline). Interleaved A/B against main, 9-15 runs: `b200-items`
+  1355-1360 -> 1224-1227 ms, `b200-text` 897-911 -> 773-788 ms, `b200-mixed` 878-902 -> 788-802 ms, `01-basic` 19.1 ->
+  17.0 ms. The pool is now started for every render: about +1 ms of CPU at 16 threads and +9 ms at 64 on a one-page
+  document (F179). `b200-items` is still over the goal; next: the margin-box documents in parallel (F99f).
 - **F99c (2026-10-20, a different host: 4 vCPU Xeon @ 2.80GHz, so `bench/baseline.json`, recorded on the 2.10GHz host, was not rewritten: `--check` here applies only
   the hard budgets).** Main `fbaf57f` against the F99c branch, alternating, median of 7-11: `b200-items` 2312-2333 -> 1953-1970 ms (-342 / -380 ms, -15 / -16 %),
   `b200-text` 1074 / 947 -> 1024 / 990 and `b200-mixed` 1075 / 1127 -> 1147 / 1110 ms (no long table in them: within the +-5 % noise of the VM), `02-long` 55.2 -> 55.8 ms.
