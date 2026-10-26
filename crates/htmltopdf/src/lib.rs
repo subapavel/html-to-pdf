@@ -90,6 +90,10 @@ pub enum ImageProblemKind {
     /// The image is registered but its data is not a PNG, JPEG, GIF or SVG that decodes (or is over
     /// the pixel limit). The reason is the decoder's.
     Undecodable(String),
+    /// A raster inside the SVG named by `src` (a bundled SVG, or an inline `<svg>`) does not decode or is over the
+    /// pixel limit, so it is left out of the SVG (F177). `image` names the raster (`data:image/png (N bytes)` or its
+    /// href), `why` is the decoder's reason.
+    InSvg { image: String, why: String },
 }
 
 impl fmt::Display for ImageProblem {
@@ -103,6 +107,9 @@ impl fmt::Display for ImageProblem {
             }
             ImageProblemKind::Undecodable(why) => {
                 write!(f, "<img src=\"{}\"> cannot be decoded: {why}", self.src)
+            }
+            ImageProblemKind::InSvg { image, why } => {
+                write!(f, "{} in {} cannot be decoded: {why}", image, self.src)
             }
         }
     }
