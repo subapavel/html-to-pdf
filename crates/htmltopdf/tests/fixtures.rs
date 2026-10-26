@@ -452,11 +452,20 @@ fn columns_span_invoice_prints_every_clause() {
         )
         .unwrap_or_else(|e| panic!("{name}: {e}"));
     let text = pdf_text(&pdf, "24");
-    let chrome = pdf_text(&std::fs::read(dir.join("reference/chrome.pdf")).unwrap(), "24c");
+    let chrome = pdf_text(
+        &std::fs::read(dir.join("reference/chrome.pdf")).unwrap(),
+        "24c",
+    );
     // Every clause heading and both spanners, in source order.
     let mut needles: Vec<String> = Vec::new();
     for (i, part) in html.split("<h3").skip(1).enumerate() {
-        let heading = part.split_once('>').unwrap().1.split_once("</h3>").unwrap().0;
+        let heading = part
+            .split_once('>')
+            .unwrap()
+            .1
+            .split_once("</h3>")
+            .unwrap()
+            .0;
         if i == 6 {
             needles.push("Reklamační řád".into());
         }
@@ -469,7 +478,10 @@ fn columns_span_invoice_prints_every_clause() {
         let para = para.split_once("</p>").unwrap().0;
         let words: Vec<&str> = para.split_whitespace().collect();
         let tail = words[words.len().saturating_sub(2)..].join(" ");
-        assert!(text.contains(&tail), "{name}: the end of clause `{heading}` (`{tail}`) is missing: {text}");
+        assert!(
+            text.contains(&tail),
+            "{name}: the end of clause `{heading}` (`{tail}`) is missing: {text}"
+        );
     }
     assert_eq!(needles.len(), 29, "{name}: 27 clauses and 2 spanners");
     let mut at = 0;

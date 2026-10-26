@@ -96,7 +96,9 @@ fn assert_all_once(what: &str, found: &[Word], expected: &[String]) {
     let mut seen: Vec<&str> = found
         .iter()
         .map(|w| w.text.as_str())
-        .filter(|t| t.len() == 5 && t.starts_with('w') && t[1..].bytes().all(|b| b.is_ascii_digit()))
+        .filter(|t| {
+            t.len() == 5 && t.starts_with('w') && t[1..].bytes().all(|b| b.is_ascii_digit())
+        })
         .collect();
     seen.sort_unstable();
     let mut want: Vec<&str> = expected.iter().map(String::as_str).collect();
@@ -127,7 +129,11 @@ fn a_paragraph_after_a_one_word_paragraph_keeps_its_words() {
     );
     let mut want = vec!["w0009".to_string()];
     want.extend(words(14, 21));
-    assert_all_once("one-word + 7-word paragraph", &printed_words(&render(&body)), &want);
+    assert_all_once(
+        "one-word + 7-word paragraph",
+        &printed_words(&render(&body)),
+        &want,
+    );
 }
 
 #[test]
@@ -172,18 +178,46 @@ fn a_column_span_all_heading_in_a_container_over_two_pages_keeps_every_word() {
     // The spanner sits under every word before it on its page and above every word after it.
     let h = found.iter().find(|w| w.text == "w0500").unwrap();
     for w in &found {
-        let Some(n) = w.text.strip_prefix('w').and_then(|n| n.parse::<usize>().ok()) else {
+        let Some(n) = w
+            .text
+            .strip_prefix('w')
+            .and_then(|n| n.parse::<usize>().ok())
+        else {
             continue;
         };
         if w.page == h.page && n < 121 {
-            assert!(w.y_min < h.y_min, "{} ({:.1}pt) is not above the spanner ({:.1}pt)", w.text, w.y_min, h.y_min);
+            assert!(
+                w.y_min < h.y_min,
+                "{} ({:.1}pt) is not above the spanner ({:.1}pt)",
+                w.text,
+                w.y_min,
+                h.y_min
+            );
         } else if w.page == h.page && (121..241).contains(&n) {
-            assert!(w.y_min > h.y_min, "{} ({:.1}pt) is not below the spanner ({:.1}pt)", w.text, w.y_min, h.y_min);
+            assert!(
+                w.y_min > h.y_min,
+                "{} ({:.1}pt) is not below the spanner ({:.1}pt)",
+                w.text,
+                w.y_min,
+                h.y_min
+            );
         }
         if n < 121 {
-            assert!(w.page <= h.page, "{} is on page {}, after the spanner's page {}", w.text, w.page, h.page);
+            assert!(
+                w.page <= h.page,
+                "{} is on page {}, after the spanner's page {}",
+                w.text,
+                w.page,
+                h.page
+            );
         } else if (121..241).contains(&n) {
-            assert!(w.page >= h.page, "{} is on page {}, before the spanner's page {}", w.text, w.page, h.page);
+            assert!(
+                w.page >= h.page,
+                "{} is on page {}, before the spanner's page {}",
+                w.text,
+                w.page,
+                h.page
+            );
         }
     }
 }
@@ -197,7 +231,11 @@ fn a_column_span_all_heading_on_one_page_keeps_every_word() {
     let mut want = words(0, 60);
     want.push("w0500".into());
     want.push("w0999".into());
-    assert_all_once("column-span: all on one page", &printed_words(&render(&body)), &want);
+    assert_all_once(
+        "column-span: all on one page",
+        &printed_words(&render(&body)),
+        &want,
+    );
 }
 
 /// The top of `word` in a render of `body`.
@@ -238,5 +276,9 @@ fn a_long_multicol_container_before_a_contents_wrapper_keeps_its_words() {
         ws(0, 120),
         ws(120, 228)
     );
-    assert_all_once("multicol + wrapped paragraph", &printed_words(&render(&body)), &words(0, 228));
+    assert_all_once(
+        "multicol + wrapped paragraph",
+        &printed_words(&render(&body)),
+        &words(0, 228),
+    );
 }
