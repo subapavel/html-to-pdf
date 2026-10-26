@@ -92,3 +92,22 @@ with `/dev/zero` returns in < 1 s; `render_smoke` one per cause; VRT unchanged. 
 - Non-goals: `<base href>` and name matching beyond the exact key (F32f); F177c; SVG text and fonts (F152); F177d
   (a fulgur user setting `base_path` gets SVGs parsed by Blitz `net.rs` with usvg's default resolver; unreachable from
   our crate).
+
+## 7. Result
+
+- fulgur `70ab4525` (steps 2 and 3 in one commit): `offline_options()` at `validate_detailed` and the three fallbacks,
+  plus `parse_inner` with no checks (the public parse paths) now gets an offline factory too; `SvgImageCause`,
+  `resolve_href`, `SvgImageChecks::new(images)`, the bundle as an `Arc` in `Engine` (an `Arc` bump per render). Ours:
+  `ImageProblemKind::UnregisteredInSvg`, `run()` maps `NotBundled` / `External` to it and `Undecodable` to `InSvg`;
+  ADR-0006.
+- Probes (F177 binary → F177b), working directory holding a red `logo.png`: relative, absolute, `file:` and `http:`
+  hrefs in an inline `<svg>` 1 image XObject (the host file) → 0, one warning each, strict exit 1; `/dev/zero` inline,
+  in `<img src="zero.svg">` and in a background: unbounded read → exit 0 in about 0.0 s; a bundled `logo.png` /
+  `./logo.png` inline and in `feImage` drawn (unchanged); a bundled `card.svg` with `href="logo.png"` as `<img>`,
+  background, list marker drew the file → 0 XObjects, one `External` warning each.
+- `svg_image_offline.rs`: 5 tests (working-directory cases in a child process). Fixtures 01-25 and the 7 corpus
+  documents byte-identical to main. Fork: 2282 lib tests, 305 `render_smoke`, 18 `gcpm_integration`; VRT unchanged.
+- Deviations: an empty href reaches the resolver and gives a `NotBundled` finding with an empty name; findings are
+  deduplicated on site, image, reason and cause; a margin-box inline `<svg>` cannot reference a bundled raster by name
+  (warned).
+- Not run: the Chrome reference of step 0 (the plan's reading of SVG Integration §3 stands, unverified in Chrome).

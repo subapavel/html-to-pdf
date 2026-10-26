@@ -94,6 +94,10 @@ pub enum ImageProblemKind {
     /// pixel limit, so it is left out of the SVG (F177). `image` names the raster (`data:image/png (N bytes)` or its
     /// href), `why` is the decoder's reason.
     InSvg { image: String, why: String },
+    /// An `<image href>` inside the SVG named by `src` that is not a `data:` URL and is not loaded (F177b): in an inline
+    /// `<svg>` it is no bundled image (`href` is looked up by name, like `<img src>`; the filesystem is never read), and
+    /// an SVG used as an image (`<img>`, `background-image`, `list-style-image`) loads no external file at all.
+    UnregisteredInSvg { image: String, why: String },
 }
 
 impl fmt::Display for ImageProblem {
@@ -110,6 +114,9 @@ impl fmt::Display for ImageProblem {
             }
             ImageProblemKind::InSvg { image, why } => {
                 write!(f, "{} in {} cannot be decoded: {why}", image, self.src)
+            }
+            ImageProblemKind::UnregisteredInSvg { image, why } => {
+                write!(f, "{} in {} is not loaded: {why}", image, self.src)
             }
         }
     }
@@ -325,9 +332,18 @@ impl Renderer {
                     .into_iter()
                     .map(|d| ImageProblem {
                         src: d.svg,
-                        kind: ImageProblemKind::InSvg {
-                            image: d.image,
-                            why: d.reason,
+                        kind: match d.cause {
+                            fulgur::SvgImageCause::Undecodable => ImageProblemKind::InSvg {
+                                image: d.image,
+                                why: d.reason,
+                            },
+                            // F177b: not bundled (inline `<svg>`) or external (an SVG used as an image).
+                            fulgur::SvgImageCause::NotBundled | fulgur::SvgImageCause::External => {
+                                ImageProblemKind::UnregisteredInSvg {
+                                    image: d.image,
+                                    why: d.reason,
+                                }
+                            }
                         },
                     })
                     .collect(),
