@@ -317,11 +317,12 @@ impl Renderer {
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
         self.check_rejected_fonts()?;
-        self.check_fonts(html)?;
-        self.check_images(html)?;
+        let sites = fonts::HtmlSites::walk(html);
+        self.check_fonts(html, &sites)?;
+        self.check_images(html, &sites)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        let html = self.prepare(html);
+        let html = self.prepare(html, &sites);
         self.run(|| engine.render(&html))
     }
 
@@ -333,25 +334,72 @@ impl Renderer {
         path: impl AsRef<Path>,
     ) -> Result<()> {
         self.check_rejected_fonts()?;
-        self.check_fonts(html)?;
-        self.check_images(html)?;
+        let sites = fonts::HtmlSites::walk(html);
+        self.check_fonts(html, &sites)?;
+        self.check_images(html, &sites)?;
         self.warn_property_limits(html);
         let engine = self.engine(opts);
-        let html = self.prepare(html);
+        let html = self.prepare(html, &sites);
         self.run(|| engine.render_file(&html, path))
     }
 
     /// The document as handed to the engine: media queries evaluated for print (F7), generic font
-    /// families mapped to bundled faces (F3b), gradient interpolation methods removed (F8).
-    fn prepare<'a>(&self, html: &'a str) -> Cow<'a, str> {
-        let html = media::print_media_in_html(html);
-        let html = then(html, |h| fonts::map_generics_in_html(h, &self.generics));
-        let html = then(html, |h| {
-            fonts::rewrite_css_in_html(h, gradient::strip_gradient_interpolation)
+    /// families mapped to bundled faces (F3b), gradient interpolation methods removed (F8), open blocks
+    /// of `<style>` elements closed. `sites` is the walk of `html` (F99f).
+    ///
+    /// The rewrites are applied one after another to each CSS site and the document is rebuilt once. Where each
+    /// applies: the media swap and the block closing are for `<style>` elements only; the generic mapping is not
+    /// for inline `<svg>` (usvg does not read the CSS escapes it writes, and fulgur's SVG font resolver maps the
+    /// generics itself, F152); the gradient rewrite is for every site. A `style=""` value with a character reference
+    /// is never rewritten (`HtmlSites::rewrite`).
+    ///
+    /// Removing text from a `<style>` element can join a `<` and a `/style` into an end tag that was not there
+    /// (`to right<in oklch/style>` → `to right</style>`), so the element ends earlier for every later rewrite and for
+    /// the engine. A document where that happens is rewritten pass by pass instead, each pass over a new walk
+    /// ([`Self::prepare_in_passes`]), which is the text the rewrites gave before they were fused.
+    fn prepare<'a>(&self, html: &'a str, sites: &fonts::HtmlSites) -> Cow<'a, str> {
+        let new_end_tag = std::cell::Cell::new(false);
+        let out = sites.rewrite(html, |css, site| {
+            let css = self.rewrite_site(css, site, Pass::ALL);
+            if !site.attribute && fonts::contains_end_tag(&css, "style") {
+                new_end_tag.set(true);
+            }
+            css
         });
-        then(html, |h| {
-            fonts::rewrite_style_elements(h, css_text::close_open_blocks)
-        })
+        if new_end_tag.get() {
+            Cow::Owned(self.prepare_in_passes(html))
+        } else {
+            out
+        }
+    }
+
+    /// The rewrites of [`Self::prepare`] as separate passes over the whole document, each with its own walk.
+    fn prepare_in_passes(&self, html: &str) -> String {
+        let mut html = html.to_string();
+        for pass in [Pass::MEDIA, Pass::GENERICS, Pass::GRADIENT, Pass::CLOSE] {
+            html = fonts::HtmlSites::walk(&html)
+                .rewrite(&html, |css, site| self.rewrite_site(css, site, pass))
+                .into_owned();
+        }
+        html
+    }
+
+    /// `css` (the text of `site`) with the rewrites of `passes` that apply to the site, in [`Self::prepare`]'s order.
+    fn rewrite_site<'a>(&self, css: &'a str, site: fonts::SiteInfo, passes: Pass) -> Cow<'a, str> {
+        let mut css = Cow::Borrowed(css);
+        if passes.has(Pass::MEDIA) && !site.attribute {
+            css = then(css, media::print_media);
+        }
+        if passes.has(Pass::GENERICS) && !site.in_svg {
+            css = then(css, |c| fonts::map_generics(c, &self.generics));
+        }
+        if passes.has(Pass::GRADIENT) {
+            css = then(css, gradient::strip_gradient_interpolation);
+        }
+        if passes.has(Pass::CLOSE) && !site.attribute {
+            css = then(css, css_text::close_open_blocks);
+        }
+        css
     }
 
     /// Runs the engine. A panic inside it (an engine bug, e.g. on unusual CSS) becomes
@@ -440,8 +488,8 @@ impl Renderer {
 
     /// Static check that every `font-family` list can be satisfied by a bundled face. Without it,
     /// text whose list matches nothing is silently dropped from the PDF.
-    fn check_fonts(&self, html: &str) -> Result<()> {
-        let document = fonts::scan_html(html);
+    fn check_fonts(&self, html: &str, sites: &fonts::HtmlSites) -> Result<()> {
+        let document = sites.scan(html);
         let unresolved =
             fonts::check_font_families(&self.css_scan, &document, &self.registered, &self.generics);
         if unresolved.is_empty() {
@@ -464,9 +512,9 @@ impl Renderer {
     ///
     /// A JPEG that is damaged but decodes (truncated, no end marker, stray header bytes) is embedded as
     /// Chrome draws it, and logged; it is not an error even in strict mode.
-    fn check_images(&self, html: &str) -> Result<()> {
+    fn check_images(&self, html: &str, sites: &fonts::HtmlSites) -> Result<()> {
         let mut problems = Vec::new();
-        for src in fonts::img_srcs(html) {
+        for src in sites.img_srcs(html) {
             let key = src.strip_prefix("./").unwrap_or(&src);
             let Some(data) = self.assets.get_image(&src).filter(|_| !src.is_empty()) else {
                 problems.push(ImageProblem {
@@ -562,6 +610,22 @@ fn then<'a>(text: Cow<'a, str>, rewrite: impl Fn(&str) -> Cow<'_, str>) -> Cow<'
             Cow::Borrowed(_) => Cow::Owned(t),
             Cow::Owned(r) => Cow::Owned(r),
         },
+    }
+}
+
+/// A set of the rewrites [`Renderer::prepare`] applies.
+#[derive(Clone, Copy)]
+struct Pass(u8);
+
+impl Pass {
+    const MEDIA: Pass = Pass(1);
+    const GENERICS: Pass = Pass(2);
+    const GRADIENT: Pass = Pass(4);
+    const CLOSE: Pass = Pass(8);
+    const ALL: Pass = Pass(15);
+
+    fn has(self, pass: Pass) -> bool {
+        self.0 & pass.0 != 0
     }
 }
 
@@ -823,5 +887,74 @@ mod tests {
             .render("<p>determinism</p>", &RenderOptions::default())
             .unwrap();
         assert_eq!(a, b, "render is not deterministic");
+    }
+
+    /// The rewrites `prepare` used to run one after another, each over the whole document with its own walk (F99f).
+    fn prepare_in_separate_passes(r: &Renderer, html: &str) -> String {
+        use crate::fonts::HtmlSites;
+        let step = |html: &str, f: &dyn Fn(&str, fonts::SiteInfo) -> Cow<'_, str>| {
+            HtmlSites::walk(html).rewrite(html, f).into_owned()
+        };
+        let html = step(html, &|css, s| {
+            if s.attribute {
+                Cow::Borrowed(css)
+            } else {
+                media::print_media(css)
+            }
+        });
+        let html = step(&html, &|css, s| {
+            if s.in_svg {
+                Cow::Borrowed(css)
+            } else {
+                fonts::map_generics(css, &r.generics)
+            }
+        });
+        let html = step(&html, &|css, _| gradient::strip_gradient_interpolation(css));
+        step(&html, &|css, s| {
+            if s.attribute {
+                Cow::Borrowed(css)
+            } else {
+                css_text::close_open_blocks(css)
+            }
+        })
+    }
+
+    #[test]
+    fn prepare_in_one_pass_gives_the_text_of_the_separate_rewrites() {
+        let r = Renderer::builder().build();
+        let sites = fonts::HtmlSites::walk(fonts::tests::MIXED_HTML);
+        let one = r.prepare(fonts::tests::MIXED_HTML, &sites);
+        let separate = prepare_in_separate_passes(&r, fonts::tests::MIXED_HTML);
+        assert_eq!(one, separate);
+        // Every rewrite did something to this document, so the comparison is not vacuous.
+        assert_ne!(one, fonts::tests::MIXED_HTML);
+        assert!(one.contains("@media screen { .a {"), "media swap");
+        assert!(one.contains("linear-gradient(red, blue)"), "gradient");
+        assert!(one.contains("color:red}</STYLE>"), "open block");
+        assert!(!one.contains("font-family: sans-serif }"), "generic");
+        // A document with nothing to rewrite stays borrowed.
+        let plain = "<style>p{color:red}</style><p style=\"color:blue\">x</p>";
+        assert!(matches!(
+            r.prepare(plain, &fonts::HtmlSites::walk(plain)),
+            Cow::Borrowed(_)
+        ));
+    }
+
+    /// The gradient rewrite removes `in oklch` and joins `<` and `/style` into an end tag: the element ends there, the
+    /// rest is HTML, and the block closing sees only the text before it (vrt-validator, F99f).
+    #[test]
+    fn prepare_rewrites_pass_by_pass_where_a_rewrite_ends_a_style_element() {
+        let r = Renderer::builder().build();
+        for html in [
+            "<style>a{background:linear-gradient(to right<in oklch/style><p>X</p></style>",
+            "<style>a{background:linear-gradient(to right<in oklch/style><img src=zz.png>\
+             <p style=\"font-family:sans-serif\">M</p>{}</style><p>Ahoj</p>",
+            "<style>@media screen{x}a{background:linear-gradient(to right<in oklch/STYLE >\
+             <style>b{color:red</style>",
+        ] {
+            let one = r.prepare(html, &fonts::HtmlSites::walk(html));
+            assert_eq!(one, prepare_in_separate_passes(&r, html), "{html}");
+            assert!(one.contains("to right)}</"), "{one}");
+        }
     }
 }
