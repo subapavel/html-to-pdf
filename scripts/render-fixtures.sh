@@ -20,8 +20,10 @@ for n in "${names[@]}"; do
   out="out/$n"; mkdir -p "$out"
   IMAGES=()
   for img in "$dir"/*.png "$dir"/*.jpg; do [ -f "$img" ] && IMAGES+=(--image "$(basename "$img")=$img"); done
+  # A fixture gets the compiled Tailwind sheet only when its <link> names it (27 is plain CSS: no preflight).
+  CSS=(); grep -q 'tailwind\.css' "$dir/index.html" && CSS=(--css fixtures/tailwind/tailwind.css)
   "$BIN" render "$dir/index.html" -o "$out/htmltopdf.pdf" \
-      --css fixtures/tailwind/tailwind.css "${FONTS[@]}" "${IMAGES[@]}" \
+      "${CSS[@]}" "${FONTS[@]}" "${IMAGES[@]}" \
       --title "$n" --lang cs --strict-fonts --strict-images
   rm -f "$out"/htmltopdf-p*.png
   pdftoppm -r 96 -png "$out/htmltopdf.pdf" "$out/htmltopdf-p"

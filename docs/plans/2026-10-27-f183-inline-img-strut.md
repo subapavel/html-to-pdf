@@ -72,4 +72,50 @@ list them, check against Chrome.
 
 ## 7. Evidence
 
-(Step 0 Chrome table; after the fix.)
+### 7.1 Step 0: Chrome reference (2026-10-27)
+
+Chromium via Playwright (`printBackground`, `preferCSSPageSize`, print media), A4, rasterised with `pdftoppm` at 96 dpi; rows are
+`[y0, y1)` of the red image, the blue 20 px block (`.blk`) and black ink, and `getBoundingClientRect` in brackets. Every case:
+`@page { margin: 0 }`, `body { margin: 0; font: 16px Inter }`, the image `red60.png` 60 x 60 with `width` / `height`
+attributes. Probe: `scratchpad/f183/probe.mjs`; the cases are the ones in `inline_img_strut.rs`.
+
+| Case | Chrome | Nominal in section 4 | Main's binary |
+|---|---|---|---|
+| S1 16px | image 0..60, block 64..84 | 64 | block 60 |
+| S2 `line-height: 1.5` | block 66 | 66 | 60 |
+| S3 14px | block **63** (ascent 13.56 -> 14, descent 3.38 -> 3, rounded separately) | 64 | 60 |
+| S4 `line-height: 1` | block 62 | 62 | 60 |
+| S5 10 x 10 image | image 6..16 (DOM), block **20** | 5..15 / 19 | image 0..11, block 10 |
+| S6 image + text | image 0..60, text bottom row 59, block 64 | 0 / 64 | block 60 (image top -2 in the section 1 text; the raster here starts at 0) |
+| S7 two wrapped images (`width: 100px`) | images 0..60, 64..124, block 128 | 0, 64, 128 | one run 0..120 |
+| S8 image in a flex item | block 64 | 64 | 60 |
+| S9 header: `padding: 16px 0`, `border-bottom: 2px` | image 16..76, rule 96..98 | 96 | rule 92 |
+| S10 100 px QR in `td` (`padding: 8px`, `border-bottom: 1px`) | image 8..108, border 120..121, cell bottom 121, block 121 | 121 | 117 |
+| S11 inline `<svg>` 60 x 60 | as S1 | | as S1 on main |
+| S12 `<img style="display: inline-block">` | as S1 | | as S1 on main |
+| G1 `display: block` | block 60 | | green |
+| G2 `vertical-align: top / middle / bottom` | block 60, 60, 60 | | green |
+| G3 Tailwind preflight image | block 60 | | green |
+| G3 empty `inline-block` 48 x 48 (F183b) | block **52** (box on the baseline; strut below it) | | 48, unchanged by this finding |
+| G4 abspos image (`left: 200px; top: 100px`) | block 0..20, image 100..160 | | green |
+| G5 `inline-block` badge on a text line | block 24 | | green |
+
+Differences from section 4's nominal numbers: S3 is 63 and S5 is image 6..16 / block 20, because Chrome rounds the strut's ascent
+and descent separately (SimpleFontData: `lroundf(ascent) + lroundf(descent) + lroundf(line gap)` is `line-height: normal`). The
+strut therefore takes `line-height: normal` as that sum, not as the unrounded metrics, and Parley's leading rounding (which
+mimics Chrome for explicit line heights) then adds nothing.
+
+**Quirks mode.** The same S1-S12 without a doctype: Chrome drops the strut gap (S1 block 60, S2-S4 60, S5 image 0..10 / block 10,
+S7 120, S9 rule 92, S10 117, S8 60, S11 60) but S6 stays 64 (text on the line). Ours has no quirks mode (a document without a
+doctype renders as in standards mode), so `<img>` without a doctype is 4 px off Chrome. Every fixture has a doctype; not in scope
+(filed as F183e, the general quirks-mode question).
+
+**Parley `main`.** `subapavel/parley` `main` is at `dd6fe3a` (2026-10-26, Parley 0.12.0) and does fix this, with a different and
+much larger API: `InlineBox { kind, baseline, vertical_align }`, `layout/style_metrics.rs` (the root span box is the strut,
+CSS 2 section 10.8; "the strut only applies once the line has content"), and a rewritten `layout/line_break.rs`. Our base is the
+0.6.0 release that Blitz 0.2.4 / Stylo are built against; moving to 0.12 would bump Parley, Fontique, Swash and the Blitz glue
+and is a dependency bump, so the fork keeps the minimal change of section 3 on v0.6.0. When Blitz moves to a Parley with the
+upstream fix, this fork branch is dropped (`docs/upstream.md`).
+
+Fixture 27 (Chrome PNG, 96 dpi): header rule rows 121..123, QR rows 454..566, payment cell top border 440 and bottom border 583.
+Main's binary: rule 117, compare **7.6 %** (one page, 1 / 1; main's number for the threshold).
