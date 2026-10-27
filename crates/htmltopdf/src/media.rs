@@ -25,13 +25,17 @@ pub(crate) fn print_media(css: &str) -> Cow<'_, str> {
     swap(css, &media_type_spans(css, 0))
 }
 
-/// `html` with [`print_media`] applied to the contents of every `<style>` element.
+/// `html` with [`print_media`] applied to the contents of every `<style>` element. The renderer applies it together
+/// with its other rewrites in one pass (`Renderer::prepare`); this is the single rewrite, for tests.
+#[cfg(test)]
 pub(crate) fn print_media_in_html(html: &str) -> Cow<'_, str> {
-    let spans: Vec<Range<usize>> = crate::fonts::style_element_ranges(html)
-        .into_iter()
-        .flat_map(|r| media_type_spans(&html[r.clone()], r.start))
-        .collect();
-    swap(html, &spans)
+    crate::fonts::HtmlSites::walk(html).rewrite(html, |css, site| {
+        if site.attribute {
+            Cow::Borrowed(css)
+        } else {
+            print_media(css)
+        }
+    })
 }
 
 fn swap<'a>(text: &'a str, spans: &[Range<usize>]) -> Cow<'a, str> {
