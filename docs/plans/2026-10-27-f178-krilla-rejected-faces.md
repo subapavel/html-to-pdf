@@ -170,3 +170,19 @@ magnitude.
 - `font_bytes #N`: N counts every font the caller added (`font_file` and `font_bytes`), from 1.
 - Test 6 (SVG text) was red because the text was missing, not because a Type 3 font was embedded (see above).
 - The smoke test shares the logger of the existing `svg_images` module in `render_smoke.rs` (one logger per process).
+
+Reviews (head `bac0dbc`): fixtures 01-25 and `bench/corpus` byte-identical to `main`, `bench.py --check` ok.
+`pdf-reviewer` D1 (MEDIUM): a `COLR` / `SVG ` / `CBDT` / `sbix` table alone passed the "colour or bitmap glyphs" rule
+but krilla draws nothing from it without outlines (no SVG-glyph renderer installed; `COLR` layers are outlines; only
+PNG bitmaps are drawn) — still an invisible Type 3. `vrt-validator`: no false rejection among 108 host fonts (TTF, CFF,
+TTC / EBDT, NotoColorEmoji CBDT, COLRv1, synthetic CFF2 / `fvar` / WOFF2); M1 `unitsPerEm` 0 passed `Font::new` and
+krilla panicked writing the CID descriptor; M2 a face krilla opens but cannot subset (malformed `hmtx`, `maxp`, `post`,
+`loca`, `numberOfHMetrics`) failed the whole document even without strict mode (29 of 400 header-fuzz mutants).
+
+Fix (fulgur `c26567f3`): `unitsPerEm` must be in 16..16384; a face with outlines is trial-subset like krilla
+(`subsetter::subset_with_variations`, `.notdef` + the first 16 mapped glyphs) and the subset must reopen; a face without
+outlines passes only with PNG bitmap data on one of its first 16 mapped glyphs. Re-run: still no false rejection; all
+201 hand-made mutants render (left out with one warning) or are refused in strict mode; fuzz 13 of 400 still fail the
+render loudly ("failed to subset font: malformed font", the corruption hits glyphs outside the sample) — F178d. 108
+fonts registered: 112-154 ms wall (before ~110 ms; mostly file I/O and fontique).
+
