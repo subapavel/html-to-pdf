@@ -152,8 +152,9 @@ THRESHOLDS = {
     # 21: new in F150 / F153 (a Czech invoice whose address blocks, item-grid rows, notes and list items sit in
     #     `display: contents` wrappers, one page like Chrome's). 3.7 %: the text drift every fixture has. On main's binary
     #     the item grid, the notes, the first two terms and the supplier's lines were lost and the rest was misplaced
-    #     (7.4 %, though most of the page was missing). Worst page + 1 point.
-    "21-display-contents": 0.047,
+    #     (7.4 %, though most of the page was missing). Worst page + 1 point. F186: its `border-bottom: 1px solid #d1d5db` row
+    #     rules were drawn black (the top colour) and are now light grey like Chrome's: 3.7 % → 3.2 %.
+    "21-display-contents": 0.042,
     # 22: new in F154 (a Czech invoice whose labels are written `<b>Splatnost: </b>2. 11. 2026`, with spaces at the inner edges
     #     of `<strong>`, `<em>`, `<a>` and `<span>`, a `::before` / `::after` label, `pre-line` notes and NBSP amounts; one page like
     #     Chrome's). 3.5 %: the text drift every fixture has. On main's binary every label was glued to its value (`Splatnost:2. 11.`,
