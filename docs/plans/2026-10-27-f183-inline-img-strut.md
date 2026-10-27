@@ -119,3 +119,32 @@ upstream fix, this fork branch is dropped (`docs/upstream.md`).
 
 Fixture 27 (Chrome PNG, 96 dpi): header rule rows 121..123, QR rows 454..566, payment cell top border 440 and bottom border 583.
 Main's binary: rule 117, compare **7.6 %** (one page, 1 / 1; main's number for the threshold).
+
+### 7.2 After the fix (2026-10-27)
+
+Forks: `subapavel/parley` `htmltopdf/inline-box-strut` `f551ab4` (v0.6.0 `3fe5c23` + one commit), `subapavel/blitz`
+`htmltopdf/blitz-dom-0.2.4` `e5b7feb8`; `fulgur` is unchanged (`3fa6f44b`, it reads Parley's `line_height` / `baseline`).
+`Cargo.lock` points `parley` (and, because the Parley git source holds it, `fontique` 0.6.0, the same release source) at the
+fork's git rev.
+
+- `inline_img_strut.rs`: S1-S12, G1-G5 and fixture 27 all match Chrome within 1 px (the QR rows of fixture 27 within 3 px:
+  the items table above carries 2 px of its own text drift against Chrome; the distance QR -> cell border is within 1 px of
+  Chrome's 17). 18 tests, all red or the guards green before, all green after.
+- Parley fork: 9 new unit tests (`tests/test_strut.rs`), 78 + 3 pass (`PARLEY_IGNORE_DECODING_ERRORS=1`: the snapshot PNGs are
+  Git LFS pointers in the clone, so the image-snapshot comparisons are skipped; the bit-for-bit claim is covered by the
+  new test that compares line metrics with and without a strut / flag).
+- Blitz fork: 5 new lib tests; `cargo test -p blitz-dom --lib` 136 pass, 138 with `--features parallel-construct`.
+- html-to-pdf: `cargo test --release` 767 passed, 0 failed (70 test binaries); `cargo fmt --all --check`, `cargo clippy
+  --release --all-targets -- -D warnings` clean.
+- Byte identity with main's binary: fixtures 01-26 and the seven `bench/corpus` documents render to identical bytes (no
+  baseline-aligned box on any of their lines, preflight makes the images block). Only 27 differs.
+- Compare (worst page): fixture 27 7.6 % on main -> 6.1 % (threshold 7.1 %); 01-26 unchanged (all at their thresholds).
+- fulgur: `fulgur-vrt` renders the same 64 fixtures byte-for-byte with and without the change (35 differ from the committed
+  goldens in this environment's fonts both before and after; the 35 actual PDFs are identical): no golden moves. `svg/shapes`
+  is the only VRT fixture with an inline baseline `svg` and it has nothing below it. `cargo test -p fulgur --lib` (2349) and
+  the image / inline-box / svg / smoke / link integration tests pass with the Parley fork patched in.
+- Side by side (main / after / Chrome) of S1, S6, S10 and fixture 27: `out/scratch/f183/sbs.png`.
+
+Not verified: the Parley snapshot PNG comparisons (LFS pointers); a variable font's `MVAR`-adjusted ascent for the strut
+(`skrifa` is asked without variations, like nothing else in a fixture needs); quirks mode (F183e, section 7.1); the Blitz
+fork's CI / clippy (not run); the bench numbers beyond fixture 27 (coordinator's gate).
