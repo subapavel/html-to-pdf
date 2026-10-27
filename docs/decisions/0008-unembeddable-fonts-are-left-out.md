@@ -13,9 +13,12 @@ never dropped. Chrome (OTS) rejects both broken files and draws the text in a fa
 
 ## Decision
 
-- Every bundled font file is checked when it is registered (fulgur `font_check::check_font`): each face must be
-  accepted by krilla's own `Font::new` and have glyph outlines (`glyf`, `CFF `, `CFF2`) or colour / bitmap glyphs
-  (`COLR`, `SVG `, `CBDT`, `sbix`); bytes that are not OpenType are rejected.
+- Every bundled font file is checked when it is registered (fulgur `font_check::check_font`), against what the PDF
+  writer will do with it: each face must be accepted by krilla's own `Font::new`; have `unitsPerEm` in OpenType's
+  16..16384 (krilla divides by it; 0 panics); and either have glyph outlines (`glyf`, `CFF `, `CFF2`) that krilla's
+  subsetter can subset (a trial subset of `.notdef` and the first mapped glyphs must reopen), or PNG bitmap glyphs (the
+  only glyphs krilla draws without outlines: `COLR` layers are outlines, and no SVG-glyph renderer is installed).
+  Bytes that are not OpenType are rejected.
 - A file with any bad face is left out whole (a collection too): its families are not registered and it can never be
   the default family, so its text falls back to the other bundled faces (weight 700 with only 400 left matches 400; we
   do not synthesise bold, ADR-0002).
@@ -29,7 +32,8 @@ never dropped. Chrome (OTS) rejects both broken files and draws the text in a fa
 - A document with a damaged font file renders its text in a fallback face instead of losing it; strict templates fail
   loudly. WOFF1, a WOFF2 decode failure and an I/O error still fail the builder at once, as before.
 - fulgur fork behaviour change: bytes with unknown magic are now an error (they never drew anything).
-- The check costs microseconds per face (§7 of the plan: 0.054 ms for five Inter faces + JetBrains Mono, 0.015 ms for a
-  17 MB collection).
+- The check costs well under a millisecond per face (§7 of the plan).
+- A face krilla opens but cannot subset (malformed `hmtx`, `maxp`, `post`, `loca`) failed the whole document before;
+  now it is left out like any other.
 - Not covered: leaving out only the bad face of a collection (F178b); deeper sanitising of tables Parley and krilla both
   accept (broken `loca` / `cmap`, all-empty outlines; F178c).

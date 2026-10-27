@@ -718,9 +718,13 @@ impl RendererBuilder {
     pub fn build(self) -> Renderer {
         // F178: say once per file what was left out. With `strict_fonts` the render refuses instead.
         if !self.strict_fonts {
+            let fallback = match &self.default_family {
+                Some(_) => "the other bundled faces",
+                None => "the built-in face (JetBrains Mono), no other font is bundled",
+            };
             for r in &self.rejected_fonts {
                 log::warn!(
-                    "font `{}` is left out: {}; its text uses the other bundled faces",
+                    "font `{}` is left out: {}; its text uses {fallback}",
                     r.source,
                     r.faces.join(", ")
                 );

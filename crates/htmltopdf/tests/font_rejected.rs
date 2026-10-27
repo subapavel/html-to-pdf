@@ -297,6 +297,54 @@ fn a_bold_without_outlines_is_left_out_and_never_embedded_as_invisible_type_3() 
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// 3b. Faces krilla opens but cannot write (F178 reviews): a panic, a failed document, invisible colour-table glyphs
+
+/// `font` with the big-endian u16 at offset `at` of table `table` set to `value`.
+fn set_u16(font: &[u8], table: &[u8; 4], at: usize, value: u16) -> Vec<u8> {
+    let n = u16::from_be_bytes([font[4], font[5]]) as usize;
+    let record = (0..n)
+        .map(|i| 12 + 16 * i)
+        .find(|r| &font[*r..*r + 4] == table)
+        .expect("no such table");
+    let off = u32::from_be_bytes(font[record + 8..record + 12].try_into().unwrap()) as usize;
+    let mut out = font.to_vec();
+    out[off + at..off + at + 2].copy_from_slice(&value.to_be_bytes());
+    out
+}
+
+#[test]
+fn a_bold_the_pdf_writer_cannot_write_is_left_out_instead_of_failing_the_document() {
+    let _g = serial();
+    let bold = font("Inter-Bold.ttf");
+    for (what, bad, why) in [
+        // Before: krilla panicked in the CID font descriptor (`cid.rs` unwrap), no PDF.
+        ("unitsPerEm 0", set_u16(&bold, b"head", 18, 0), "unitsPerEm"),
+        // Before: "failed to subset font: malformed font", no PDF, even without strict mode.
+        (
+            "numberOfHMetrics 0",
+            set_u16(&bold, b"hhea", 34, 0),
+            "subset",
+        ),
+        // Before: accepted for its colour table, embedded as Type 3 with empty glyphs.
+        (
+            "glyf renamed COLR",
+            rename_table(&bold, b"glyf", b"COLR"),
+            "outline",
+        ),
+    ] {
+        let (pdf, log) = lenient(std::slice::from_ref(&bad), BODY);
+        let t = text(&pdf);
+        assert!(
+            t.contains("Normální") && t.contains("TUČNÝ ŘÁDEK"),
+            "{what}: text is missing from {t:?}"
+        );
+        assert_eq!(fonts(&pdf), names(&["Inter-Regular"]), "{what}");
+        assert_one_warning(&log, "face 0 (Inter Bold)", why);
+        assert_strict_refuses(&[bad], "face 0 (Inter Bold)", why);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // 4. A collection with one bad face is left out whole
 
 #[test]
