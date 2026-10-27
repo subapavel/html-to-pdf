@@ -60,6 +60,13 @@ pub enum Error {
     /// of `@page` margin boxes. The message names at most 20 entries; the vector has all of them.
     #[error("text without a font, left out of the PDF: {}", join_capped(.0))]
     TextWithoutFont(Vec<String>),
+    /// Bundled font files with a face the PDF writer cannot embed, or bytes that are not a font (F178): a face without
+    /// a `head` table, one with no glyph outlines, junk. Such a file is left out of the bundle whole (a collection with
+    /// one bad face too); without it the text would be shaped with a face that is then dropped from the PDF, or drawn
+    /// as invisible glyphs. Returned by `render` / `render_to_file` only with [`RendererBuilder::strict_fonts`]`(true)`;
+    /// otherwise logged when the [`Renderer`] is built and the text uses the other bundled faces.
+    #[error("bundled fonts the PDF writer cannot embed: {}", join_rejected(.0))]
+    RejectedFonts(Vec<RejectedFont>),
     /// The rendering engine panicked (a bug in it, not in the document). The message is the panic's.
     #[error("the rendering engine failed: {0}")]
     EnginePanic(String),
@@ -73,6 +80,29 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+}
+
+/// A bundled font file that was left out because the PDF writer cannot embed one of its faces (F178).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RejectedFont {
+    /// Where it came from: the path for [`RendererBuilder::font_file`], `font_bytes #N` for
+    /// [`RendererBuilder::font_bytes`], N counting every font the caller added, from 1.
+    pub source: String,
+    /// One entry per bad face: `face <index> (<full name>): <reason>`.
+    pub faces: Vec<String>,
+}
+
+impl fmt::Display for RejectedFont {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "font `{}`: {}", self.source, self.faces.join(", "))
+    }
+}
+
+fn join_rejected(list: &[RejectedFont]) -> String {
+    list.iter()
+        .map(|r| r.to_string())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// An `<img>` that cannot be drawn.
@@ -257,6 +287,8 @@ pub struct Renderer {
     registered: FamilySet,
     generics: GenericMap,
     strict_fonts: bool,
+    /// Font files that were left out of the bundle because the PDF writer cannot embed a face of them (F178).
+    rejected_fonts: Vec<RejectedFont>,
     /// What decoding each bundled image showed, by the name it was looked up under. Filled lazily by
     /// `check_images`, so only images a document refers to are ever decoded, each once per `Renderer`;
     /// the verdict is a pure function of the bytes, so the order documents arrive in cannot matter.
@@ -277,11 +309,14 @@ impl Renderer {
             generic_overrides: GenericMap::new(),
             strict_fonts: false,
             strict_images: false,
+            fonts_added: 0,
+            rejected_fonts: Vec::new(),
         }
     }
 
     /// Render one HTML document to PDF bytes.
     pub fn render(&self, html: &str, opts: &RenderOptions) -> Result<Vec<u8>> {
+        self.check_rejected_fonts()?;
         self.check_fonts(html)?;
         self.check_images(html)?;
         self.warn_property_limits(html);
@@ -297,6 +332,7 @@ impl Renderer {
         opts: &RenderOptions,
         path: impl AsRef<Path>,
     ) -> Result<()> {
+        self.check_rejected_fonts()?;
         self.check_fonts(html)?;
         self.check_images(html)?;
         self.warn_property_limits(html);
@@ -390,6 +426,16 @@ impl Renderer {
                  defaults, so its custom-property declarations inside layers may lose to those defaults"
             );
         }
+    }
+
+    /// With `strict_fonts`, refuses a document when a font file was left out of the bundle because the PDF writer
+    /// cannot embed one of its faces (F178). Without it the build already logged each file. Checked before the
+    /// `font-family` lists: those are matched against the faces that remain, and the file in question is the cause.
+    fn check_rejected_fonts(&self) -> Result<()> {
+        if self.strict_fonts && !self.rejected_fonts.is_empty() {
+            return Err(Error::RejectedFonts(self.rejected_fonts.clone()));
+        }
+        Ok(())
     }
 
     /// Static check that every `font-family` list can be satisfied by a bundled face. Without it,
@@ -531,6 +577,10 @@ pub struct RendererBuilder {
     generic_overrides: GenericMap,
     strict_fonts: bool,
     strict_images: bool,
+    /// How many fonts the caller added so far (`font_file` and `font_bytes`), for `font_bytes #N`.
+    fonts_added: usize,
+    /// Font files `add_font` left out (F178), in the order they were added.
+    rejected_fonts: Vec<RejectedFont>,
 }
 
 impl RendererBuilder {
@@ -559,21 +609,40 @@ impl RendererBuilder {
 
     /// Bundle a font (TTF / OTF / TTC / WOFF2). The family name comes from the
     /// font's own name table and is what `font-family` in CSS must match.
+    ///
+    /// A file whose faces the PDF writer cannot all embed (no `head` table, no glyph outlines, a collection with one
+    /// such face, bytes that are not a font) is left out whole, with a warning when the [`Renderer`] is built; with
+    /// [`strict_fonts`](Self::strict_fonts) rendering fails with [`Error::RejectedFonts`] instead. Its text uses the
+    /// other bundled faces. A file that cannot be read, a WOFF1 file and a WOFF2 file that does not decode are still
+    /// errors here.
     pub fn font_file(self, path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let bytes = std::fs::read(path).map_err(|source| Error::Asset {
             path: path.into(),
             source,
         })?;
-        self.add_font(bytes)
+        self.add_font(bytes, Some(path.display().to_string()))
     }
 
+    /// Bundle a font from memory; see [`font_file`](Self::font_file).
     pub fn font_bytes(self, bytes: Vec<u8>) -> Result<Self> {
-        self.add_font(bytes)
+        self.add_font(bytes, None)
     }
 
-    fn add_font(mut self, bytes: Vec<u8>) -> Result<Self> {
-        self.assets.add_font_bytes(bytes)?;
+    fn add_font(mut self, bytes: Vec<u8>, source: Option<String>) -> Result<Self> {
+        self.fonts_added += 1;
+        match self.assets.add_font_bytes(bytes) {
+            Ok(()) => {}
+            // F178: left out whole, so its families are neither registered nor the document's default.
+            Err(fulgur::Error::FontRejected(rejection)) => {
+                self.rejected_fonts.push(RejectedFont {
+                    source: source.unwrap_or_else(|| format!("font_bytes #{}", self.fonts_added)),
+                    faces: rejection.faces.iter().map(|f| f.to_string()).collect(),
+                });
+                return Ok(self);
+            }
+            Err(e) => return Err(e.into()),
+        }
         // fulgur may have decoded the bytes (WOFF2); read the family names from what it kept.
         if let Some(stored) = self.assets.fonts.last() {
             for name in fonts::family_names(stored) {
@@ -600,6 +669,10 @@ impl RendererBuilder {
     /// see, such as a custom property that names an unbundled family where it is used and a bundled one
     /// elsewhere. Not covered: a character the chosen face has no glyph for (a run is produced and the glyph
     /// is `.notdef`, F44) and the text of `@page` margin boxes.
+    ///
+    /// It also refuses a bundled font file that the PDF writer cannot embed ([`Error::RejectedFonts`], F178), which
+    /// is otherwise left out of the bundle with a warning when the [`Renderer`] is built. That is checked when a
+    /// document is rendered, so the switch can be set before or after the fonts are added.
     pub fn strict_fonts(mut self, strict: bool) -> Self {
         self.strict_fonts = strict;
         self
@@ -643,6 +716,20 @@ impl RendererBuilder {
     }
 
     pub fn build(self) -> Renderer {
+        // F178: say once per file what was left out. With `strict_fonts` the render refuses instead.
+        if !self.strict_fonts {
+            let fallback = match &self.default_family {
+                Some(_) => "the other bundled faces",
+                None => "the built-in face (JetBrains Mono), no other font is bundled",
+            };
+            for r in &self.rejected_fonts {
+                log::warn!(
+                    "font `{}` is left out: {}; its text uses {fallback}",
+                    r.source,
+                    r.faces.join(", ")
+                );
+            }
+        }
         let mut assets = self.assets;
         let mut registered = self.registered;
         // The engine has no user-agent default `font-family`: text in an element with no family
@@ -696,6 +783,7 @@ impl RendererBuilder {
             registered,
             generics,
             strict_fonts: self.strict_fonts,
+            rejected_fonts: self.rejected_fonts,
             image_verdicts: Mutex::default(),
             strict_images: self.strict_images,
             property_defaults,

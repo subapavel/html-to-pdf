@@ -1,0 +1,188 @@
+# F178 — a bundled font the PDF writer cannot embed is left out (warned) or refused (strict)
+
+Date: 2026-10-27. Finding: F178 (`2026-10-15-m0-findings.md`). The fix goes on `subapavel/fulgur` `htmltopdf/srgb-colours`
+(the check when a font is registered, plus a safety net at draw time); the strict-mode mapping is ours.
+
+## 1. Problem
+
+Parley (fontique, skrifa) and krilla parse a bundled font separately, and they disagree. Repro (F99e pdf-reviewer):
+`fixtures/fonts/Inter-Bold.ttf` with the `head` tag in its table directory renamed to `hexd` (directory still sorted).
+fontique registers the face and shapes `font-bold` text with it; at draw time `KrillaFonts::get`
+(`draw_primitives.rs:672`) gets `None` from `krilla::text::Font::new`, and `paragraph.rs:842` skips the run with a bare
+`continue`: exit 0 even with `--strict-fonts`, the bold lines missing from the PDF, no warning. With `glyf` renamed
+(`glyx`) instead, krilla accepts the face, `FontInfo::can_be_cid_font()` is false, and the face is embedded as a
+non-subset Type 3 font whose glyph procedures are empty (`type3.rs:169`: no outline, no path): `pdftotext` still finds
+the text but nothing is painted — the loss looks like success. SVG text has the same skip (`krilla-svg-0.7.0`
+`text.rs:34`, `convert_fontdb` drops a `None` face). Bytes that are not a font at all (`font_bytes(b"junk")`) only log
+`unknown font magic bytes; passing through` (`asset.rs:89`). Silent data loss on an invoice that bypasses the strict
+switch (AGENTS.md goal 1, ADR-0002).
+
+## 2. Spec (from memory, unverified; step 0 checks Chrome)
+
+- OpenType 1.9 "Required tables": `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`, `post`, plus outlines
+  (`glyf`+`loca`, or `CFF `/`CFF2`). A face without `head` is not a conforming font; a face with no outlines and no
+  colour or bitmap glyph tables (`COLR`, `SVG `, `CBDT`, `sbix`) has nothing to draw.
+- css-fonts-4 §4.3 (`src`): an invalid font resource is treated as if it failed to load; §5 (font matching) continues
+  with the remaining faces, so text is drawn in a fallback face, never dropped. Our UA fonts are the bundle (ADR-0002,
+  ADR-0007). §5.2: `font-weight: 700` with only 400 available matches 400; we do not synthesise bold (ADR-0002), so the
+  fallback is Inter-Regular.
+- Chrome runs OTS on web fonts: a face with a required table missing fails, and for a collection the whole file fails
+  (unverified; step 0 checks the fallback with an `@font-face` `data:` URL).
+- PDF 32000-1 §9.6.5 (Type 3): glyphs are content streams; an empty stream paints nothing but still maps to Unicode —
+  the invisible-but-extractable text.
+
+## 3. Where it belongs
+
+krilla's `Option` is the right API for its caller; skipping the run silently is fulgur's choice. The check must run on
+the bytes fulgur keeps (WOFF2 is decoded inside `AssetBundle`) and use krilla's own parser (it decides what gets
+embedded). Our crate imports only fulgur and does not depend on krilla, so the check goes in the fulgur fork and
+reaches us through a fulgur error.
+
+| Part | Where | Change |
+|---|---|---|
+| Check | fulgur new `font_check.rs` | `pub fn check_font(bytes: &[u8]) -> Result<(), FontRejection>`: for each face `0..n` (skrifa `FileRef` count): `FontRef::from_index` (else "not an OpenType font: {e}"); `krilla::text::Font::new(Arc::clone(..).into(), i)`, `None` diagnosed as "no `head` table" / "metrics are not finite" / "unitsPerEm is 0"; then glyphs: outlines present (skrifa `outline_glyphs()`, exact API checked in step 2) or a colour / bitmap table, else "no glyph outlines". `FontRejection { faces: Vec<RejectedFace> }`, `RejectedFace { index: u32, name: Option<String> /* name ID 4 */, reason: String }`. |
+| Registration | fulgur `asset.rs` `add_font_bytes` | After the WOFF2 decode, `check_font(&decoded)`; on failure `Err(Error::FontRejected(r))`, bytes not pushed. Unknown magic is no longer passed through. Parley (`parse_inner`, `MarginDocEnv::new`) and `SvgFonts` all read `fonts`, so a rejected file is missing from all three by construction. |
+| Error | fulgur `error.rs` | `FontRejected(FontRejection)`; the message names each face (index, name, reason). |
+| Safety net | fulgur `KrillaFonts`, `paragraph.rs:842`, `render.rs:190`, `engine.rs` | At the `continue`, record a `DroppedText { element: "glyph run in a face the PDF writer cannot read", excerpt }` into `KrillaFonts::skipped`; `render_v2` hands the list back and the engine reports it like the dropped text at line ~739 (`Error::TextWithoutFont` under `strict_text`, otherwise `warn!`). Only reachable when `AssetBundle::fonts` (pub) is filled directly, or with system fonts. |
+| Ours | `crates/htmltopdf/src/lib.rs` `add_font`, `build`, `render`, `render_to_file` | `Err(fulgur::Error::FontRejected(r))` → `RejectedFont { source: String, faces: Vec<String> }` (`source`: the path for `font_file`, `font_bytes #N` otherwise); the file's families are not added to `registered` and never become `default_family`. `build()` non-strict: one `warn!` per file ("font `<source>` is left out: face 1 (Inter Bold): no `head` table; its text uses the other bundled faces"). `render*` with `strict_fonts`: `Err(Error::RejectedFonts(Vec<RejectedFont>))` before `check_fonts`. |
+
+Decisions:
+
+- Strict refuses at render time, not in the builder: builder methods come in any order (`dropped_text_warning.rs` calls
+  `strict_fonts` after `font_bytes`) and `build()` cannot fail; this is where `check_fonts` refuses too.
+- Non-strict warns and leaves the font out instead of failing: today the document renders minus that face's text; a
+  hard error would produce no PDF at all, against "warn by default".
+- Existing font errors are unchanged: WOFF1, a WOFF2 decode failure and an I/O error still return `Err` from the
+  builder at once.
+- A collection with one bad face is left out whole: fontique registers a blob with all its faces and `unregister_font`
+  matches by attributes (could remove a good face of another file); OTS also rejects a whole collection.
+- A face with no outlines is refused like a face without `head` (empty glyphs on a tax document are data loss);
+  colour-only faces are accepted (krilla draws them as Type 3).
+
+## 4. Acceptance
+
+New `crates/htmltopdf/tests/font_rejected.rs` with helpers `rename_table(font, from, to)` (keeps the directory sorted)
+and `ttc_of(&[&[u8]])` (collection header + rebased table offsets); fonts from `pdffonts` (subset prefix stripped), text
+from `pdftotext` as in `svg_text_fonts.rs`; the logger is captured in one test per process.
+
+1. `head` renamed, non-strict: Inter-Regular + the bad Bold, `<p>Normální</p><p class="font-bold">TUČNÝ ŘÁDEK</p>`:
+   `Ok`; both texts in `pdftotext`; `pdffonts` = {Inter-Regular}; exactly one warning naming `face 0 (Inter Bold)`, the
+   source and `head`; no "text has no font face" warning. Red: TUČNÝ missing, no warning.
+2. Strict, `strict_fonts` both before and after `font_bytes`: `Err(RejectedFonts)` naming the same; `htmltopdf-cli
+   --strict-fonts --font <bad>`: exit 1 with that message, stdout empty.
+3. `glyf` renamed: as 1 and 2, and `pdffonts` lists no `Type 3`. Red: a Type 3 Inter-Bold.
+4. A collection of (Inter-SemiBold, `head`-renamed Bold) next to Inter-Regular: the warning names `face 1`;
+   Inter-SemiBold is not in `pdffonts` (whole file left out); strict `Err`.
+5. Junk bytes registered first, then Inter: warning "not an OpenType font"; the default family is `Inter`; strict `Err`.
+6. SVG (F152 path): inline `<svg><text font-family="Inter" font-weight="bold">TUČNĚ</text>` with the `glyf`-renamed
+   Bold: drawn, only Inter-Regular embedded, no Type 3. Red: Type 3.
+7. Fork: `render_smoke.rs` — an `AssetBundle` whose `fonts` gets the bad bytes pushed directly: `strict_text` →
+   `Err(TextWithoutFont)` with the excerpt, non-strict → one warning. `font_check.rs` unit tests: Inter ok, built-in
+   mono ok, `head` renamed, `glyf` renamed, junk, collection index.
+8. Neutral: fixtures 01-25 byte-identical, `compare.py` change 0, `bench.py --check` ok. Registration cost measured in
+   step 0 and recorded in §7 (expected microseconds per face: `Font::new` reads the table directory, metrics, `name` and
+   outline headers, never the glyph data); target under 1 ms for five Inter faces + JetBrains Mono, under 5 ms for a
+   17 MB TTC (host `wqy-zenhei.ttc` in a scratch probe only, never in a committed test).
+
+## 5. Steps
+
+0. Bad fonts in `out/scratch/f178/`; Chrome reference (`@font-face` `data:` URL of each bad Bold, expected to fall back
+   to Regular with the text drawn); confirm the empty Type 3 glyphs with `pdftoppm`; measure the check cost.
+1. Ours: tests 1-6, red.
+2. fulgur: `font_check.rs` + unit tests.
+3. fulgur: `add_font_bytes` calls the check; `Error::FontRejected`; invert `test_add_font_bytes_unknown_passthrough`;
+   VRT unchanged.
+4. fulgur: the draw-time safety net + smoke test.
+5. Ours: lock bump; `RejectedFont`, `Error::RejectedFonts`, the warning in `build`, the strict check in `render*`; CLI
+   test. Gates: `compare.py`, `bench.py --check`, `vrt-validator`, `pdf-reviewer` (fonts, merge-policy item 5).
+6. Docs: ADR-0008 "A bundled font file the PDF writer cannot embed is left out whole; strict refuses it";
+   `docs/upstream.md` fork row (behaviour change); `RendererBuilder::font_file` / `strict_fonts` doc comments; findings
+   (F178 done, F178b, F178c filed).
+
+## 6. Risks and non-goals
+
+- Fork behaviour change: fulgur callers passing bytes with unknown magic now get `Err` (those bytes never drew
+  anything); recorded in `docs/upstream.md`.
+- A face krilla accepts but whose subset fails at write time already fails the whole render (`PdfGeneration`): loud,
+  out of scope.
+- The check parses each face once per `Renderer` and the render again (`KrillaFonts`); sharing is a follow-up only if
+  `bench.py` shows a cost.
+- Non-goals: leaving out only the bad face of a collection (F178b); deeper sanitising (broken `loca` / `cmap`, all-empty
+  outlines; F178c, OTS-like); WOFF1 / WOFF2 decode errors as warnings; synthetic bold; `@font-face` in documents.
+
+## 7. Evidence (step 0, 2026-10-27)
+
+Scratch files in `out/scratch/f178/` (`mk.py` makes the bad fonts, `chrome.mjs` the Chrome run, `t.html` the document).
+
+**Bad fonts.** `bold-head.ttf` = `Inter-Bold.ttf` with `head` renamed `hexd`, `bold-glyf.ttf` with `glyf` renamed `glyx`
+(directory re-sorted), `junk.bin` = `junk`. `target/release/htmltopdf` before the change, `<p>Normální</p><p
+class="font-bold">TUČNÝ ŘÁDEK</p>`, `--font Inter-Regular --font <bad> --strict-fonts`:
+
+| Font | Exit | `pdffonts` | `pdftotext` |
+|---|---|---|---|
+| `head` renamed | 0, no warning | Inter-Regular only | `Normální`; the bold line is missing |
+| `glyf` renamed | 0, no warning | Inter-Regular + `Inter-Bold` **Type 3** (`emb yes sub no`) | both lines found |
+| `junk` first, then Inter | 0, only `unknown font magic bytes; passing through` | Inter-Regular | n/a |
+
+`pdftoppm -r 96` of the `glyf` case shows `Normální` and an empty page below it: the Type 3 glyph procedures paint
+nothing, the text layer still says `TUČNÝ ŘÁDEK` (confirmed, §1). SVG text (test 6) with the `glyf`-renamed Bold is
+worse than the plan assumed: `<text font-family="Inter" font-weight="bold">TUČNĚ</text>` is not in the PDF at all (not
+an invisible Type 3), so the red test reads "the SVG text is not drawn".
+
+**Chrome** (Playwright Chromium, `@font-face` `data:` URLs: family `T` with Inter-Regular at 400 and the bad Bold at
+700; `p { font-weight: 700 }`):
+
+- both bad files are refused by OTS: `head`: "OTS parsing error: head: missing required table"; `glyf`: "OTS parsing
+  error: no supported glyph data table(s) present". `document.fonts` reports `700: error`. A good Bold: `700: loaded`.
+- The text is drawn, not dropped (`pdftotext` finds `TUČNÝ ŘÁDEK`), which is the css-fonts-4 §4.3 behaviour the plan
+  assumes. But the fallback is **not** the family's remaining face: with `font: 20px T, serif` the bold line used the
+  next family of the list (LiberationSerif-Bold; width 148.3 px vs 143.2 px for Inter-Regular and 146.4 px for a good
+  Inter-Bold), because Blink keeps a failed `@font-face` in the family as the weight-700 match. Chrome's PDF therefore
+  has no Inter-Bold either way and never has an invisible or missing line. We have no `@font-face`, the bundle is the
+  family, so the plan's reading stands: leaving the face out makes §5.2 pick Inter-Regular for `font-weight: 700`
+  (no synthetic bold, ADR-0002). Chrome with a family that has only the faux-bold route would draw synthetic bold; we do not.
+- Both files are rejected whole; a collection is not tried in Chrome here (the `data:` URL path takes one font), the
+  whole-file rule for collections stays as planned (OTS rejects a collection with a bad member).
+
+**Check cost.** Probe (scratch example in the fulgur fork, release build, deleted afterwards) running what the check
+does per face (`skrifa::FontRef::from_index`, `krilla::text::Font::new`, `outline_glyphs().format()`, four table
+lookups, `head`) on bytes already in memory, mean of repeated passes:
+
+| Input | Faces | First pass | Warm pass |
+|---|---|---|---|
+| 5 Inter TTFs + JetBrains Mono | 6 | 0.050 ms | 0.012 ms |
+| host `wqy-zenhei.ttc` (16.8 MB, scratch only) | 3 | 0.038 ms | 0.006 ms |
+
+Both are far under the targets (1 ms and 5 ms): the check reads table directories, `head`, `hhea`, `OS/2`, `name` and
+the outline table headers, never glyph data. The real `check_font` is measured again in step 2 and the number added
+here.
+
+**Check cost, as implemented** (`fulgur::font_check::check_font`, release build, scratch test in `htmltopdf`, deleted
+afterwards; bytes in memory, mean of repeated passes): 5 Inter + JetBrains Mono, 6 faces: 0.054 ms first pass, 0.009 ms
+warm. Host `wqy-zenhei.ttc` (16.8 MB, 3 faces): 0.015 ms first, 0.005 ms warm. `Renderer::builder()` with 5 Inter faces
+and `build()` takes 1.5 ms in total, so the check is below 5 % of it. Both targets of §4.8 are met by two orders of
+magnitude.
+
+**Deviations from the plan while implementing** (steps 1-5):
+
+- `check_font` takes `&Arc<Vec<u8>>`, not `&[u8]`: Krilla's `Font::new` wants shared bytes and a 17 MB collection must
+  not be copied to check it.
+- `font_bytes #N`: N counts every font the caller added (`font_file` and `font_bytes`), from 1.
+- Test 6 (SVG text) was red because the text was missing, not because a Type 3 font was embedded (see above).
+- The smoke test shares the logger of the existing `svg_images` module in `render_smoke.rs` (one logger per process).
+
+Reviews (head `bac0dbc`): fixtures 01-25 and `bench/corpus` byte-identical to `main`, `bench.py --check` ok.
+`pdf-reviewer` D1 (MEDIUM): a `COLR` / `SVG ` / `CBDT` / `sbix` table alone passed the "colour or bitmap glyphs" rule
+but krilla draws nothing from it without outlines (no SVG-glyph renderer installed; `COLR` layers are outlines; only
+PNG bitmaps are drawn) — still an invisible Type 3. `vrt-validator`: no false rejection among 108 host fonts (TTF, CFF,
+TTC / EBDT, NotoColorEmoji CBDT, COLRv1, synthetic CFF2 / `fvar` / WOFF2); M1 `unitsPerEm` 0 passed `Font::new` and
+krilla panicked writing the CID descriptor; M2 a face krilla opens but cannot subset (malformed `hmtx`, `maxp`, `post`,
+`loca`, `numberOfHMetrics`) failed the whole document even without strict mode (29 of 400 header-fuzz mutants).
+
+Fix (fulgur `c26567f3`): `unitsPerEm` must be in 16..16384; a face with outlines is trial-subset like krilla
+(`subsetter::subset_with_variations`, `.notdef` + the first 16 mapped glyphs) and the subset must reopen; a face without
+outlines passes only with PNG bitmap data on one of its first 16 mapped glyphs. Re-run: still no false rejection; all
+201 hand-made mutants render (left out with one warning) or are refused in strict mode; fuzz 13 of 400 still fail the
+render loudly ("failed to subset font: malformed font", the corruption hits glyphs outside the sample) — F178d. 108
+fonts registered: 112-154 ms wall (before ~110 ms; mostly file I/O and fontique).
+
