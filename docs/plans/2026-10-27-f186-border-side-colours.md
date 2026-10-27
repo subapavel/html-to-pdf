@@ -96,3 +96,24 @@ Findings from the step-0 run on the unchanged engine (tests `border_colors.rs`):
 are red (top colour used for every side: black bottom band, red right side, black left accent, black row separators);
 case 4 collapse is already green (the collapsed-border painter carries its own per-edge colour from the Blitz fork's
 `collapsed_borders`), and guards g1-g6 are green.
+
+### Steps 2-3: results (2026-10-27, fork `091fad98`)
+
+- `border_colors.rs`: 14 / 14 green (cases 1, 2, 3, 3b, 3c, 4, 4 collapse, 5 and guards g1-g6). Pixels differing from Chrome by more
+  than 40/255 in a whole A4 page (old -> new): c1 2856 -> 4, c2 3400 -> 8, c3 3728 -> 16, c3b 2240 -> 8, c4 separate
+  900 -> 0, c5 414 -> 0 (left accent with `border-radius: 8px`: the band now tapers along the curve like Chrome),
+  c6r (3b with `border-radius: 12px`) 4710 -> 6; g1, g2, g5, g6 and collapsed c4 unchanged (0 / 0 / 0 / 1 / 0).
+- Uniform-colour borders take the old code paths: PDFs of g1-g6 and the collapsed table are byte-identical to the previous
+  binary; the seven `bench/corpus` documents and fixtures 01-20, 22, 23, 25 are byte-identical.
+- Two fixtures change, both borders that were black (the top colour is `currentColor`) and now have their own colour:
+  21-display-contents (`border-bottom: 1px solid #d1d5db` row rules; compare 3.7 -> 3.2 %) and 24-columns-span
+  (`.terms .span { border-bottom: 1px solid #d1d5db }`; pages 8.6 / 6.7 -> 8.6 / 6.6 %).
+- Collapsed table borders (F22) and `column-rule` never read the top-colour shortcut: the collapsed edges carry their own
+  colour from the Blitz fork and `column-rule` has its own parser. Mixed colours with `border-radius` are painted as wedges
+  clipped to the border ring when every drawn side is solid; with a dashed / dotted / double / 3D side they stay straight
+  per-side lines (not filed: no invoice need).
+- fulgur-vrt in this environment: 35 of 64 fixtures differ before and after (same set). Seven of the failing fixtures'
+  actual PDFs change, each a side border that now has its own colour (`bugs/cover-page-break-after` p2 `border-bottom:
+  3pt solid #e94560`, `layout/review_card_inline_block` `border-left: 4pt solid #e94560`, `gcpm/running-element` and
+  `gcpm/element-policy-{first,first-except,last,start}` `border-bottom: 1pt solid #999`); their goldens still hold the black
+  borders and need re-blessing in a clean environment.
