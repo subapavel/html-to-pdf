@@ -1,6 +1,6 @@
 # F183 — an inline `<img>` sits on the floor of its line box (no strut below the baseline)
 
-Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **done** (Parley fork `f551ab4`, Blitz fork `e5b7feb8`) — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
+Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **done** (Parley fork `1f23226`, Blitz fork `63628c03`; section 7.3) — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
 v0.6.0 release commit `3fe5c239`. Low impact on the product today:
 Tailwind's preflight makes every `img` / `svg` `display: block`, so no Tailwind invoice (fixtures 01-26, `bench/corpus`)
 has an inline baseline image; hand-written HTML with an inline logo or QR code does.
@@ -148,3 +148,47 @@ fork's git rev.
 Not verified: the Parley snapshot PNG comparisons (LFS pointers); a variable font's `MVAR`-adjusted ascent for the strut
 (`skrifa` is asked without variations, like nothing else in a fixture needs); quirks mode (F183e, section 7.1); the Blitz
 fork's CI / clippy (not run); the bench numbers beyond fixture 27 (coordinator's gate).
+
+### 7.3 vrt-validator fixes (2026-10-27)
+
+The validator ran 249 cases (`out/scratch/f183v`, Chrome PDFs beside main's and the branch's) and found three defects in 7.2. Forks now:
+Parley `1f23226` (on `f551ab4`), Blitz `fd40643d` and `63628c03` (on `e5b7feb8`).
+
+1. **A short `line-height` pulled the next block up** (high): `line-height: 0` and a 60 px image gave block top 54, main and Chrome 60 (also
+   `.25`, `.5`, `10px`, `calc(1px + .5em)`; text and a 30 px image with `line-height: 0`: 24, Chrome 30). The half-leading is negative,
+   so `descent + leading_below` went below zero. CSS 2.1 section 10.8: the line box ends at the lowest box bottom, and a baseline image
+   ends at the baseline, so the part below it is `max(descent + half-leading, 0)`. Parley `BreakLines::finish`: `below = (descent +
+   leading_below).max(0)`; `above` stays at least the tallest flagged box; `min_coord` / `max_coord` are kept inside the line box
+   (pagination reads them as the line's top and bottom).
+2. **An image in an atomic inline was drawn 4 px low** (high): `<span style="display:inline-block"><img></span>`, a block inside an
+   inline-block, an image in a `<button>` (`ib_img_bg`, `ib_img_text`, `ib_nested_div`, `ib_lines2`, `ib_qr_dl`, `img_in_button`, `ib_wrap`):
+   the inner line is 64 tall (right) but the outer line puts the bottom of the inline-block on its baseline instead of the baseline of
+   its last line, so the image sat 4 px lower than on main (Chrome: image 0..60, block 64). That is **F183b**, out of scope. Until
+   F183b Blitz sets no strut when the inline formatting context is inside an atomic inline: `inside_atomic_inline` walks from the
+   context's root up and stops at an ancestor with an inline-level outside display and an inside other than `flow` (`inline-block`,
+   `inline-flex`, `inline-grid`, `inline-table`) or at an inline-level `<button>` / `<input>` / `<textarea>` (Blitz lays these out as
+   atomic inlines although their `display` is `inline`, `construct.rs`). These cases are exactly main's again. F183b must remove this
+   check when the outer line uses the last line's baseline.
+3. **A flagged image grew a line with an unflagged box** (medium): 80 px `vertical-align: top` image plus a 40 px baseline image: 84,
+   main and Chrome 80 (`c_mixed_vtop_base`; 50 px: 54 / 50). Parley draws every box bottom-on-baseline, so the baseline has to be at
+   least as low as every box is tall. The strut path now keeps the height of unflagged boxes apart: `above` (strut and text part) uses
+   flagged boxes and text only, `baseline = max(above, tallest unflagged)`, `line_height = max(above + below, tallest unflagged)`.
+   Main's result whenever an unflagged box dominates (`ib_plus_img`: main's 100, Chrome 104 is F183b), the strut result otherwise.
+   A line where an unflagged box is between `above` and `above + below` is up to the strut descent short of Chrome (its strut would
+   still sit below the baseline): not a regression against main, and F183c's.
+
+Tests (red before, green after): Parley `short_line_height_does_not_pull_the_next_block_up`,
+`unflagged_box_taller_than_the_flagged_ones_keeps_the_old_line` (`flagged_boxes_and_a_smaller_unflagged_box_use_the_strut` as a guard;
+it replaces `text_and_unflagged_box_next_to_a_flagged_one`, which asserted the 74 of finding 3); Blitz `an_img_inside_an_inline_block_has_no_strut_until_f183b`;
+`inline_img_strut.rs` `v1_*` (two), `v2_*`, `v3_*` (two), with the Chrome numbers above (main's positions for v2 and the dominant
+unflagged box).
+
+Results: Parley lib 80 pass (`PARLEY_IGNORE_DECODING_ERRORS=1`); Blitz `blitz-dom --lib` 137, 139 with `parallel-construct`;
+fulgur `cargo test -p fulgur --lib` 2349 pass with the forks patched in; html-to-pdf `cargo test --release` 777 passed, 0 failed (70 binaries; `inline_img_strut` 23), `cargo fmt --all --check` and `cargo clippy --release --all-targets -- -D warnings` clean; fixtures 01-26 and the seven `bench/corpus` documents byte-identical to main at 1 and 4
+threads (the byte gate renders 27 with Tailwind, where images are block; 27 is judged by compare); compare: fixture 27 6.1 % as in 7.2,
+all ok. The validator's 249 cases re-run: 26 changed against the first version of the branch; the red and blue rows of every one are now main's
+(F183b: image in an inline-block / button, unflagged box dominant) or Chrome's (the `line-height` cases, `lh0_wrapper_logo`),
+none is further from Chrome than main.
+
+Not verified: the Blitz CI / clippy; a `<button>` or `<input>` check has an html-to-pdf test but no Blitz lib test; Parley clippy
+(`-D warnings` fails on 7 sites in files this change does not touch, as before it).

@@ -451,6 +451,127 @@ fn g5_inline_block_badge_on_a_text_line() {
     rows(&s.blue(), 24, 44, "block after a line with a badge");
 }
 
+// --- V. vrt-validator findings on the first version (plan section 7.3) ---------------------------------------------
+
+#[test]
+fn v1_short_line_height_does_not_pull_the_next_block_up() {
+    // CSS 2.1 section 10.8: the line box ends at the lowest box bottom. The image's bottom is the baseline, so the
+    // part below it is max(strut descent + half-leading, 0), never negative. Chrome: block at 60 for all of these
+    // (the first version gave 54 for `line-height: 0`).
+    for lh in ["0", ".25", ".5", "10px", "calc(1px + .5em)"] {
+        let s = shot(
+            &format!("div.l {{ line-height: {lh} }}"),
+            &format!("<div class=\"l\">{}</div>{BLK}", img60()),
+        );
+        rows(&s.red(), 0, 60, &format!("image, line-height {lh}"));
+        rows(&s.blue(), 60, 80, &format!("block, line-height {lh}"));
+    }
+}
+
+#[test]
+fn v1_short_line_height_with_text_and_a_30px_image() {
+    // Chrome: image 0..30, block 30..50 for `line-height: 0` and `.5` (the first version gave 24 and 28).
+    for lh in ["0", ".5"] {
+        let s = shot(
+            &format!("div.l {{ line-height: {lh} }}"),
+            &format!("<div class=\"l\">x {} y</div>{BLK}", img(30, 30, "")),
+        );
+        rows(&s.red(), 0, 30, &format!("image, line-height {lh}"));
+        rows(&s.blue(), 30, 50, &format!("block, line-height {lh}"));
+    }
+}
+
+#[test]
+fn v2_image_inside_an_inline_block_stays_where_it_was_until_f183b() {
+    // The inner line is 64 tall (right), but the outer line puts the bottom of an inline-block on its baseline
+    // instead of its last line's baseline (F183b; Chrome puts the block at 64), so a strut inside drew the image 4 px
+    // low. Until F183b an image inside an atomic inline gets no strut: the positions of the version before F183.
+    let ib = ".ib { display: inline-block; background: #0f0 }";
+    let cases = [
+        (
+            "inline-block wrapper",
+            ib,
+            format!("<div><span class=\"ib\">{}</span></div>{BLK}", img60()),
+            (0, 60),
+            60,
+        ),
+        (
+            "inline-block between text",
+            ib,
+            format!("<div>a <span class=\"ib\">{}</span> b</div>{BLK}", img60()),
+            (0, 60),
+            60,
+        ),
+        (
+            "block inside an inline-block",
+            "",
+            format!(
+                "<div style=\"display:inline-block\"><div>{}</div></div>{BLK}",
+                img60()
+            ),
+            (0, 60),
+            60,
+        ),
+        (
+            "image in a button",
+            "",
+            format!(
+                "<div><button style=\"font:16px Inter;padding:0;border:0\">{}</button></div>{BLK}",
+                img(30, 30, "")
+            ),
+            (0, 30),
+            30,
+        ),
+    ];
+    for (what, css, body, (y0, y1), block) in cases {
+        let s = shot(css, &body);
+        rows(&s.red(), y0, y1, &format!("image, {what}"));
+        rows(&s.blue(), block, block + 20, &format!("block, {what}"));
+    }
+}
+
+#[test]
+fn v3_unflagged_box_taller_than_a_baseline_image_keeps_the_old_line() {
+    // `vertical-align: top` images are not baseline-aligned. Parley draws every box bottom-on-baseline, so the
+    // baseline cannot be above the tallest one: the line is 80 / 50 tall as before F183, not 84 / 54 (Chrome: 80 / 50).
+    for (top, blue) in [(80, 80), (50, 50)] {
+        let s = shot(
+            "",
+            &format!(
+                "<div>{}{}</div>{BLK}",
+                img(40, 40, ""),
+                img(top, top, "vertical-align:top")
+            ),
+        );
+        rows(
+            &s.red(),
+            0,
+            top as usize,
+            &format!("images, top-aligned {top}"),
+        );
+        rows(
+            &s.blue(),
+            blue,
+            blue + 20,
+            &format!("block, top-aligned {top}"),
+        );
+    }
+}
+
+#[test]
+fn v3_inline_block_taller_than_a_baseline_image_keeps_the_old_line() {
+    // A 100 px inline-block (an unflagged box) and a 20 px baseline image: the old line, 100 (Chrome 104: F183b).
+    let s = shot(
+        ".ib { display: inline-block; width: 100px; height: 100px; background: #0f0 }",
+        &format!(
+            "<div><span class=\"ib\"></span>{}</div>{BLK}",
+            img(20, 20, "")
+        ),
+    );
+    rows(&s.red(), 80, 100, "image");
+    rows(&s.blue(), 100, 120, "block (F183b: Chrome 104)");
+}
+
 // --- Fixture 27: a hand-written invoice with inline images --------------------------------------------------
 
 #[test]
