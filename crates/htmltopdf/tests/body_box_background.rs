@@ -322,6 +322,36 @@ fn k3_a_body_frame_does_not_overshoot_the_page_area_at_15_mm() {
     );
 }
 
+// --- K3b. a body taller than its content stays open at the page bottom ----------------------------------------
+
+#[test]
+fn k3b_a_body_taller_than_its_content_is_not_closed_at_the_page_bottom() {
+    // F37 vrt-validator: `min-height: 100vh` plus a margin makes body taller than the page area. Chrome continues the
+    // box on a second page; page 1 shows the side borders to the page bottom and no bottom border or rounded corner.
+    for (page_rule, bottom) in [(PAGE_A4, 1123), (PAGE_A4_15MM, 1066)] {
+        let pdf = render(
+            page_rule,
+            "body { margin: 40px; min-height: 100vh; border: 3px solid #00f; border-radius: 24px; \
+             background: #fff; font: 16px/20px Inter } html { background: #eee }",
+            "<div>x</div>",
+        );
+        let p1 = raster(&pdf, 1);
+        let across: Vec<usize> = (bottom - 12..bottom)
+            .filter(|&y| (200..600).any(|x| is_blue(p1.at(x, y))))
+            .collect();
+        assert!(
+            across.is_empty(),
+            "{page_rule}: a bottom border on page 1 in rows {across:?} (Chrome: open, the box goes on)"
+        );
+        // The left side border runs straight down to the page-area bottom (no rounded corner there).
+        let side = col(&p1, if bottom == 1123 { 41 } else { 98 }, is_blue);
+        assert!(
+            side.last().is_some_and(|r| r.1 + 2 >= bottom),
+            "{page_rule}: the left border ends at {side:?}, not at the page-area bottom {bottom}"
+        );
+    }
+}
+
 // --- K4. an image is positioned against body's whole box ---------------------------------------------------
 
 #[test]

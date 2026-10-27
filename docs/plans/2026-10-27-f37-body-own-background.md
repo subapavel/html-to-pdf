@@ -141,3 +141,20 @@ Findings against section 4:
   pagination, not F37); K5 at m15 (the F184 whole-pixel drift).
 
 (Before / after numbers and the gates: filled in by the coordinator.)
+
+Gates and review (head `0d356fa`): fixtures 01-25 and `bench/corpus` byte-identical to `main`; `bench.py --check` ok;
+side-by-side `out/scratch/f37/sbs.png` (K1, K2) matches Chrome. `vrt-validator` (134 cases at margins 0 / 15 mm /
+asymmetric vs F184 and Chrome): no HIGH; new is closer to Chrome than F184 in every case but four (body border + radius
+over 3 pages 59,959 → 38,001 differing px; shadow 305,960 → 69,219; gradient 2,084,350 → 29,852); page counts equal to
+F184 in all 134; deterministic; `--tagged` valid; 50 pages with a repeating body image + shadow + radius 96 ms (F184
+128 ms), 200 pages 384 vs 505 ms, PDF size linear (32 KB / page). MEDIUM, fixed (fulgur `b6a12216`, `97ec1b78`): a body
+taller than its content (`min-height: 100vh` with a margin) got a bottom border and rounded corners at the page bottom,
+because its one slice is clamped to the page; the box is now painted at its layout height under the cut of its slices
+(test K3b), and a flat slice stays a plain rectangle (multicol documents, whose layout height exceeds the slices, keep
+their bytes). LOW: `box-decoration-break: clone` ignored (non-goal); a body shadow on many pages redraws its gradient
+patterns per page (PDF ~3x larger than F184 for a shadowed 49-page body, 1.59 vs 0.52 MB; cull to the clip band if it
+matters); inline-root body's last-page text sits 24 px lower than Chrome (pre-existing, F37d / F111). Pre-existing
+bugs seen in passing: F186 (per-side border colours), an abspos child of a margined body placed by the body margin too
+far left, body `transform` / `outline` / `background-clip: content-box` not honoured, the html canvas colour reaching
+into the top page margin when margin boxes are present.
+
