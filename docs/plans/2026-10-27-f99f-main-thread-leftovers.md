@@ -51,4 +51,35 @@ None (no output change). AGENTS.md goal 3: output byte-identical.
 
 ## 7. Evidence
 
-(A/B numbers, bench table.)
+Host: 4 vCPU Xeon @ 2.10 GHz (the dev VM), release CLI, the `bench.py` command line, one untimed warm-up of each binary, then
+interleaved pairs (A first, B first alternately). Two identical binaries differ by up to 12 ms median on `b200-items` here,
+and the per-batch spread below is the same size. Main = `ab643e7` binary (sha256 `d686c1a0...`).
+
+**(a) one walk, landed (`c3b5ed8`).** Byte identity: fixtures 01-26 and the seven `bench/corpus` documents `cmp`-identical to main's output
+(33 PDFs). Wall, main vs (a), median of the diff B-A in ms, one line per batch of interleaved pairs:
+
+| document | pairs | batch results (B-A, ms) |
+|---|--:|---|
+| `b200-items` | 15 / 21 / 41 / 41 | -33.5 / -1.5 / +4.9 / -26.0 |
+| `b200-text`, `b200-mixed` | 15 each | -60.8 / -14.3 (noise: no table, nothing else changed) |
+| `01-basic` | 15 / 40 / 40 / 41 | +1.3 / +0.4 / -0.3 / -0.3 |
+| `02-long` | 41 | -0.3 |
+
+So the wall-clock effect is below what the VM resolves (about 1 % of `b200-items`); the pooled direction is a few to some ten ms faster.
+The direct measurement is in-process (a throw-away `#[ignore]` test on `bench/corpus/b200-items.html`, 1.9 MB, median of 15,
+release): six walks of the old allocating kind (the walks `check_fonts`, `check_images` and the four rewrites used to do)
+**14.9 ms**, the one allocation-free walk now **1.63 ms**; the font scan plus image sources over the sites 0.05 ms. That is
+about **-13 ms** per render of a 200-page document, in line with the profile's estimate for this part (-15 to -40 ms), and the
+same work on a one-page invoice is a few tens of microseconds.
+
+**(b) drops on a rayon worker, not landed.** Byte-identical and tests green, but slower: the Blitz document on `rayon::spawn`
+**+64 / +80 ms** on `b200-items`, on `std::thread` +20 ms, the drawables on `rayon::spawn` -1 ms (neutral); leaking either
+(`mem::forget`) is -41 / -57 ms, so the frees cost that much but cannot be moved to another thread profitably (cross-thread
+frees against the main arena, hypothesis). The fork commit was reverted (fork tip `6d4eb20c`, tree equal to `3fa6f44`, so
+`Cargo.lock` is unchanged). Details and the next option: `docs/postmortems/2026-10-27-f99f-offthread-drop.md`.
+
+**Acceptance (§4) against this.** Byte identity: met. `b200-items` faster by (a) + (b): not demonstrable in wall clock (a: about -13 ms measured
+in-process, below the VM's noise; b: dropped). No corpus document slower: none beyond noise (batches above). `bench.py --check` on the final tree: ok (`b200-items` 1209 ms, `b200-text` 803, `b200-mixed` 778, `02-long` 40.2, scaling r = 4.34; baseline.json not rewritten, see `docs/benchmarks.md`). Unit tests: `fonts::tests::the_allocation_free_walk_reports_what_the_reference_walk_reports` (the pre-F99f walk, kept in the test module,
+against the new one on a mixed document, on every truncation of it, and on all fixtures and `b200-*` documents),
+`one_walk_serves_the_scan_the_image_sources_and_the_rewrite`, and `tests::prepare_in_one_pass_gives_the_text_of_the_separate_rewrites`
+(the four rewrites per site against the four whole-document passes); the 49 existing unit tests of the crate are unchanged and green.
