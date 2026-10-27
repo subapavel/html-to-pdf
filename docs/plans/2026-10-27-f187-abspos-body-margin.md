@@ -148,4 +148,21 @@ F187b probe (not fixed here): `top:50px; left:50px; margin-left:10px` is x 60..1
 
 Fixture 26 (`26-stamp-page-margin`) on main's binary (F186): 4.57 % (1 page, as Chrome); the stamp is 57 px too far left.
 
-(Before / after numbers of the fix, WPT and VRT results, validator summary: to be filled in by the later steps.)
+### 7.2 After the fix (fork `subapavel/fulgur` `htmltopdf/srgb-colours` 3fa6f44b)
+
+- `abspos_body.rs`: all 24 cases green (18 were red). A5 (`body{position:relative}`) and the static-position cases pass without
+  further changes; A2 / A3 / A9 land within the 1 px tolerance of Chrome's numbers.
+- Fixture 26: 4.57 % (main's binary, stamp 57 px too far left) to 4.22 %; threshold 5.3 % (worst page + 1 point).
+- Fixtures 01-25: PDFs byte-identical to main's binary (`scripts/render-fixtures.sh`, `cmp`); `compare.py` numbers and page
+  counts unchanged.
+- fulgur lib + integration tests: 2901 passed, 0 failed. fulgur-vrt: the same 35 fixtures fail in this environment before and
+  after, and all 35 `.actual.pdf` are byte-identical to the F186 state (the fix moves no VRT pixel).
+- fulgur-wpt `css-page` (pinned SHA, bundled-fonts fontconfig): the 9 declared-PASS tests that already fail in this
+  environment (`fixedpos-001..006`, `fixedpos-008` page 2 anti-aliasing, `page-name-display-none-child`,
+  `page-name-propagated-003`) fail identically before and after; no PASS to FAIL, no FAIL to PASS (no expectation edited).
+  Two messages improve: `fixedpos-008` page 2 4068 px / max channel 255 to 1810 px / max channel 64 (now the same
+  signature as `fixedpos-001..003`: F40 was part of that diff), `page-name-propagated-003` 142 to 139 px.
+- Deviation from §3: `body_direct_root_icb` takes no `doc` (it needs only the two nodes); `record_subtree_fragments_at_offset`
+  takes `body_offset_y: f32` instead of the `(x, y)` pair because x is no longer used. `abspos_flow::fragment_abspos_flows`
+  also takes its `root_y_icb` from `body_direct_root_icb`, so the Keep / Flow choice reads the frame the window pass uses.
+- Validator summary: (coordinator).
