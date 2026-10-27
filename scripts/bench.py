@@ -63,6 +63,7 @@ HARD_MS_OVERRIDE = {
     "b200-items": 3000.0,
 }
 GOAL_MS_B200 = 1000.0  # reported, not gated
+GOAL_MS_B200_TABLE = 1250.0  # b200-items: the owner accepted about 1.2 s for a 200-page table (2026-10-27); reported, not gated
 # t(4800 rows) / t(1200 rows) of variant `t`: linear is about 4, quadratic tends to 16 (F99c). Main measured 4.5-5.0, F99c's
 # branch 4.0-4.6 (median of 5-10 runs, 4 vCPU, also with two busy-loop hogs; the F99c validator saw up to 4.60). A gate
 # that close to the branch's own spread would flake on a slower or loaded CI runner, so the gate is set at 6.0: it does
@@ -650,8 +651,10 @@ def main() -> int:
     for d in docs:
         r = results[d.name]
         if d.kind == "b200" and not r["error"]:
-            lines.append(f"AGENTS.md goal (200 pages under {GOAL_MS_B200:.0f} ms): {d.name} {r['median_ms']:.0f} ms "
-                         + ("met" if r["median_ms"] <= GOAL_MS_B200 else "NOT met on this machine"))
+            goal = GOAL_MS_B200_TABLE if d.name == "b200-items" else GOAL_MS_B200
+            label = "accepted table exception" if d.name == "b200-items" else "AGENTS.md goal"
+            lines.append(f"{label} (200 pages under {goal:.0f} ms): {d.name} {r['median_ms']:.0f} ms "
+                         + ("met" if r["median_ms"] <= goal else "NOT met on this machine"))
     lines.append(f"machine: {machine}; binary: {bin_}")
     print("\n".join(lines[-(len(lines) - len(docs) - 1):]))
     (OUT / "table.txt").write_text("\n".join(lines) + "\n")
