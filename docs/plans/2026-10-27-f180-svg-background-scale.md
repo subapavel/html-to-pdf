@@ -92,4 +92,29 @@ integration test is the fixture, with the Chrome numbers in §7 (precedent F152,
 
 ## 7. Evidence
 
-(Step 0 Chrome numbers and the gate results go here.)
+### Step 0 — Chrome reference (2026-10-27)
+
+Playwright Chromium, `emulateMedia print`, `preferCSSPageSize`, `printBackground: true`, `@page { size: A4; margin: 0 }`,
+page 1 rasterised with `pdftoppm -r 96`; ink = red (`r > 200, g < 80, b < 80`) / blue pixels inside the block, as
+`[x0, x1) x [y0, y1)` relative to the block's corner (the block sits at (30, 20) px). Same measurement code as the test
+(`ink`), same HTML; the Chrome script and its assets were `out/scratch/f180/` (not committed).
+
+| Case | Chrome red | Chrome blue | Plan §4 |
+|---|---|---|---|
+| 1 `auto no-repeat`, 300 x 60 | [10,50) x [10,50) | [200,240) x [10,50) | same |
+| 1 `<img style="display:block">` | [10,50) x [10,50) | [200,240) x [10,50) | same |
+| 2 `repeat`, 700 x 60 | [10,49) [311,350) [611,650), y [9,48) | [200,240) [501,540), y [9,49) | same within 1 px |
+| 3 `100% 0`, 400 x 60 | [110,150) x [10,50) | [300,340) x [10,50) | same |
+| 3 `20px 5px` | [30,70) x [15,55) | [220,260) x [15,55) | same |
+| 4 `150px 30px` and `150px auto` | [5,25) x [5,25) | [100,120) x [5,25) | same |
+| 5 `contain`, 600 x 60 | [10,50) x [10,50) | [200,240) x [10,50) | same |
+| 5 `cover` | [20,100) x [20,60) | [400,480) x [20,60) | same |
+| 6 `list-style-image` 12 x 12 SVG | marker [41,53) x [3,15) (12 x 12) | | same size |
+| 7 `red16.png no-repeat` | [0,16) x [0,16) | | same |
+| 7 `red16.png no-repeat 100% 0`, 100 x 40 | [83,100) x [0,16) | | 84–100 within 1 px |
+
+In case 2 Chrome's repeated tiles land up to 1 px off the ideal grid (red starts 10 / 311 / 611, ends 49 / 350 / 650, y
+9–48: the tile is rasterised separately), the 300 px pitch is intact. Every number is within the plan's 1 px tolerance,
+so the tests assert the plan's values.
+
+(Gate results go here.)
