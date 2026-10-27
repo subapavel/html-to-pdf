@@ -174,6 +174,11 @@ THRESHOLDS = {
     #     8.3 %: the text drift every fixture has. Main's binary places the table whole in column 1 and loses most of its rows.
     #     Worst page + 1 point.
     "25-terms-table-columns": 0.093,
+    # 26: new in F187 (a Czech invoice written for a browser: `@page { margin: 0 }`, `body { margin: 15mm }`, and a body-direct
+    #     `position:absolute; top:20mm; right:20mm` "Zaplaceno" stamp whose containing block is the page; one page like
+    #     Chrome's). On main's binary the stamp is 57 px too far left (the body's x offset was subtracted): 4.57 %; with
+    #     the F187 fix it is where Chrome puts it: 4.22 % (the text drift every fixture has). Worst page + 1 point.
+    "26-stamp-page-margin": 0.053,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
