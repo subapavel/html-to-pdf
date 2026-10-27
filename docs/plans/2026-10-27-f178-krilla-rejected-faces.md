@@ -156,3 +156,17 @@ lookups, `head`) on bytes already in memory, mean of repeated passes:
 Both are far under the targets (1 ms and 5 ms): the check reads table directories, `head`, `hhea`, `OS/2`, `name` and
 the outline table headers, never glyph data. The real `check_font` is measured again in step 2 and the number added
 here.
+
+**Check cost, as implemented** (`fulgur::font_check::check_font`, release build, scratch test in `htmltopdf`, deleted
+afterwards; bytes in memory, mean of repeated passes): 5 Inter + JetBrains Mono, 6 faces: 0.054 ms first pass, 0.009 ms
+warm. Host `wqy-zenhei.ttc` (16.8 MB, 3 faces): 0.015 ms first, 0.005 ms warm. `Renderer::builder()` with 5 Inter faces
+and `build()` takes 1.5 ms in total, so the check is below 5 % of it. Both targets of §4.8 are met by two orders of
+magnitude.
+
+**Deviations from the plan while implementing** (steps 1-5):
+
+- `check_font` takes `&Arc<Vec<u8>>`, not `&[u8]`: Krilla's `Font::new` wants shared bytes and a 17 MB collection must
+  not be copied to check it.
+- `font_bytes #N`: N counts every font the caller added (`font_file` and `font_bytes`), from 1.
+- Test 6 (SVG text) was red because the text was missing, not because a Type 3 font was embedded (see above).
+- The smoke test shares the logger of the existing `svg_images` module in `render_smoke.rs` (one logger per process).
