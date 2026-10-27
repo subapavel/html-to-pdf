@@ -134,6 +134,9 @@ Findings against section 4:
   (`box-decoration-break: slice`, css-break-3 section 5.4).
 - With a body background and a canvas colour from html the canvas fill is not changed by the body box (K1: grey outside
   white, K2: grey outside the frame), as in F184.
+- K7's lines are separated by `<br>`, none after the last: Chrome (measured above with a trailing `<br>`) ends body at
+  the last line (680), fulgur lays a trailing `<br>` out as one more empty line box and ends body 20 px lower (700). That
+  is Blitz's line layout, not the slices (the old code painted to the page bottom either way): filed as F37d.
 - Not in the tests: K2 / K3 / K7 at m15 beyond what is listed (page counts 4 / 3 / 5 differ in how the area fills, which is
   pagination, not F37); K5 at m15 (the F184 whole-pixel drift).
 

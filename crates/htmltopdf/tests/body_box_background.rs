@@ -408,7 +408,12 @@ fn k6_a_bordered_canvas_source_body_closes_its_border_at_the_content_end() {
 
 #[test]
 fn k7_an_inline_root_body_ends_at_its_last_line() {
-    let lines: String = (0..200).map(|i| format!("Line{i:03}<br>")).collect();
+    // Lines are separated by `<br>`, none follows the last: fulgur lays out a trailing `<br>` as one more, empty line box
+    // (Blitz) and Chrome does not, which would end body 20 px below its last line here (F37d).
+    let lines = (0..200)
+        .map(|i| format!("Line{i:03}"))
+        .collect::<Vec<_>>()
+        .join("<br>");
     let pdf = render(
         PAGE_A4,
         "html { background: #eee } body { margin: 40px; background: #fff; font: 16px/20px Inter }",
