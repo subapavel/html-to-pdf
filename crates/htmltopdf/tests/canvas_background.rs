@@ -415,6 +415,26 @@ fn f_html_colour_reaches_the_page_edge() {
     }
 }
 
+// --- F2. the root's opacity does not apply to the canvas ------------------------------------------
+
+#[test]
+fn f2_root_opacity_does_not_fade_the_canvas() {
+    // Chrome paints the canvas at full colour under `html { opacity: .5 }` (F184 vrt-validator): the canvas is not
+    // part of the root's stacking context. Pixel (400, 600) is (0, 102, 204) in Chrome.
+    for style in [
+        "html { opacity: .5; background: #06c } body { margin: 0 }",
+        "html { opacity: .5 } body { margin: 0; background: #06c }",
+    ] {
+        let pdf = render_page(PAGE_A4, style, "<div style=\"height:300px\"></div>");
+        let page = raster(&pdf, 1);
+        assert!(
+            is_colour(page.at(400, 600), [0, 102, 204], 3),
+            "{style}: (400, 600) is {:?}",
+            page.at(400, 600)
+        );
+    }
+}
+
 // --- G. a gradient is sized to the root box and repeats down the canvas -------------------------
 
 #[test]

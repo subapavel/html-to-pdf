@@ -129,10 +129,23 @@ Findings against section 4:
 - Origin on page 1 is the root box origin: (0, 0) at margin 0, (57, 57) at 15 mm.
 - The page-2 tile phase equals the nominal `k * H mod pitch` at margin 0 (2.56 px). On page 3 and with 15 mm margins
   Chrome's phase is off the nominal by 1.3 to 1.7 px (shifts 6.72 vs 5.12; 10.56 vs 9.17; 19.8 vs 18.3), while the
-  centred image of D at 15 mm is at the nominal y (307 vs 307.5). That is Chrome's own jitter between pages, not
-  something the spec asks for. Case C asserts pages 2 and 3 within 1 and 2 px of the nominal values and does not copy
-  the jitter.
+  centred image of D at 15 mm is at the nominal y (307 vs 307.5). The vrt-validator showed it is systematic, not
+  jitter: Chrome advances a repeating canvas background by the page-area height rounded up to whole px (1122.56 → 1123,
+  1009.28 → ~1010, A5 718.4 → 719), so the drift from the nominal grows linearly (A4 15 mm: +10.5 px by page 12). Ours
+  is spec-nominal; case C asserts pages 2 and 3 within 1 and 2 px of the nominal values and does not copy the rounding.
 - Section 4's expected values hold (A: 0..80 x 0..40; D: 357..437 x 137..177) within 1 px.
 - Case H is green before the fix; the part "html fills the page under the body" is a separate red test (H2).
 
 (Gates, before / after numbers: filled in by the coordinator after the render and bench gates.)
+
+Gates and review (head `506a640`): fixtures 01-25 and `bench/corpus` byte-identical to `main`; `bench.py --check` ok;
+side-by-side `out/scratch/f184/sbs.png` (07b, 07d) matches Chrome. `vrt-validator` (73 cases vs Chrome, `pdftoppm` 96
+dpi): no HIGH; the Chrome diff improved or stayed equal in 71 of 73 (body gradient 70% → 0.6%, body image 79% → 8%,
+html-only gradient 61% → 0%); page areas exact on A4 / A5 / landscape / letter / odd sizes; margin boxes stay visible;
+`--tagged` valid, deterministic; a 45-page body image 100 ms (main 125 ms). MEDIUM 1, fixed (fulgur `0e4b1cc0`): the
+canvas was drawn under the root's `opacity` (Chrome paints it at full colour) — test F2. MEDIUM 2 (F184c): a gradient
+canvas in a document with `break-inside: avoid` gaps restarts with a hard seam on the last page (page 3 diff 30% →
+56%, pages 1-2 28% → 0.04%). LOW: the systematic phase drift above; `@page :first` with other margins puts the phase
+off from page 3 (F109); root `background-origin: content-box` is honoured (spec), Chrome ignores it; F37 (body's own
+box stretched to the page bottom) is now conspicuous in the grey-page / white-card pattern.
+
