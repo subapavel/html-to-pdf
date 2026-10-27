@@ -92,9 +92,14 @@ impl Page {
 
 /// Page 1 at 96 dpi.
 fn raster(pdf: &[u8]) -> Page {
+    raster_page(pdf, 1)
+}
+
+/// Page `n` (1-based) at 96 dpi.
+fn raster_page(pdf: &[u8], n: usize) -> Page {
     let path = temp(pdf);
     let out = Command::new("pdftoppm")
-        .args(["-r", "96", "-f", "1", "-l", "1"])
+        .args(["-r", "96", "-f", &n.to_string(), "-l", &n.to_string()])
         .arg(&path)
         .output()
         .expect("pdftoppm (poppler-utils) is required for this test");
@@ -570,6 +575,53 @@ fn v3_inline_block_taller_than_a_baseline_image_keeps_the_old_line() {
     );
     rows(&s.red(), 80, 100, "image");
     rows(&s.blue(), 100, 120, "block (F183b: Chrome 104)");
+}
+
+// --- W. a row that does not fit moves whole (plan section 7.4) -------------------------------------------------
+
+/// The first page of `pdf` has no ink (grey filler excluded) and page 2 holds the whole bordered cell.
+fn row_on_page_2(extra_css: &str, cell: &str, filler: usize) -> (Page, Page) {
+    let pdf = render_with(
+        false,
+        &format!("td {{ padding: 8px; border: 1px solid #000 }} {extra_css}"),
+        &format!(
+            "<div style=\"height: {filler}px; background: #ccc\"></div>\
+             <table style=\"border-collapse: collapse\"><tr><td>{cell}</td></tr></table>"
+        ),
+    );
+    (raster_page(&pdf, 1), raster_page(&pdf, 2))
+}
+
+#[test]
+fn w1_collapsed_cell_with_an_image_moves_to_page_2_whole() {
+    // A 1 px collapsed border puts the first line 1 px below `border + padding` of the cell (half borders). The
+    // fragmenter read that as a margin gap in front of the first child (a class C break point), entered the cell at the
+    // bottom of page 1 and left a 10 px stub there; the image went to page 2 as a box of its own, 60 px tall, in a cell
+    // fragment of 60 px, while its line is 64 px tall (strut). The paragraph painter drops a line that is taller than
+    // its fragment, so the image, and the text beside it, were gone. Chrome: nothing on page 1; page 2 has the
+    // image at rows 8..69 and the cell border at rows 0..82.
+    let (p1, p2) = row_on_page_2("", &img60(), 1080);
+    rows(&bbox(&p2, is_red), 8, 69, "image on page 2");
+    rows(&bbox(&p2, is_black), 0, 82, "cell on page 2");
+    let ink1 = bbox(&p1, is_black);
+    assert!(ink1.is_none(), "page 1 keeps a stub of the cell: {ink1:?}");
+    assert!(bbox(&p1, is_red).is_none(), "page 1 has the image");
+}
+
+#[test]
+fn w2_collapsed_cell_with_text_beside_the_image_keeps_both() {
+    let (p1, p2) = row_on_page_2("", &format!("Řádek {} text", img60()), 1080);
+    rows(&bbox(&p2, is_red), 8, 69, "image on page 2");
+    rows(&bbox(&p2, is_black), 0, 82, "cell on page 2");
+    assert!(bbox(&p1, is_black).is_none(), "page 1 keeps a stub");
+}
+
+#[test]
+fn w3_100px_image_in_a_collapsed_cell() {
+    let (p1, p2) = row_on_page_2("", &img(100, 100, ""), 1080);
+    rows(&bbox(&p2, is_red), 8, 109, "image on page 2");
+    rows(&bbox(&p2, is_black), 0, 122, "cell on page 2");
+    assert!(bbox(&p1, is_black).is_none(), "page 1 keeps a stub");
 }
 
 // --- Fixture 27: a hand-written invoice with inline images --------------------------------------------------
