@@ -117,3 +117,17 @@ case 4 collapse is already green (the collapsed-border painter carries its own p
   3pt solid #e94560`, `layout/review_card_inline_block` `border-left: 4pt solid #e94560`, `gcpm/running-element` and
   `gcpm/element-policy-{first,first-except,last,start}` `border-bottom: 1pt solid #999`); their goldens still hold the black
   borders and need re-blessing in a clean environment.
+
+Review (head `d1b1183`): fixtures 23 of 25 byte-identical, 21 (3.7 → 3.2 %) and 24 (p2 6.7 → 6.6 %) changed by their
+`border-bottom: 1px solid #d1d5db` rules turning grey; `bench/corpus` identical; `bench.py --check` ok; side-by-side
+`out/scratch/f186/sbs.png` matches Chrome. `vrt-validator` (100 cases vs Chrome and main): no HIGH; 80 moved toward
+Chrome; realistic invoice CSS now matches (separate-table row rules 1600 → 0 px, accent bar 240 → 0, accent with radius
+258 → 0, card `border-bottom-color` 302 → 1); Tailwind `border-b` / `border-t-4` / `divide-y` unchanged and equal to
+Chrome; no crashes or seams on degenerate geometry; deterministic; `qpdf --check` clean incl. `--tagged`. MEDIUM, fixed
+(fulgur `bca0f5dd`, test `b3d`): two sides of the same translucent colour next to a side of another colour overlapped in
+the corner square and darkened it; translucent joins are now mitred. LOW: mixed colours with a radius and a non-solid
+side draw square corners (F186b); `inset` / `outset` / `groove` / `ridge` shading with mixed colours (non-goal); PDF size
+with mixed colours on 8000 cells 161 → 341 KB (437 KB → 1.04 MB with a radius), per-side row borders +2 KB on 2000
+rows, render time flat (+25 % with radius); pre-existing: a box split across pages repeats its whole frame (F96), now
+visibly with the right colours.
+

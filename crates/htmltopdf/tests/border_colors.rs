@@ -329,6 +329,29 @@ fn b3c_mixed_colours_with_a_radius_keep_each_side_in_its_colour() {
 
 // --- B4. table rows ----------------------------------------------------------------------------------------
 
+#[test]
+fn b3d_a_translucent_corner_is_painted_once() {
+    // F186 vrt-validator: two sides of the same translucent colour next to a side of another colour overlapped in the
+    // corner square and darkened it. Box at (0, 0), 20 px borders: the top-left corner square is (0..20, 0..20).
+    for radius in ["", "border-radius: 20px;"] {
+        let pdf = render(
+            &format!(
+                "div {{ width: 100px; height: 60px; border: 20px solid rgba(255, 0, 0, .5); \
+                 border-bottom-color: rgba(0, 0, 255, .5); {radius} }}"
+            ),
+            "<div></div>",
+        );
+        let page = raster(&pdf);
+        let side = page.at(70, 10);
+        // Inside the corner square, on the top side's half of the diagonal (and inside the ring with a radius).
+        let corner = page.at(14, 8);
+        assert!(
+            is_colour(corner, side, 6),
+            "{radius:?}: the corner is {corner:?}, the top side {side:?} (a darker corner is painted twice)"
+        );
+    }
+}
+
 fn table_separators(border_collapse: &str) {
     let pdf = render(
         &format!(
