@@ -109,3 +109,50 @@ from `pdftotext` as in `svg_text_fonts.rs`; the logger is captured in one test p
   `bench.py` shows a cost.
 - Non-goals: leaving out only the bad face of a collection (F178b); deeper sanitising (broken `loca` / `cmap`, all-empty
   outlines; F178c, OTS-like); WOFF1 / WOFF2 decode errors as warnings; synthetic bold; `@font-face` in documents.
+
+## 7. Evidence (step 0, 2026-10-27)
+
+Scratch files in `out/scratch/f178/` (`mk.py` makes the bad fonts, `chrome.mjs` the Chrome run, `t.html` the document).
+
+**Bad fonts.** `bold-head.ttf` = `Inter-Bold.ttf` with `head` renamed `hexd`, `bold-glyf.ttf` with `glyf` renamed `glyx`
+(directory re-sorted), `junk.bin` = `junk`. `target/release/htmltopdf` before the change, `<p>Normální</p><p
+class="font-bold">TUČNÝ ŘÁDEK</p>`, `--font Inter-Regular --font <bad> --strict-fonts`:
+
+| Font | Exit | `pdffonts` | `pdftotext` |
+|---|---|---|---|
+| `head` renamed | 0, no warning | Inter-Regular only | `Normální`; the bold line is missing |
+| `glyf` renamed | 0, no warning | Inter-Regular + `Inter-Bold` **Type 3** (`emb yes sub no`) | both lines found |
+| `junk` first, then Inter | 0, only `unknown font magic bytes; passing through` | Inter-Regular | n/a |
+
+`pdftoppm -r 96` of the `glyf` case shows `Normální` and an empty page below it: the Type 3 glyph procedures paint
+nothing, the text layer still says `TUČNÝ ŘÁDEK` (confirmed, §1). SVG text (test 6) with the `glyf`-renamed Bold is
+worse than the plan assumed: `<text font-family="Inter" font-weight="bold">TUČNĚ</text>` is not in the PDF at all (not
+an invisible Type 3), so the red test reads "the SVG text is not drawn".
+
+**Chrome** (Playwright Chromium, `@font-face` `data:` URLs: family `T` with Inter-Regular at 400 and the bad Bold at
+700; `p { font-weight: 700 }`):
+
+- both bad files are refused by OTS: `head`: "OTS parsing error: head: missing required table"; `glyf`: "OTS parsing
+  error: no supported glyph data table(s) present". `document.fonts` reports `700: error`. A good Bold: `700: loaded`.
+- The text is drawn, not dropped (`pdftotext` finds `TUČNÝ ŘÁDEK`), which is the css-fonts-4 §4.3 behaviour the plan
+  assumes. But the fallback is **not** the family's remaining face: with `font: 20px T, serif` the bold line used the
+  next family of the list (LiberationSerif-Bold; width 148.3 px vs 143.2 px for Inter-Regular and 146.4 px for a good
+  Inter-Bold), because Blink keeps a failed `@font-face` in the family as the weight-700 match. Chrome's PDF therefore
+  has no Inter-Bold either way and never has an invisible or missing line. We have no `@font-face`, the bundle is the
+  family, so the plan's reading stands: leaving the face out makes §5.2 pick Inter-Regular for `font-weight: 700`
+  (no synthetic bold, ADR-0002). Chrome with a family that has only the faux-bold route would draw synthetic bold; we do not.
+- Both files are rejected whole; a collection is not tried in Chrome here (the `data:` URL path takes one font), the
+  whole-file rule for collections stays as planned (OTS rejects a collection with a bad member).
+
+**Check cost.** Probe (scratch example in the fulgur fork, release build, deleted afterwards) running what the check
+does per face (`skrifa::FontRef::from_index`, `krilla::text::Font::new`, `outline_glyphs().format()`, four table
+lookups, `head`) on bytes already in memory, mean of repeated passes:
+
+| Input | Faces | First pass | Warm pass |
+|---|---|---|---|
+| 5 Inter TTFs + JetBrains Mono | 6 | 0.050 ms | 0.012 ms |
+| host `wqy-zenhei.ttc` (16.8 MB, scratch only) | 3 | 0.038 ms | 0.006 ms |
+
+Both are far under the targets (1 ms and 5 ms): the check reads table directories, `head`, `hhea`, `OS/2`, `name` and
+the outline table headers, never glyph data. The real `check_font` is measured again in step 2 and the number added
+here.
