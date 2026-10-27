@@ -18,6 +18,8 @@ use htmltopdf::{RenderOptions, Renderer};
 const SHAPE: &[u8] = include_bytes!("data/shape.svg");
 const MARKER: &[u8] = include_bytes!("data/marker.svg");
 const RED_PNG: &[u8] = include_bytes!("data/red16.png");
+const DOT8_PNG: &[u8] = include_bytes!("data/dot8.png");
+const PX1_PNG: &[u8] = include_bytes!("data/px1.png");
 
 /// Where the block under test starts on the page, in CSS px.
 const OX: usize = 30;
@@ -38,6 +40,8 @@ fn render(body: &str) -> Vec<u8> {
         .image("shape.svg", SHAPE.to_vec())
         .image("marker.svg", MARKER.to_vec())
         .image("red16.png", RED_PNG.to_vec())
+        .image("dot8.png", DOT8_PNG.to_vec())
+        .image("px1.png", PX1_PNG.to_vec())
         .strict_images(true)
         .build()
         .render(
@@ -316,4 +320,72 @@ fn raster_background_keeps_its_natural_size() {
     assert_ink("top left", &red(&page, 100, 40), &[(0, 16, 0, 16)]);
     let page = raster(&render(&block(100, 40, "url(red16.png) no-repeat 100% 0")));
     assert_ink("top right", &red(&page, 100, 40), &[(84, 100, 0, 16)]);
+}
+
+// --- 8. a small tile repeated over a large area (regression of the F180 fix) ----------------------------
+
+/// Count of red pixels in `[x0, x1) x [y0, y1)`.
+fn red_count(page: &Page, x0: usize, x1: usize, y0: usize, y1: usize) -> usize {
+    let mut n = 0;
+    for y in y0..y1.min(page.h) {
+        for x in x0..x1.min(page.w) {
+            let i = (y * page.w + x) * 3;
+            if is_red([page.rgb[i], page.rgb[i + 1], page.rgb[i + 2]]) {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+#[test]
+fn small_raster_tile_on_body_covers_the_whole_page() {
+    // dot8.png is 8 x 8 px, white with a red 2 x 2 dot in its top-left corner. At its natural size an A4 page
+    // (794 x 1123 px) takes 99 x 141 tiles: more than the 10 000 the per-tile path draws, which once left the page
+    // below row ~800 empty. Every 8 x 8 cell of the page carries its dot.
+    let pdf = render(
+        "<style>body { background: url(dot8.png) }</style><div style=\"height:1500px\"></div>",
+    );
+    let page = raster(&pdf);
+    assert_eq!((page.w, page.h), (794, 1123));
+    let (mut cells, mut empty) = (0, Vec::new());
+    for cy in 0..page.h / 8 {
+        for cx in 0..page.w / 8 {
+            cells += 1;
+            if red_count(&page, cx * 8, cx * 8 + 8, cy * 8, cy * 8 + 8) == 0 {
+                empty.push((cx, cy));
+            }
+        }
+    }
+    assert!(
+        empty.is_empty(),
+        "{} of {cells} cells have no dot, first {:?}",
+        empty.len(),
+        &empty[..empty.len().min(5)]
+    );
+}
+
+#[test]
+fn one_pixel_tile_fills_the_box() {
+    // px1.png is one red pixel: 700 x 1000 = 700 000 tiles.
+    let page = raster(&render(&block(700, 1000, "url(px1.png)")));
+    let red = red_count(&page, OX, OX + 700, OY, OY + 1000);
+    assert!(
+        red >= 700 * 1000 * 99 / 100,
+        "{red} of {} px are red",
+        700 * 1000
+    );
+    // and nothing leaks outside the box
+    assert_eq!(red_count(&page, 0, page.w, 0, OY), 0, "above the box");
+    assert_eq!(red_count(&page, 0, OX, 0, page.h), 0, "left of the box");
+    assert_eq!(
+        red_count(&page, OX + 700, page.w, 0, page.h),
+        0,
+        "right of the box"
+    );
+    assert_eq!(
+        red_count(&page, 0, page.w, OY + 1000, page.h),
+        0,
+        "below the box"
+    );
 }
