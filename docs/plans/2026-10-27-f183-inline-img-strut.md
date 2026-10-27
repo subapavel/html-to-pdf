@@ -1,6 +1,6 @@
 # F183 — an inline `<img>` sits on the floor of its line box (no strut below the baseline)
 
-Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **active** — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
+Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **done** (Parley fork `f551ab4`, Blitz fork `e5b7feb8`) — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
 v0.6.0 release commit `3fe5c239`. Low impact on the product today:
 Tailwind's preflight makes every `img` / `svg` `display: block`, so no Tailwind invoice (fixtures 01-26, `bench/corpus`)
 has an inline baseline image; hand-written HTML with an inline logo or QR code does.
