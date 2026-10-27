@@ -111,6 +111,8 @@ pub enum Origin {
     StyleElement,
     /// A `style=""` attribute in the document.
     StyleAttribute,
+    /// A `font-family` list on SVG `<text>` (inline `<svg>`, or an SVG used as an image).
+    Svg,
 }
 
 impl std::fmt::Display for Origin {
@@ -119,6 +121,7 @@ impl std::fmt::Display for Origin {
             Origin::Stylesheet => "bundled stylesheet",
             Origin::StyleElement => "<style> element",
             Origin::StyleAttribute => "style attribute",
+            Origin::Svg => "SVG text",
         })
     }
 }
@@ -560,9 +563,14 @@ fn parse_font_shorthand(
 /// Scans the CSS inside an HTML document: `<style>` elements and `style=""` attributes, in document
 /// order. This is a deliberately small tag scanner, not an HTML parser; it understands comments,
 /// quoted/unquoted attribute values and raw-text elements, which is what the scan needs.
+///
+/// CSS inside an inline `<svg>` (its `<style>` elements and the `style=""` of the `<svg>` and its descendants) is
+/// not scanned: the SVG's text is shaped by usvg with the bundled fonts, and fulgur reports a family list there that
+/// matches nothing itself (`Origin::Svg`, F152), with the CSS generics usvg knows and the map for the rest.
 pub(crate) fn scan_html(html: &str) -> Scan {
     let mut scan = Scan::default();
-    walk_html(html, |site| match site {
+    walk_html(html, |site, in_svg| match site {
+        HtmlSite::Attribute(_) | HtmlSite::Element(_) if in_svg => {}
         HtmlSite::Attribute(range) => {
             let attr = scan_css(
                 &decode_entities(&html[range.clone()]),
@@ -586,7 +594,7 @@ pub(crate) fn scan_html(html: &str) -> Scan {
 /// Byte ranges of the contents of every `<style>` element, in document order.
 pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
     let mut ranges = Vec::new();
-    walk_html(html, |site| {
+    walk_html(html, |site, _| {
         if let HtmlSite::Element(range) = site {
             ranges.push(range);
         }
@@ -599,7 +607,7 @@ pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
 /// `<textarea>`, `<title>`), is not an image of the document and is not reported.
 pub(crate) fn img_srcs(html: &str) -> Vec<String> {
     let mut srcs = Vec::new();
-    walk_html(html, |site| {
+    walk_html(html, |site, _| {
         if let HtmlSite::ImgSrc(range) = site {
             srcs.push(decode_entities(&html[range]));
         }
@@ -618,10 +626,13 @@ enum HtmlSite {
     ImgSrc(std::ops::Range<usize>),
 }
 
-/// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order.
-fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
+/// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order, each site
+/// with whether it is inside an inline `<svg>` (the `<svg>` element's own attributes included).
+fn walk_html(html: &str, mut found: impl FnMut(HtmlSite, bool)) {
     let bytes = html.as_bytes();
     let mut i = 0;
+    // Open `<svg>` elements.
+    let mut svg = 0usize;
     // Open `<template>` and `<noscript>` elements: their content is inert (it is never rendered, here
     // there is no scripting), so images in it are not images of the document. CSS in them is still
     // reported, like CSS anywhere else, because the engine's style handling does not know about them.
@@ -639,6 +650,9 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
             if is_end_tag(rest, "template") || is_end_tag(rest, "noscript") {
                 inert = inert.saturating_sub(1);
             }
+            if is_end_tag(rest, "svg") {
+                svg = svg.saturating_sub(1);
+            }
             i += rest.find('>').map_or(rest.len(), |e| e + 1);
             continue;
         }
@@ -651,6 +665,10 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
         if matches!(tag.as_str(), "template" | "noscript") {
             inert += 1;
         }
+        if tag == "svg" {
+            svg += 1;
+        }
+        let mut self_closing = false;
         loop {
             while j < bytes.len() && (bytes[j].is_ascii_whitespace() || bytes[j] == b'/') {
                 j += 1;
@@ -659,6 +677,7 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
                 break;
             }
             if bytes[j] == b'>' {
+                self_closing = bytes[j - 1] == b'/';
                 j += 1;
                 break;
             }
@@ -697,16 +716,19 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite)) {
                 }
             }
             if name == "style" {
-                found(HtmlSite::Attribute(value));
+                found(HtmlSite::Attribute(value), svg > 0);
             } else if name == "src" && tag == "img" && inert == 0 {
-                found(HtmlSite::ImgSrc(value));
+                found(HtmlSite::ImgSrc(value), svg > 0);
             }
+        }
+        if tag == "svg" && self_closing {
+            svg -= 1;
         }
         i = j;
         if matches!(tag.as_str(), "style" | "script" | "textarea" | "title") {
             let end = find_end_tag(&html[i..], &tag);
             if tag == "style" {
-                found(HtmlSite::Element(i..i + end));
+                found(HtmlSite::Element(i..i + end), svg > 0);
             }
             i += end;
         }
@@ -769,9 +791,11 @@ pub(crate) fn map_generics<'a>(css: &'a str, map: &GenericMap) -> Cow<'a, str> {
 }
 
 /// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes (see
-/// [`rewrite_css_in_html`] for which attributes).
+/// [`rewrite_css_in_html`] for which attributes), except inside an inline `<svg>`: usvg does not read the CSS escapes
+/// [`css_ident`] writes (`JetBrains\000020Mono` is the family `JetBrains`), and fulgur's SVG font resolver maps the
+/// generics itself (F152).
 pub(crate) fn map_generics_in_html<'a>(html: &'a str, map: &GenericMap) -> Cow<'a, str> {
-    rewrite_css_in_html(html, |css| map_generics(css, map))
+    rewrite_sites(html, true, false, |css| map_generics(css, map))
 }
 
 /// `html` with `rewrite` applied to the contents of every `<style>` element and every `style=""` value.
@@ -781,7 +805,7 @@ pub(crate) fn rewrite_css_in_html<'a>(
     html: &'a str,
     rewrite: impl Fn(&str) -> Cow<'_, str>,
 ) -> Cow<'a, str> {
-    rewrite_sites(html, true, rewrite)
+    rewrite_sites(html, true, true, rewrite)
 }
 
 /// `html` with `rewrite` applied to the contents of every `<style>` element only.
@@ -789,17 +813,22 @@ pub(crate) fn rewrite_style_elements<'a>(
     html: &'a str,
     rewrite: impl Fn(&str) -> Cow<'_, str>,
 ) -> Cow<'a, str> {
-    rewrite_sites(html, false, rewrite)
+    rewrite_sites(html, false, true, rewrite)
 }
 
+/// `svg`: whether CSS inside an inline `<svg>` is rewritten too.
 fn rewrite_sites<'a>(
     html: &'a str,
     attributes: bool,
+    svg: bool,
     rewrite: impl Fn(&str) -> Cow<'_, str>,
 ) -> Cow<'a, str> {
     let mut out = String::new();
     let mut last = 0;
-    walk_html(html, |site| {
+    walk_html(html, |site, in_svg| {
+        if in_svg && !svg {
+            return;
+        }
         let range = match site {
             HtmlSite::Element(r) => r,
             HtmlSite::Attribute(r) if attributes && !html[r.clone()].contains('&') => r,
@@ -1095,6 +1124,39 @@ mod tests {
             let html = format!(r#"<p style="font-family:{g};content:&#39;x&#39;">x</p>"#);
             assert_eq!(check(&html).len(), 1, "{g}");
         }
+    }
+
+    #[test]
+    fn css_inside_an_inline_svg_is_neither_rewritten_nor_scanned() {
+        // usvg reads `JetBrains\000020Mono` as the family `JetBrains`; fulgur's SVG resolver maps the generics and
+        // reports an unmatched SVG list itself (F152).
+        let html = r#"<p style="font-family:monospace">a</p><svg style="font-family:monospace"><style>text{font-family:ui-monospace}</style><text style="font-family:Georgia">b</text><svg/><text style="font-family:monospace">c</text></svg><p style="font-family:monospace">d</p><svg/><p style="font-family:monospace">e</p>"#;
+        let mapped = map_generics_in_html(html, &map()).into_owned();
+        assert_eq!(
+            mapped.matches("JetBrains\\000020Mono").count(),
+            3,
+            "{mapped}"
+        );
+        assert_eq!(
+            mapped.matches("font-family:monospace").count(),
+            2,
+            "{mapped}"
+        );
+        assert!(
+            mapped.contains("text{font-family:ui-monospace}"),
+            "{mapped}"
+        );
+        let bad = check_font_families(
+            &Scan::default(),
+            &scan_html(html),
+            &registered(&["Inter", BUILTIN_MONO_FAMILY]),
+            &map(),
+        );
+        assert!(bad.is_empty(), "{bad:?}");
+        // CSS outside the SVG is still scanned.
+        let outside = scan_html(r#"<svg></svg><p style="font-family:Georgia">x</p>"#);
+        let bad = check_font_families(&Scan::default(), &outside, &registered(&["Inter"]), &map());
+        assert_eq!(bad.len(), 1, "{bad:?}");
     }
 
     #[test]

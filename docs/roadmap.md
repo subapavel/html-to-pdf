@@ -10,4 +10,6 @@
 | **M5 — product** | Java (Panama) + Node bindings, HTTP service template+JSON→PDF, PDF/A-3 with ISDOC attachment, QR Platba helper | first real invoice sent to a real customer |
 | **M6 — autonomy** | Cloud routines: nightly triage, one-fix-per-night, read-only review | a week of nightly PRs with no human babysitting |
 
+*Owner decision 2026-10-26: PDF/A-3 and e-invoicing (ISDOC / ZUGFeRD attachments) are not needed for now; do not plan them until the owner asks.*
+
 Thresholds are set per fixture in `scripts/compare.py` once M1 lands and we see real numbers.
