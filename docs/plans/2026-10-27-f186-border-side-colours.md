@@ -69,4 +69,30 @@ uniform in colour) — if any fixture changes, its pixel diff must move toward C
 
 ## 7. Evidence
 
-(Step 0 Chrome table, gates.)
+### Step 0: Chrome reference (2026-10-27)
+
+Chromium via Playwright (`printBackground`, `preferCSSPageSize`, `@page { size: A4; margin: 0 }`, body margin 0), the
+PDF rasterised with `pdftoppm -r 96` (794 x 1123, 1 px = 1 CSS px), the same way as the tests. Script and raw output:
+`out/scratch/f186/chrome.mjs` (not committed). Palette: T `#c00` = (204, 0, 0), R `#0a0` = (0, 170, 0),
+B `#00c` = (0, 0, 204), L `#fa0` = (255, 170, 0).
+
+| Case | HTML | Chrome |
+|---|---|---|
+| 1 | `div { margin: 40px 40px 0; height: 100px; border-bottom: 4px solid #c00 }` | rows y 140..143 are (204, 0, 0) at every x; rows 139 and 144 white. No black. |
+| 2 | `div { margin: 40px; width: 200px; height: 100px; border: 8px solid; border-color: #c00 #0a0 #00c #fa0 }` | box x 40..256, y 40..156; (148, 44) = (204, 0, 0), (252, 98) = (0, 170, 0), (148, 152) = (0, 0, 204), (44, 98) = (255, 170, 0); inside white. |
+| 3 | same with `width: 88px; height: 48px; border-width: 16px` | box x 40..160, y 40..120. In every 16 x 16 corner square, with u / v the distance in px from the outer corner along the horizontal / vertical side: v < u is the horizontal side's colour, v > u the vertical side's, v == u one anti-aliased pixel (a mitre from the outer to the inner corner). E.g. top-left row y=45 is `LLLLL.TTTTTTTTTT`. |
+| 3b | `border-width: 10px 4px 16px 8px`, `width: 88px; height: 48px` | box x 40..140, y 40..114. Boundary top-left runs (40, 40) to (48, 50): row y=45 is `LLLL.TTT`, row y=49 `LLLLLLL.TTTT`; bottom-left runs (40, 114) to (48, 98): row y=105 is `LLLL.BBBBBBB`. Same line rule: boundary at u = (v + 0.5) * w_vertical / w_horizontal. |
+| 4 | `td { height: 29px; padding: 0; border-bottom: 1px solid #e5e7eb }`, 3 rows, `width: 300px`, `margin: 40px`, `border-spacing: 0` | `separate` and `collapse` alike: one pixel row of (229, 231, 235) at y 69, 99, 129; nothing else down x=200. |
+| 5 | `div { margin: 40px; width: 200px; height: 100px; border-left: 4px solid #2563eb; border-radius: 8px }` | (42, 90) = (37, 99, 235); (39, 90), (140, 41), (237, 90), (140, 138), (100, 90) white. The band tapers along the curve at the top-left and bottom-left corners (rows y 40..51 have blue only in x 40..45). Without the radius: the same band, straight, full height y 40..139. |
+| 3c | 3b plus `border-radius: 12px` (box x 40..252, y 40..166) | each side keeps its colour; the colour boundaries run through the curved corners, e.g. top-left row y=45 is `WW.L.TTTTTTTTT` (anti-aliased boundary pixels `.` between the sides). |
+| g1 | `border: 6px solid #c00` | along y=98 red x 40..46 and 246..252; down x=140 y 40..46 and 146..152. |
+| g2 | g1 plus `border-radius: 12px` | (40, 40) and (41, 41) white; sides red; same runs along y=98. |
+| g3 | `border: 4px dashed #00c` | 18 dashes of 9 px with 3 px gaps along the top (fulgur: 9 dashes of 12 px, pre-existing, unchanged). |
+| g4 | `border: 4px dotted #00c` | 27 dots along the top. |
+| g5 | `border: 9px double #c00` | along y=98: red x 40..43, 46..49, 249..252, 255..258. |
+| g6 | `border: 2px solid #c00; border-bottom-width: 8px` | down x=140: red y 40..42 and 142..150. |
+
+Findings from the step-0 run on the unchanged engine (tests `border_colors.rs`): cases 1, 2, 3, 3b, 3c, 4 separate and 5
+are red (top colour used for every side: black bottom band, red right side, black left accent, black row separators);
+case 4 collapse is already green (the collapsed-border painter carries its own per-edge colour from the Blitz fork's
+`collapsed_borders`), and guards g1-g6 are green.
