@@ -104,4 +104,37 @@ byte-identical (`cmp`); any change must show a `pdftocairo` pixel diff of 0. Do 
 
 ## 7. Evidence
 
-(Step 0 Chrome table, before / after numbers and the gates.)
+### Step 0: Chrome reference (2026-10-27)
+
+Chromium via Playwright (`printBackground: true`, `preferCSSPageSize: true`, print media), A4 = 793.7 x 1122.56 px,
+rasterised with `pdftoppm` at 96 dpi (794 x 1123) unless stated, each case with `@page { margin: 0 }` (m0) and `{ margin:
+15mm }` (m15; page area x 57..737, y 57..1066, H = 1009.17 px). Cases are the K1-K7 CSS of section 4 (`html { background:
+#eee }` where stated); the blocks of K2 / K3 are `<div style="height:20px">x</div>` with `font: 16px/20px Inter` (an *empty*
+fixed-height block is cut mid-way by Chrome and moved whole by fulgur; a line of text moves whole in both, so the page
+distribution is comparable). Rows and columns are `[start, end)` of a colour run.
+
+| Case | Chrome m0 | Chrome m15 |
+|---|---|---|
+| K1 card (`margin 40, padding 20`, 300 px) | white x 40..754, y 40..380 (x=400 and x=42 alike); grey (238) elsewhere, down to the page bottom | white x 97..698, y 97..437; grey = the page area (57..737 x 57..1066) around and below it; margin white |
+| K2 three pages (`margin 40`, border 4 #c00, radius 16, 150 blocks) | page 1: top border y 40..44, sides x 40..44 / 750..754 to the page bottom (1122.56), no bottom border, top corners rounded, no rounding at the bottom. Page 2: sides over the whole page, white inside (also at y 2 and 1120), square. Page 3: sides from 0, bottom border y 820..824, no top border, bottom corners rounded, grey below 824 | 4 pages: page 1 top border 97..101, sides to the area bottom 1066; pages 2-3 sides 57..1067 over the area; page 4 holds only the bottom border at 97..101 (50 blocks per area-high page, so the content ends exactly at a page end and the border goes on the next page) |
+| K3 overshoot (`margin 40`, border 3 #00f, 130 blocks) | page 1 sides run to the page bottom; page 3 bottom border y 400..403 (130 blocks) | page 1 top border 97..100, sides to row 1066 inclusive (end 1067) = the area bottom, nothing below; page 2 sides 57..1067; page 3 bottom border y 697..700 |
+| K4 image `100% 100%` (K1 + `no-repeat`) | ink x 674..754, y 340..380 | ink x 618..698, y 397..437 |
+| K5 `repeat`, 3000 px (`margin 0 40px`) | first tile column at x 40; 300 dpi seam (red to green) at 19.52 / 16.96 / 12.80 px on pages 1 / 2 / 3: shifts 2.56 (nominal 1122.56 mod 40) and 6.72 (nominal 5.12); html grey over 0..1122.56 | seam at 76.8 / 66.24 / (red begins 76.8) i.e. 19.8 / 9.27 / 19.8 px after the area top: the F184 whole-pixel drift again |
+| K6 canvas source with border (`margin 40`, border 3 #00f, #ffd, 300 px) | tint over the whole page; border y 40..43 and 343..346 | tint over the page area only; border 97..100 and 400..403 |
+| K7 inline-root body (200 lines of 20 px) | page 1 white from y 40, pages 2-3 white all down, page 4 white 0..680 (34 lines), grey below; 200 lines printed | page 1 white from 97, pages 2-4 white over the area, page 5 white 57..97 (2 lines), grey to 1066; 200 lines printed |
+
+Findings against section 4:
+
+- All of section 4's numbers hold at m0 within 1 px; K2's page-3 bottom border is at 820..824 (Chrome moves a line of text
+  whole exactly as we do, so the distribution is the same), K3's page-3 bottom border at 697..700, K4's ink at 674..754 x
+  340..380, K5's shifts 2.56 / 6.72 (nominal 5.12; test tolerance 2.5 px on page 3).
+- Chrome's side borders on a page that continues run to the *page-area bottom* (row 1066 at m15; the page bottom at m0),
+  not to the margin box: the K3 test allows rows up to 1067 and asserts nothing below 1068.
+- Corner shapes: rounding only at the real top (page 1) and the real bottom (last page); no rounding at a break
+  (`box-decoration-break: slice`, css-break-3 section 5.4).
+- With a body background and a canvas colour from html the canvas fill is not changed by the body box (K1: grey outside
+  white, K2: grey outside the frame), as in F184.
+- Not in the tests: K2 / K3 / K7 at m15 beyond what is listed (page counts 4 / 3 / 5 differ in how the area fills, which is
+  pagination, not F37); K5 at m15 (the F184 whole-pixel drift).
+
+(Before / after numbers and the gates: filled in by the coordinator.)
