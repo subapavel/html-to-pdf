@@ -83,8 +83,9 @@ integration test is the fixture, with the Chrome numbers in §7 (precedent F152,
 
 - Documents with raster or SVG backgrounds change size — to the correct one (matches Chrome); anyone who tuned around
   the 4/3 sees a move.
-- Smaller tiles mean 16/9 more tiles per area: a tiny tiled background reaches the existing `MAX_TILES` cap sooner; the
-  cap's behaviour does not change.
+- Smaller tiles mean 16/9 more tiles per area: a tiny tiled background reaches the existing `MAX_TILES` cap sooner. This
+  turned out to matter (vrt-validator, HIGH: an 8 x 8 PNG on an A4 body lost rows 800-1123), so §8 replaces the cap's
+  behaviour for raster and SVG tiles.
 - Gradients unaffected (intrinsic size 0; sized through `resolve_gradient_size`).
 - Non-goals: F180b (an SVG with no natural size — `viewBox` only or percentage `width` — usvg reports the `viewBox` size
   or 100 x 100, §5.3 says contain-fit); F180c (list markers clamped to the line height; Chrome draws natural size);
@@ -118,3 +119,17 @@ In case 2 Chrome's repeated tiles land up to 1 px off the ideal grid (red starts
 so the tests assert the plan's values.
 
 Gates (head `92d5354`): fixtures 01-25 and `bench/corpus` byte-identical to `main` (no fixture uses a `url()` background or `list-style-image`), so `compare.py` is unchanged; `bench.py --check` ok; side-by-side before / after / Chrome in `out/scratch/f180/sbs.png` (the background copy now equals the `<img>` and Chrome). Seen in passing: Chrome leaves ~4 px under an inline `<img>` before the next block, we leave none (F183).
+
+## 8. Follow-up: dense tile grids are one tiling pattern (fork `ae9419c8`)
+
+The per-tile path stops at `MAX_TILES` = 10 000 tiles and dropped the rest silently. With correct natural sizes an 8 x 8 PNG
+on an A4 body is 99 x 141 = 13 959 tiles; a 1 x 1 PNG over 700 x 1000 px is 700 000. Raster and SVG layers whose grid has 64 or
+more tiles (`IMAGE_PATTERN_MIN_TILES`) are now painted as ONE krilla tiling pattern, as the gradient arms already were:
+cell = one tile, step = tile (+ the `space` gap), origin = the first tile at or before the clip box (so it follows
+`background-position`), filled over the clip box, or over the tile's own extent on a `no-repeat` axis. The grid is computed
+analytically from `resolve_repeat_axis` (the per-axis geometry of the per-tile path), so there is no tile cap on this path;
+below 64 tiles, a tile pitch under `MIN_GRADIENT_TILE_PT` or a non-finite size the per-tile draws are unchanged (byte-identical
+PDFs). The per-tile path logs a warning when it stops at `MAX_TILES` with tiles left. Tests: `svg_background_scale.rs` cases 8
+(dot8.png on an A4 body, every 8 x 8 cell has its dot; px1.png fills 700 x 1000), fulgur `uniform_image_grid` unit tests and
+`render_smoke` pattern / no-pattern cases. Seen in passing: poppler resamples a pattern cell, so a pattern-painted grid differs
+from per-tile draws by antialiasing at tile edges (03-repeat-png page 2: 9 238 px over the threshold of 64, same layout).
