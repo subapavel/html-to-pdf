@@ -326,6 +326,17 @@ impl Renderer {
             Ok(Err(fulgur::Error::TextWithoutFont(found))) => Err(Error::TextWithoutFont(
                 found.iter().map(|d| d.to_string()).collect(),
             )),
+            // F152: SVG text whose `font-family` list matches no bundled face. fulgur draws it in the serif mapping;
+            // strict mode refuses it exactly as it refuses an HTML list with no bundled or mapped entry.
+            Ok(Err(fulgur::Error::SvgFontFallback(found))) => Err(Error::UnresolvedFontFamilies(
+                found
+                    .into_iter()
+                    .map(|f| UnresolvedFamily {
+                        font_family: f.font_family,
+                        origin: Origin::Svg,
+                    })
+                    .collect(),
+            )),
             // F177: rasters inside an SVG that do not decode, found while the document is built (strict only).
             Ok(Err(fulgur::Error::SvgImages(dropped))) => Err(Error::Images(
                 dropped
