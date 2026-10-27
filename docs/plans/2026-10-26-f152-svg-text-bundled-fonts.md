@@ -129,3 +129,16 @@ Step 0 (probes `out/scratch/f152/inline.html`, `img.html` + `card.svg`; Chromium
 - `card.svg` as `<img src>` and `background-image`: Chrome draws the text (`pdftotext`: `Card text Faktura`).
 - fulgur on `main` + F177b: inline embeds host FreeSerif, FreeSans, FreeMono and a host CFF `Inter-Regular` next to the
   bundled `Inter-Regular`; `<img>` / background draw no text (`No match for 'sans-serif' font-family` x3).
+
+Gates (head `c225332`): fixtures 01-25 and `bench/corpus` byte-identical to `main`; `compare.py` unchanged; `bench.py
+--check` ok. `pdf-reviewer`: no defect (one font object per face shared by HTML and SVG text; ToUnicode and Czech
+diacritics extract; byte-identical with extra host fonts and `env -i`; `qpdf --check` clean); filed F181 (tagging).
+`vrt-validator`: strace shows no host font access at any site; 500 inline SVGs with text 99 ms (main 960 ms). One HIGH,
+fixed: our HTML generic rewrite (`fonts::map_generics_in_html`) also rewrote `style=""` / `<style>` inside an inline
+`<svg>` to `JetBrains\000020Mono`, which usvg reads as `JetBrains` (wrong face; strict refused a valid document). Fix:
+`walk_html` tracks `<svg>` depth; the generic rewrite and `scan_html` skip SVG sites (also fixes the validator's M2:
+the HTML scan reported SVG CSS as "text will be dropped", with the wrong origin). fulgur `84107583`: a quoted generic
+is a family name (L1), a CSS-wide keyword selects the default family (L2). M1 (margin-box SVG text not refused in
+strict mode) is recorded in ADR-0007 as consistent with HTML margin-box text. L3 (weights not a multiple of 100), L4
+(missing-glyph warnings not deduplicated) filed as F152d; L5 (`-o -` writes a file named `-`) filed as F182.
+

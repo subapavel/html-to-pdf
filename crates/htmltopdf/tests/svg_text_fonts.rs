@@ -305,6 +305,40 @@ fn generic_families_in_svg_text_map_like_html() {
     }
 }
 
+#[test]
+fn css_in_an_inline_svg_maps_like_its_presentation_attributes() {
+    // The HTML generic rewrite must leave CSS inside an inline `<svg>` alone: usvg does not read the CSS escape it
+    // writes (`JetBrains\000020Mono` would be the family `JetBrains`), and strict mode would refuse a valid document.
+    for (what, svg) in [
+        (
+            "style attribute",
+            one_text("style=\"font-family:monospace\"", "Styled Faktura"),
+        ),
+        (
+            "<style> element",
+            one_text("", "Styled Faktura").replace(
+                "<text ",
+                "<style>text{font-family:ui-monospace}</style><text ",
+            ),
+        ),
+    ] {
+        let pdf = render_with(&["Inter-Regular.ttf"], &[], &svg, true)
+            .unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!(fonts(&pdf), names(&["JetBrainsMono-Regular"]), "{what}");
+        assert!(text(&pdf).contains("Styled Faktura"), "{what}: not drawn");
+    }
+    // An unbundled family in an SVG's CSS is reported once, as SVG text (which is drawn), not as HTML CSS whose text
+    // would be dropped.
+    let svg = one_text("style=\"font-family:Georgia\"", "Styled Faktura");
+    match render_with(&["Inter-Regular.ttf"], &[], &svg, true) {
+        Err(Error::UnresolvedFontFamilies(list)) => assert!(
+            list.iter().all(|u| u.origin == Origin::Svg) && list.len() == 1,
+            "{list:?}"
+        ),
+        other => panic!("strict mode must refuse, got {:?}", other.map(|p| p.len())),
+    }
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // 4. An unbundled family
 
