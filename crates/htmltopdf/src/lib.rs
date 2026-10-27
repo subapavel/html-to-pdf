@@ -352,21 +352,54 @@ impl Renderer {
     /// for inline `<svg>` (usvg does not read the CSS escapes it writes, and fulgur's SVG font resolver maps the
     /// generics itself, F152); the gradient rewrite is for every site. A `style=""` value with a character reference
     /// is never rewritten (`HtmlSites::rewrite`).
+    ///
+    /// Removing text from a `<style>` element can join a `<` and a `/style` into an end tag that was not there
+    /// (`to right<in oklch/style>` → `to right</style>`), so the element ends earlier for every later rewrite and for
+    /// the engine. A document where that happens is rewritten pass by pass instead, each pass over a new walk
+    /// ([`Self::prepare_in_passes`]), which is the text the rewrites gave before they were fused.
     fn prepare<'a>(&self, html: &'a str, sites: &fonts::HtmlSites) -> Cow<'a, str> {
-        sites.rewrite(html, |css, site| {
-            let mut css = Cow::Borrowed(css);
-            if !site.attribute {
-                css = then(css, media::print_media);
-            }
-            if !site.in_svg {
-                css = then(css, |c| fonts::map_generics(c, &self.generics));
-            }
-            css = then(css, gradient::strip_gradient_interpolation);
-            if !site.attribute {
-                css = then(css, css_text::close_open_blocks);
+        let new_end_tag = std::cell::Cell::new(false);
+        let out = sites.rewrite(html, |css, site| {
+            let css = self.rewrite_site(css, site, Pass::ALL);
+            if !site.attribute && fonts::contains_end_tag(&css, "style") {
+                new_end_tag.set(true);
             }
             css
-        })
+        });
+        if new_end_tag.get() {
+            Cow::Owned(self.prepare_in_passes(html))
+        } else {
+            out
+        }
+    }
+
+    /// The rewrites of [`Self::prepare`] as separate passes over the whole document, each with its own walk.
+    fn prepare_in_passes(&self, html: &str) -> String {
+        let mut html = html.to_string();
+        for pass in [Pass::MEDIA, Pass::GENERICS, Pass::GRADIENT, Pass::CLOSE] {
+            html = fonts::HtmlSites::walk(&html)
+                .rewrite(&html, |css, site| self.rewrite_site(css, site, pass))
+                .into_owned();
+        }
+        html
+    }
+
+    /// `css` (the text of `site`) with the rewrites of `passes` that apply to the site, in [`Self::prepare`]'s order.
+    fn rewrite_site<'a>(&self, css: &'a str, site: fonts::SiteInfo, passes: Pass) -> Cow<'a, str> {
+        let mut css = Cow::Borrowed(css);
+        if passes.has(Pass::MEDIA) && !site.attribute {
+            css = then(css, media::print_media);
+        }
+        if passes.has(Pass::GENERICS) && !site.in_svg {
+            css = then(css, |c| fonts::map_generics(c, &self.generics));
+        }
+        if passes.has(Pass::GRADIENT) {
+            css = then(css, gradient::strip_gradient_interpolation);
+        }
+        if passes.has(Pass::CLOSE) && !site.attribute {
+            css = then(css, css_text::close_open_blocks);
+        }
+        css
     }
 
     /// Runs the engine. A panic inside it (an engine bug, e.g. on unusual CSS) becomes
@@ -577,6 +610,22 @@ fn then<'a>(text: Cow<'a, str>, rewrite: impl Fn(&str) -> Cow<'_, str>) -> Cow<'
             Cow::Borrowed(_) => Cow::Owned(t),
             Cow::Owned(r) => Cow::Owned(r),
         },
+    }
+}
+
+/// A set of the rewrites [`Renderer::prepare`] applies.
+#[derive(Clone, Copy)]
+struct Pass(u8);
+
+impl Pass {
+    const MEDIA: Pass = Pass(1);
+    const GENERICS: Pass = Pass(2);
+    const GRADIENT: Pass = Pass(4);
+    const CLOSE: Pass = Pass(8);
+    const ALL: Pass = Pass(15);
+
+    fn has(self, pass: Pass) -> bool {
+        self.0 & pass.0 != 0
     }
 }
 
@@ -889,5 +938,23 @@ mod tests {
             r.prepare(plain, &fonts::HtmlSites::walk(plain)),
             Cow::Borrowed(_)
         ));
+    }
+
+    /// The gradient rewrite removes `in oklch` and joins `<` and `/style` into an end tag: the element ends there, the
+    /// rest is HTML, and the block closing sees only the text before it (vrt-validator, F99f).
+    #[test]
+    fn prepare_rewrites_pass_by_pass_where_a_rewrite_ends_a_style_element() {
+        let r = Renderer::builder().build();
+        for html in [
+            "<style>a{background:linear-gradient(to right<in oklch/style><p>X</p></style>",
+            "<style>a{background:linear-gradient(to right<in oklch/style><img src=zz.png>\
+             <p style=\"font-family:sans-serif\">M</p>{}</style><p>Ahoj</p>",
+            "<style>@media screen{x}a{background:linear-gradient(to right<in oklch/STYLE >\
+             <style>b{color:red</style>",
+        ] {
+            let one = r.prepare(html, &fonts::HtmlSites::walk(html));
+            assert_eq!(one, prepare_in_separate_passes(&r, html), "{html}");
+            assert!(one.contains("to right)}</"), "{one}");
+        }
     }
 }

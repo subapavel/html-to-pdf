@@ -83,3 +83,12 @@ in-process, below the VM's noise; b: dropped). No corpus document slower: none b
 against the new one on a mixed document, on every truncation of it, and on all fixtures and `b200-*` documents),
 `one_walk_serves_the_scan_the_image_sources_and_the_rewrite`, and `tests::prepare_in_one_pass_gives_the_text_of_the_separate_rewrites`
 (the four rewrites per site against the four whole-document passes); the 49 existing unit tests of the crate are unchanged and green.
+
+**vrt-validator (fuzz of the fused rewrite against main).** One HIGH: the gradient rewrite can join a `<` and a `/style` into
+an end tag (`<style>a{background:linear-gradient(to right<in oklch/style>…`). Main re-walked before the block closing, so the
+element ended there and the rest was HTML; the fused pass closed blocks over the whole stripped text and printed `)}` into the
+page. Fix: `Renderer::prepare` checks every rewritten `<style>` text for a `</style`; where one appears, the document is rewritten
+pass by pass with a walk per pass (`prepare_in_passes`, main's text). Test
+`tests::prepare_rewrites_pass_by_pass_where_a_rewrite_ends_a_style_element` (red without the check). After the fix: the
+validator's 42 repro documents × 7 configurations equal main's PDFs (294/294); fixtures 01-26 and the 7 corpus documents
+byte-identical to main at `RAYON_NUM_THREADS=1` and `=4`.

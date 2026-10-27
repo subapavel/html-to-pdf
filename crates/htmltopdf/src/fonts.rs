@@ -641,8 +641,9 @@ impl HtmlSites {
     /// is not the CSS the engine reads, and a rewrite could change what the reference decodes to.
     ///
     /// `rewrite` may chain several rewrites and decide per site which ones apply ([`SiteInfo`]). That is the same text
-    /// as running the rewrites one after another over the whole document, because a rewrite only changes the CSS of a
-    /// site and never what the walk sees around it (the end of a `<style>` element, a quote, a tag).
+    /// as running the rewrites one after another over the whole document as long as no rewrite changes what the walk
+    /// sees around a site (the end of a `<style>` element, a quote, a tag); the caller checks that
+    /// (`Renderer::prepare`).
     pub(crate) fn rewrite<'a>(
         &self,
         html: &'a str,
@@ -877,6 +878,11 @@ fn is_end_tag(rest: &str, tag: &str) -> bool {
             .is_some_and(|n| n.eq_ignore_ascii_case(tag.as_bytes()))
         && b.get(2 + tag.len())
             .is_none_or(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/'))
+}
+
+/// Whether `text` contains `</tag` (ASCII case-insensitive), which ends a raw-text element `tag` (see [`walk_html`]).
+pub(crate) fn contains_end_tag(text: &str, tag: &str) -> bool {
+    find_end_tag(text, tag) < text.len()
 }
 
 /// Offset of the first `</tag` (ASCII case-insensitive) in `rest`, or `rest.len()`.
