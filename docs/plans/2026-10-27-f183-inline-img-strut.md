@@ -130,7 +130,7 @@ fork's git rev.
 - `inline_img_strut.rs`: S1-S12, G1-G5 and fixture 27 all match Chrome within 1 px (the QR rows of fixture 27 within 3 px:
   the items table above carries 2 px of its own text drift against Chrome; the distance QR -> cell border is within 1 px of
   Chrome's 17). 18 tests, all red or the guards green before, all green after.
-- Parley fork: 9 new unit tests (`tests/test_strut.rs`), 78 + 3 pass (`PARLEY_IGNORE_DECODING_ERRORS=1`: the snapshot PNGs are
+- Parley fork: 8 new unit tests (`tests/test_strut.rs`), 78 + 3 pass (`PARLEY_IGNORE_DECODING_ERRORS=1`: the snapshot PNGs are
   Git LFS pointers in the clone, so the image-snapshot comparisons are skipped; the bit-for-bit claim is covered by the
   new test that compares line metrics with and without a strut / flag).
 - Blitz fork: 5 new lib tests; `cargo test -p blitz-dom --lib` 136 pass, 138 with `--features parallel-construct`.
