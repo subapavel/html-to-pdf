@@ -560,62 +560,153 @@ fn parse_font_shorthand(
     Some(parse_list(p, spans))
 }
 
-/// Scans the CSS inside an HTML document: `<style>` elements and `style=""` attributes, in document
-/// order. This is a deliberately small tag scanner, not an HTML parser; it understands comments,
-/// quoted/unquoted attribute values and raw-text elements, which is what the scan needs.
+/// The sites of an HTML document that the pre-render checks and rewrites care about: its `<style>` elements, its
+/// `style=""` attributes and the `src` of its `<img>`s, in document order, each with whether it is inside an inline
+/// `<svg>` (the `<svg>` element's own attributes included).
 ///
-/// CSS inside an inline `<svg>` (its `<style>` elements and the `style=""` of the `<svg>` and its descendants) is
-/// not scanned: the SVG's text is shaped by usvg with the bundled fonts, and fulgur reports a family list there that
-/// matches nothing itself (`Origin::Svg`, F152), with the CSS generics usvg knows and the map for the rest.
-pub(crate) fn scan_html(html: &str) -> Scan {
-    let mut scan = Scan::default();
-    walk_html(html, |site, in_svg| match site {
-        HtmlSite::Attribute(_) | HtmlSite::Element(_) if in_svg => {}
-        HtmlSite::Attribute(range) => {
-            let attr = scan_css(
-                &decode_entities(&html[range.clone()]),
-                Origin::StyleAttribute,
-            );
-            // `map_generics_in_html` leaves attributes with character references alone. The six generics
-            // the engine parses resolve through its own map anyway (F70); `ui-*` and the others would be
-            // plain names there and match nothing: check those as names.
-            scan.extend(if html[range].contains('&') {
-                attr.with_generics_unmapped()
-            } else {
-                attr
+/// One walk of the text serves the font check ([`HtmlSites::scan`]), the image check ([`HtmlSites::img_srcs`]) and the
+/// rewrites ([`HtmlSites::rewrite`]) of one document (F99f): each used to walk the whole text on its own. The ranges
+/// are byte offsets into the text that was walked, so they are valid for that text only.
+///
+/// The walk is a deliberately small tag scanner, not an HTML parser; it understands comments, quoted/unquoted
+/// attribute values and raw-text elements, which is what the checks need.
+pub(crate) struct HtmlSites {
+    sites: Vec<(HtmlSite, bool)>,
+}
+
+/// What [`HtmlSites::rewrite`] tells the rewrite about the site whose CSS it is given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SiteInfo {
+    /// A `style=""` value (otherwise the contents of a `<style>` element).
+    pub attribute: bool,
+    /// Inside an inline `<svg>`.
+    pub in_svg: bool,
+}
+
+impl HtmlSites {
+    pub(crate) fn walk(html: &str) -> Self {
+        let mut sites = Vec::new();
+        walk_html(html, |site, in_svg| sites.push((site, in_svg)));
+        Self { sites }
+    }
+
+    /// Scans the CSS inside the document: `<style>` elements and `style=""` attributes, in document order.
+    ///
+    /// CSS inside an inline `<svg>` (its `<style>` elements and the `style=""` of the `<svg>` and its descendants) is
+    /// not scanned: the SVG's text is shaped by usvg with the bundled fonts, and fulgur reports a family list there that
+    /// matches nothing itself (`Origin::Svg`, F152), with the CSS generics usvg knows and the map for the rest.
+    pub(crate) fn scan(&self, html: &str) -> Scan {
+        let mut scan = Scan::default();
+        for (site, in_svg) in &self.sites {
+            match site {
+                HtmlSite::Attribute(_) | HtmlSite::Element(_) if *in_svg => {}
+                HtmlSite::Attribute(range) => {
+                    let attr = scan_css(
+                        &decode_entities(&html[range.clone()]),
+                        Origin::StyleAttribute,
+                    );
+                    // `map_generics_in_html` leaves attributes with character references alone. The six generics
+                    // the engine parses resolve through its own map anyway (F70); `ui-*` and the others would be
+                    // plain names there and match nothing: check those as names.
+                    scan.extend(if html[range.clone()].contains('&') {
+                        attr.with_generics_unmapped()
+                    } else {
+                        attr
+                    })
+                }
+                HtmlSite::Element(range) => {
+                    scan.extend(scan_css(&html[range.clone()], Origin::StyleElement))
+                }
+                HtmlSite::ImgSrc(_) => {}
+            }
+        }
+        scan
+    }
+
+    /// The `src` of every `<img>` that has the attribute, entity-decoded, in document order. An `<img>`
+    /// without `src`, and anything inside a comment or a raw-text element (`<style>`, `<script>`,
+    /// `<textarea>`, `<title>`), is not an image of the document and is not reported.
+    pub(crate) fn img_srcs(&self, html: &str) -> Vec<String> {
+        self.sites
+            .iter()
+            .filter_map(|(site, _)| match site {
+                HtmlSite::ImgSrc(range) => Some(decode_entities(&html[range.clone()])),
+                _ => None,
             })
+            .collect()
+    }
+
+    /// `html` (the text that was walked) with `rewrite` applied to the CSS of every `<style>` element and every
+    /// `style=""` value, in one pass. A `style=""` value that contains a character reference is left alone: its text
+    /// is not the CSS the engine reads, and a rewrite could change what the reference decodes to.
+    ///
+    /// `rewrite` may chain several rewrites and decide per site which ones apply ([`SiteInfo`]). That is the same text
+    /// as running the rewrites one after another over the whole document as long as no rewrite changes what the walk
+    /// sees around a site (the end of a `<style>` element, a quote, a tag); the caller checks that
+    /// (`Renderer::prepare`).
+    pub(crate) fn rewrite<'a>(
+        &self,
+        html: &'a str,
+        rewrite: impl Fn(&'a str, SiteInfo) -> Cow<'a, str>,
+    ) -> Cow<'a, str> {
+        let mut out = String::new();
+        let mut last = 0;
+        let mut changed = false;
+        for (site, in_svg) in &self.sites {
+            let (range, attribute) = match site {
+                HtmlSite::Element(r) => (r, false),
+                HtmlSite::Attribute(r) if !html[r.clone()].contains('&') => (r, true),
+                HtmlSite::Attribute(_) | HtmlSite::ImgSrc(_) => continue,
+            };
+            let info = SiteInfo {
+                attribute,
+                in_svg: *in_svg,
+            };
+            if let Cow::Owned(css) = rewrite(&html[range.clone()], info) {
+                out.push_str(&html[last..range.start]);
+                out.push_str(&css);
+                last = range.end;
+                changed = true;
+            }
         }
-        HtmlSite::Element(range) => scan.extend(scan_css(&html[range], Origin::StyleElement)),
-        HtmlSite::ImgSrc(_) => {}
-    });
-    scan
+        if !changed {
+            return Cow::Borrowed(html);
+        }
+        out.push_str(&html[last..]);
+        Cow::Owned(out)
+    }
 }
 
-/// Byte ranges of the contents of every `<style>` element, in document order.
-pub(crate) fn style_element_ranges(html: &str) -> Vec<std::ops::Range<usize>> {
-    let mut ranges = Vec::new();
-    walk_html(html, |site, _| {
-        if let HtmlSite::Element(range) = site {
-            ranges.push(range);
-        }
-    });
-    ranges
+/// The document's CSS scan (see [`HtmlSites::scan`]), for tests.
+#[cfg(test)]
+pub(crate) fn scan_html(html: &str) -> Scan {
+    HtmlSites::walk(html).scan(html)
 }
 
-/// The `src` of every `<img>` that has the attribute, entity-decoded, in document order. An `<img>`
-/// without `src`, and anything inside a comment or a raw-text element (`<style>`, `<script>`,
-/// `<textarea>`, `<title>`), is not an image of the document and is not reported.
+/// See [`HtmlSites::img_srcs`], for tests.
+#[cfg(test)]
 pub(crate) fn img_srcs(html: &str) -> Vec<String> {
-    let mut srcs = Vec::new();
-    walk_html(html, |site, _| {
-        if let HtmlSite::ImgSrc(range) = site {
-            srcs.push(decode_entities(&html[range]));
+    HtmlSites::walk(html).img_srcs(html)
+}
+
+/// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes (an attribute that contains
+/// a character reference is left alone), except inside an inline `<svg>`: usvg does not read the CSS escapes
+/// [`css_ident`] writes (`JetBrains\000020Mono` is the family `JetBrains`), and fulgur's SVG font resolver maps the
+/// generics itself (F152). The renderer applies it together with its other rewrites in one pass (`Renderer::prepare`);
+/// this is the single rewrite, for tests.
+#[cfg(test)]
+pub(crate) fn map_generics_in_html<'a>(html: &'a str, map: &GenericMap) -> Cow<'a, str> {
+    HtmlSites::walk(html).rewrite(html, |css, site| {
+        if site.in_svg {
+            Cow::Borrowed(css)
+        } else {
+            map_generics(css, map)
         }
-    });
-    srcs
+    })
 }
 
 /// What [`walk_html`] reports, in document order: CSS, and the `src` of images.
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum HtmlSite {
     /// The byte range of a `style=""` attribute's raw (entity-encoded) value.
     Attribute(std::ops::Range<usize>),
@@ -626,8 +717,52 @@ enum HtmlSite {
     ImgSrc(std::ops::Range<usize>),
 }
 
-/// The tag scanner behind [`scan_html`] and [`style_element_ranges`], reporting CSS in document order, each site
-/// with whether it is inside an inline `<svg>` (the `<svg>` element's own attributes included).
+/// The elements the walk treats specially.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tag {
+    Template,
+    Noscript,
+    Svg,
+    Img,
+    Style,
+    Script,
+    Textarea,
+    Title,
+    Other,
+}
+
+impl Tag {
+    /// ASCII case-insensitive, without allocating: this runs for every tag of the document.
+    fn of(name: &str) -> Tag {
+        let n = name.as_bytes();
+        let is = |t: &str| n.eq_ignore_ascii_case(t.as_bytes());
+        match n.len() {
+            3 if is("svg") => Tag::Svg,
+            3 if is("img") => Tag::Img,
+            5 if is("style") => Tag::Style,
+            5 if is("title") => Tag::Title,
+            6 if is("script") => Tag::Script,
+            8 if is("template") => Tag::Template,
+            8 if is("noscript") => Tag::Noscript,
+            8 if is("textarea") => Tag::Textarea,
+            _ => Tag::Other,
+        }
+    }
+
+    /// The (lowercase) name of a raw-text element, whose contents run to its end tag.
+    fn raw_text_name(self) -> Option<&'static str> {
+        match self {
+            Tag::Style => Some("style"),
+            Tag::Script => Some("script"),
+            Tag::Textarea => Some("textarea"),
+            Tag::Title => Some("title"),
+            _ => None,
+        }
+    }
+}
+
+/// The tag scanner behind [`HtmlSites`], reporting CSS and image sources in document order, each site with whether it
+/// is inside an inline `<svg>` (the `<svg>` element's own attributes included).
 fn walk_html(html: &str, mut found: impl FnMut(HtmlSite, bool)) {
     let bytes = html.as_bytes();
     let mut i = 0;
@@ -661,11 +796,11 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite, bool)) {
         while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-') {
             j += 1;
         }
-        let tag = html[i + 1..j].to_ascii_lowercase();
-        if matches!(tag.as_str(), "template" | "noscript") {
+        let tag = Tag::of(&html[i + 1..j]);
+        if matches!(tag, Tag::Template | Tag::Noscript) {
             inert += 1;
         }
-        if tag == "svg" {
+        if tag == Tag::Svg {
             svg += 1;
         }
         let mut self_closing = false;
@@ -688,7 +823,7 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite, bool)) {
             {
                 j += 1;
             }
-            let name = html[name_start..j].to_ascii_lowercase();
+            let name = &html[name_start..j];
             while j < bytes.len() && bytes[j].is_ascii_whitespace() {
                 j += 1;
             }
@@ -715,19 +850,19 @@ fn walk_html(html: &str, mut found: impl FnMut(HtmlSite, bool)) {
                     value = vs..j;
                 }
             }
-            if name == "style" {
+            if name.eq_ignore_ascii_case("style") {
                 found(HtmlSite::Attribute(value), svg > 0);
-            } else if name == "src" && tag == "img" && inert == 0 {
+            } else if tag == Tag::Img && inert == 0 && name.eq_ignore_ascii_case("src") {
                 found(HtmlSite::ImgSrc(value), svg > 0);
             }
         }
-        if tag == "svg" && self_closing {
+        if tag == Tag::Svg && self_closing {
             svg -= 1;
         }
         i = j;
-        if matches!(tag.as_str(), "style" | "script" | "textarea" | "title") {
-            let end = find_end_tag(&html[i..], &tag);
-            if tag == "style" {
+        if let Some(raw) = tag.raw_text_name() {
+            let end = find_end_tag(&html[i..], raw);
+            if tag == Tag::Style {
                 found(HtmlSite::Element(i..i + end), svg > 0);
             }
             i += end;
@@ -743,6 +878,11 @@ fn is_end_tag(rest: &str, tag: &str) -> bool {
             .is_some_and(|n| n.eq_ignore_ascii_case(tag.as_bytes()))
         && b.get(2 + tag.len())
             .is_none_or(|c| c.is_ascii_whitespace() || matches!(c, b'>' | b'/'))
+}
+
+/// Whether `text` contains `</tag` (ASCII case-insensitive), which ends a raw-text element `tag` (see [`walk_html`]).
+pub(crate) fn contains_end_tag(text: &str, tag: &str) -> bool {
+    find_end_tag(text, tag) < text.len()
 }
 
 /// Offset of the first `</tag` (ASCII case-insensitive) in `rest`, or `rest.len()`.
@@ -788,63 +928,6 @@ pub(crate) fn generic_map(default_family: &str, overrides: &GenericMap) -> Gener
 /// text is dropped; a bundled family name does resolve. Quoted names are names, not keywords, and stay.
 pub(crate) fn map_generics<'a>(css: &'a str, map: &GenericMap) -> Cow<'a, str> {
     replace_spans(css, generic_spans(css).into_iter(), map)
-}
-
-/// `html` with [`map_generics`] applied to its `<style>` elements and `style=""` attributes (see
-/// [`rewrite_css_in_html`] for which attributes), except inside an inline `<svg>`: usvg does not read the CSS escapes
-/// [`css_ident`] writes (`JetBrains\000020Mono` is the family `JetBrains`), and fulgur's SVG font resolver maps the
-/// generics itself (F152).
-pub(crate) fn map_generics_in_html<'a>(html: &'a str, map: &GenericMap) -> Cow<'a, str> {
-    rewrite_sites(html, true, false, |css| map_generics(css, map))
-}
-
-/// `html` with `rewrite` applied to the contents of every `<style>` element and every `style=""` value.
-/// An attribute that contains a character reference is left alone: its text is not the CSS the engine
-/// reads, and a rewrite could change what the reference decodes to.
-pub(crate) fn rewrite_css_in_html<'a>(
-    html: &'a str,
-    rewrite: impl Fn(&str) -> Cow<'_, str>,
-) -> Cow<'a, str> {
-    rewrite_sites(html, true, true, rewrite)
-}
-
-/// `html` with `rewrite` applied to the contents of every `<style>` element only.
-pub(crate) fn rewrite_style_elements<'a>(
-    html: &'a str,
-    rewrite: impl Fn(&str) -> Cow<'_, str>,
-) -> Cow<'a, str> {
-    rewrite_sites(html, false, true, rewrite)
-}
-
-/// `svg`: whether CSS inside an inline `<svg>` is rewritten too.
-fn rewrite_sites<'a>(
-    html: &'a str,
-    attributes: bool,
-    svg: bool,
-    rewrite: impl Fn(&str) -> Cow<'_, str>,
-) -> Cow<'a, str> {
-    let mut out = String::new();
-    let mut last = 0;
-    walk_html(html, |site, in_svg| {
-        if in_svg && !svg {
-            return;
-        }
-        let range = match site {
-            HtmlSite::Element(r) => r,
-            HtmlSite::Attribute(r) if attributes && !html[r.clone()].contains('&') => r,
-            HtmlSite::Attribute(_) | HtmlSite::ImgSrc(_) => return,
-        };
-        if let Cow::Owned(css) = rewrite(&html[range.clone()]) {
-            out.push_str(&html[last..range.start]);
-            out.push_str(&css);
-            last = range.end;
-        }
-    });
-    if last == 0 {
-        return Cow::Borrowed(html);
-    }
-    out.push_str(&html[last..]);
-    Cow::Owned(out)
 }
 
 fn replace_spans<'a>(
@@ -978,7 +1061,7 @@ pub(crate) fn check_font_families(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -1398,5 +1481,214 @@ mod tests {
             &[],
         );
         assert_eq!(bad, vec!["'B'", "'A'"]);
+    }
+
+    /// The walk as it was before F99f (a `String` per tag and per attribute name), kept as the reference for the
+    /// allocation-free one.
+    fn reference_walk(html: &str) -> Vec<(HtmlSite, bool)> {
+        let mut out = Vec::new();
+        let bytes = html.as_bytes();
+        let mut i = 0;
+        let mut svg = 0usize;
+        let mut inert = 0usize;
+        while let Some(off) = html[i..].find('<') {
+            i += off;
+            let rest = &html[i..];
+            if rest.starts_with("<!--") {
+                i += rest.find("-->").map_or(rest.len(), |e| e + 3);
+                continue;
+            }
+            let next = bytes.get(i + 1).copied().unwrap_or(0);
+            if !next.is_ascii_alphabetic() {
+                if is_end_tag(rest, "template") || is_end_tag(rest, "noscript") {
+                    inert = inert.saturating_sub(1);
+                }
+                if is_end_tag(rest, "svg") {
+                    svg = svg.saturating_sub(1);
+                }
+                i += rest.find('>').map_or(rest.len(), |e| e + 1);
+                continue;
+            }
+            let mut j = i + 1;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-') {
+                j += 1;
+            }
+            let tag = html[i + 1..j].to_ascii_lowercase();
+            if matches!(tag.as_str(), "template" | "noscript") {
+                inert += 1;
+            }
+            if tag == "svg" {
+                svg += 1;
+            }
+            let mut self_closing = false;
+            loop {
+                while j < bytes.len() && (bytes[j].is_ascii_whitespace() || bytes[j] == b'/') {
+                    j += 1;
+                }
+                if j >= bytes.len() {
+                    break;
+                }
+                if bytes[j] == b'>' {
+                    self_closing = bytes[j - 1] == b'/';
+                    j += 1;
+                    break;
+                }
+                let name_start = j;
+                while j < bytes.len()
+                    && !bytes[j].is_ascii_whitespace()
+                    && !matches!(bytes[j], b'=' | b'>' | b'/')
+                {
+                    j += 1;
+                }
+                let name = html[name_start..j].to_ascii_lowercase();
+                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                    j += 1;
+                }
+                let mut value = j..j;
+                if j < bytes.len() && bytes[j] == b'=' {
+                    j += 1;
+                    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                        j += 1;
+                    }
+                    if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
+                        let q = bytes[j];
+                        let vs = j + 1;
+                        j = vs;
+                        while j < bytes.len() && bytes[j] != q {
+                            j += 1;
+                        }
+                        value = vs..j.min(bytes.len());
+                        j = (j + 1).min(bytes.len());
+                    } else {
+                        let vs = j;
+                        while j < bytes.len() && !bytes[j].is_ascii_whitespace() && bytes[j] != b'>'
+                        {
+                            j += 1;
+                        }
+                        value = vs..j;
+                    }
+                }
+                if name == "style" {
+                    out.push((HtmlSite::Attribute(value), svg > 0));
+                } else if name == "src" && tag == "img" && inert == 0 {
+                    out.push((HtmlSite::ImgSrc(value), svg > 0));
+                }
+            }
+            if tag == "svg" && self_closing {
+                svg -= 1;
+            }
+            i = j;
+            if matches!(tag.as_str(), "style" | "script" | "textarea" | "title") {
+                let end = find_end_tag(&html[i..], &tag);
+                if tag == "style" {
+                    out.push((HtmlSite::Element(i..i + end), svg > 0));
+                }
+                i += end;
+            }
+        }
+        out
+    }
+
+    /// A document with every shape the walk distinguishes (also used by the `Renderer::prepare` test).
+    pub(crate) const MIXED_HTML: &str = concat!(
+        "<!DOCTYPE html><html><head><TITLE>a <style>x{}</style> <img src=t.png></TITLE>",
+        "<style>@media print { .a { font-family: sans-serif } } .b { background: linear-gradient(in oklab, red, blue) }</style>",
+        "<!-- <style>c{font-family:serif}</style> <img src=c.png> -->",
+        "<STYLE media=all>p{font-family:monospace;color:red</STYLE>",
+        "<script>var s = '<style>d{}</style><img src=s.png>';</script><textarea><img src=ta.png></textarea>",
+        "</head><body>",
+        "<p STYLE=\"font-family: serif\" class=x>one</p>",
+        "<p style='background:conic-gradient(from 0deg in hsl, red, blue)'>two</p>",
+        "<p style=font-family:ui-serif>three</p><p style=\"font-family: &quot;Inter&quot;, serif\">four</p>",
+        "<p style>five</p><p style=\"\">six</p>",
+        "<img src=\"a.png\"><IMG SRC='b&amp;c.png'><img alt=x><img src><img src=\"\" >",
+        "<template><img src=in-template.png><p style=\"font-family:cursive\"></p></template>",
+        "<noscript><img src=in-noscript.png></noscript><img src=after.png>",
+        "<svg viewBox=\"0 0 1 1\" style=\"font-family: serif\"><style>text{font-family:serif}</style>",
+        "<text style=\"font-family: sans-serif\">t</text><image href=x.png /><img src=svg-img.png></svg>",
+        "<svg/><p style=\"font-family: system-ui\">after the self-closing svg</p>",
+        "<custom-element style=\"font-family:fantasy\"></custom-element><br/><a href=x>y</a>",
+        "<style>@media screen{.z{font-family:math}}</style></body></html> <",
+    );
+
+    #[test]
+    fn the_allocation_free_walk_reports_what_the_reference_walk_reports() {
+        let sites = |html: &str| HtmlSites::walk(html).sites;
+        assert_eq!(sites(MIXED_HTML), reference_walk(MIXED_HTML));
+        // The mixed document does exercise every kind of site, inside and outside an `<svg>`.
+        let all = sites(MIXED_HTML);
+        for (kind, in_svg) in [
+            (0, false),
+            (0, true),
+            (1, false),
+            (1, true),
+            (2, false),
+            (2, true),
+        ] {
+            assert!(
+                all.iter().any(|(s, v)| *v == in_svg
+                    && match s {
+                        HtmlSite::Attribute(_) => kind == 0,
+                        HtmlSite::Element(_) => kind == 1,
+                        HtmlSite::ImgSrc(_) => kind == 2,
+                    }),
+                "kind {kind} in_svg {in_svg} missing"
+            );
+        }
+        // Truncated documents (the walk must stop where the reference stops).
+        for end in (0..MIXED_HTML.len()).filter(|&e| MIXED_HTML.is_char_boundary(e)) {
+            assert_eq!(
+                sites(&MIXED_HTML[..end]),
+                reference_walk(&MIXED_HTML[..end]),
+                "{end}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_walk_reports_the_same_sites_on_every_fixture_and_bench_document() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut files = Vec::new();
+        for dir in std::fs::read_dir(root.join("fixtures/invoices")).unwrap() {
+            files.push(dir.unwrap().path().join("index.html"));
+        }
+        for doc in ["b200-items", "b200-text", "b200-mixed"] {
+            files.push(root.join(format!("bench/corpus/{doc}.html")));
+        }
+        let mut n = 0;
+        for f in files.iter().filter(|f| f.exists()) {
+            let html = std::fs::read_to_string(f).unwrap();
+            assert_eq!(
+                HtmlSites::walk(&html).sites,
+                reference_walk(&html),
+                "{}",
+                f.display()
+            );
+            n += 1;
+        }
+        assert!(n >= 20, "only {n} documents found");
+    }
+
+    #[test]
+    fn one_walk_serves_the_scan_the_image_sources_and_the_rewrite() {
+        let sites = HtmlSites::walk(MIXED_HTML);
+        let scan = sites.scan(MIXED_HTML);
+        let srcs = sites.img_srcs(MIXED_HTML);
+        // The same results from a fresh walk per question (what each call did before F99f).
+        assert_eq!(format!("{:?}", scan_html(MIXED_HTML)), format!("{scan:?}"));
+        assert_eq!(img_srcs(MIXED_HTML), srcs);
+        assert_eq!(
+            srcs,
+            ["a.png", "b&c.png", "", "", "after.png", "svg-img.png"]
+        );
+        let rewritten = sites.rewrite(MIXED_HTML, |css, _| Cow::Owned(css.to_ascii_uppercase()));
+        assert_eq!(
+            HtmlSites::walk(&rewritten).sites.len(),
+            sites.sites.len(),
+            "a rewrite of the CSS does not change what the walk sees"
+        );
+        // A `style=""` value with a character reference is never handed to the rewrite.
+        assert!(rewritten.contains("&quot;Inter&quot;, serif"));
+        assert!(rewritten.contains("FONT-FAMILY: SERIF"));
     }
 }
