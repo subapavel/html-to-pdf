@@ -120,4 +120,32 @@ unchanged. fulgur VRT byte-identical (the only abspos fixture, `paint/opacity.ht
 
 ## 7. Evidence
 
-(Step 0 Chrome table, before / after numbers, fixture 26 compare, WPT and VRT results, validator summary.)
+### 7.1 Step 0: Chrome (Playwright, `printBackground`, `preferCSSPageSize`, A4, 96 dpi `pdftoppm`)
+
+Ink box `x0..x1 / y0..y1` of the `#0a0` 100 x 100 box, page in brackets. Body `margin: 30px; border: 4px solid #c00`
+(except where stated). The harness (`scratchpad/f187/chrome.mjs`, `measure.py`) wraps the same markup the tests render.
+"nominal" is §4's number; "ours before" is main's binary (F186) as measured by `abspos_body.rs` (red / green).
+
+| Case | Chrome m0 | Chrome m15 | Nominal differs | Ours before (m0 / m15) |
+|---|---|---|---|---|
+| A1 `top:50; left:50` | 50..150 / 50..150 | 107..207 / 107..207 | no | red: x 20 / x 77 (y right) |
+| A2 `right:50; bottom:50` | 643..743 / 972..1072 | 587..687 / 916..1016 | m0 1 px (A4 is 793.7 wide: 643.7) | red: 30 px short in x |
+| A3 `left:10%; top:10%` | 79..179 / 112..212 | 125..225 / 158..258 | no | red on x |
+| A4 100 px block, `left:50`, `top:auto` | 50..150 / 134..234 | 107..207 / 191..291 | no | red: y 104 / 161 |
+| A5a `body{position:relative}`, 300 px block, `top:50; left:50` | 84..184 / 84..184 | 141..241 / 141..241 | no | red: ICB used (x 20 / y 50) |
+| A5b same, `right:50; bottom:50` | 610..710 / 184..284 | 554..654 / 241..341 | m15: 554 (nominal 553.x) | red: ICB used |
+| A6 positioned ancestor `margin:40px 0 0 20px` | 104..204 / 124..224 | 161..261 / 181..281 | no | green (guard) |
+| A7 static wrapper `margin-left:20px` | 50..150 / 50..150 | 107..207 / 107..207 | no | green (guard) |
+| A8 150 rows, `top:2000; left:50` | [2] 50..150 / 877..977 | (m15 uses A9) | no | red: x 20, y 847 |
+| A9 150 rows, `top:1800; left:50` at m15 | | [2] 107..207 / 847..947 | y 847 (nominal 848: 1800 - 1009.17 + 57 = 847.83) | red: x 77, y 818 |
+| A10 `body{margin:0}`, first child `margin-top:40`, `top:2000` | [2] 50..150 / 877..977 | `top:1800`: [2] 107..207 / 847..947 | no | red: y 837 (m0) |
+| A11 fixed `top:50; left:50`, 3 pages (m15: 4) | [1-3] 50..150 / 50..150 | [1-4] 107..207 / 107..207 | m15 has 4 pages (content 3000 + 68 px > 3 page areas) | red: x 20, y 20 on pages 2+ |
+| A12 guards: A1 / A8 shapes with `body{margin:0}` | 50..150 / 50..150; [2] 877..977 | 107..207 / 107..207 | no | green |
+
+F187b probe (not fixed here): `top:50px; left:50px; margin-left:10px` is x 60..160 (m0) / 117..217 (m15), y unchanged;
+`margin-top:10px` is y 60..160 / 117..217, x unchanged: Chrome adds the margin to the inset; ours drops it
+(`resolve_viewport_cb_location`), `abspos_x` adds it.
+
+Fixture 26 (`26-stamp-page-margin`) on main's binary (F186): 4.57 % (1 page, as Chrome); the stamp is 57 px too far left.
+
+(Before / after numbers of the fix, WPT and VRT results, validator summary: to be filled in by the later steps.)
