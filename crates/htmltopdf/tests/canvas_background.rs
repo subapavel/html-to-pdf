@@ -470,8 +470,9 @@ fn h_html_and_body_colours_keep_their_own_areas() {
 }
 
 #[test]
-fn h2_html_colour_fills_the_page_under_the_body_box() {
-    // Red before F184: the html box ended at the end of its content.
+fn h2_html_colour_fills_the_page_beside_and_below_the_body_box() {
+    // Red before F184: the html box ended at the end of its content. Body's own box below its content is not
+    // asserted: its height is the content area's (F37).
     let pdf = render_page(
         PAGE_A4,
         "html { background: #fdd } body { margin: 40px; background: #dfd }",
@@ -479,24 +480,15 @@ fn h2_html_colour_fills_the_page_under_the_body_box() {
     );
     let page = raster(&pdf, 1);
     let html = [255, 221, 221];
-    assert!(
-        is_colour(page.at(400, 600), html, 2),
-        "below the body box: {:?}",
-        page.at(400, 600)
-    );
-    assert!(
-        is_colour(page.at(400, 1100), html, 2),
-        "{:?}",
-        page.at(400, 1100)
-    );
-    assert!(
-        is_colour(page.at(10, 1100), html, 2),
-        "{:?}",
-        page.at(10, 1100)
-    );
+    for (x, y) in [(10, 600), (10, 1100), (785, 1100), (785, 600)] {
+        assert!(
+            is_colour(page.at(x, y), html, 2),
+            "({x}, {y}) is {:?}, want html's colour",
+            page.at(x, y)
+        );
+    }
     // body's colour stays on its own box
     assert!(is_colour(page.at(400, 200), [221, 255, 221], 2));
-    assert!(is_colour(page.at(400, 600), html, 2));
 }
 
 #[test]
