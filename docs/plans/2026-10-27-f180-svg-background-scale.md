@@ -133,3 +133,14 @@ PDFs). The per-tile path logs a warning when it stops at `MAX_TILES` with tiles 
 (dot8.png on an A4 body, every 8 x 8 cell has its dot; px1.png fills 700 x 1000), fulgur `uniform_image_grid` unit tests and
 `render_smoke` pattern / no-pattern cases. Seen in passing: poppler resamples a pattern cell, so a pattern-painted grid differs
 from per-tile draws by antialiasing at tile edges (03-repeat-png page 2: 9 238 px over the threshold of 64, same layout).
+
+Review of the tiling-pattern follow-up (§8): `pdf-reviewer` found the pattern structure correct (PatternType 1, PaintType 1,
+exact XStep / YStep, phase in the Matrix, one shared image XObject, `qpdf --check` clean, 3-15x smaller files) and one
+MEDIUM: poppler draws hairline seams between SVG pattern cells (krilla-svg) at DPIs where the step is not a whole number
+of device pixels, raster cells are clean. Fix (fulgur `f6ee9fd7`): an SVG grid becomes a pattern only when the per-tile
+path would be cut at `MAX_TILES` (now a module constant); rasters from 64 tiles. `vrt-validator` re-run: the 8 px body
+pattern covers all of A4, 1 px tiles over 18 pages render in 11 ms / 9.5 kB (main: 128 ms / 455 kB, cut short on every
+page); fill stays inside every origin / clip / radius combination; 63 vs 64 tiles shows no visible jump; no seams in
+poppler or cairo at 96 / 200 dpi for raster patterns. LOW: poppler (`pdftoppm`) snaps a fractional pattern step to whole
+device pixels at low DPI (13.5 px tiles at a 14 px pitch); the PDF values are exact, cairo and 480 dpi are exact.
+
