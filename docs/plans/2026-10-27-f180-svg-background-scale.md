@@ -117,4 +117,4 @@ In case 2 Chrome's repeated tiles land up to 1 px off the ideal grid (red starts
 9–48: the tile is rasterised separately), the 300 px pitch is intact. Every number is within the plan's 1 px tolerance,
 so the tests assert the plan's values.
 
-(Gate results go here.)
+Gates (head `92d5354`): fixtures 01-25 and `bench/corpus` byte-identical to `main` (no fixture uses a `url()` background or `list-style-image`), so `compare.py` is unchanged; `bench.py --check` ok; side-by-side before / after / Chrome in `out/scratch/f180/sbs.png` (the background copy now equals the `<img>` and Chrome). Seen in passing: Chrome leaves ~4 px under an inline `<img>` before the next block, we leave none (F183).
