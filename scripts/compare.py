@@ -179,6 +179,12 @@ THRESHOLDS = {
     #     Chrome's). On main's binary the stamp is 57 px too far left (the body's x offset was subtracted): 4.57 %; with
     #     the F187 fix it is where Chrome puts it: 4.22 % (the text drift every fixture has). Worst page + 1 point.
     "26-stamp-page-margin": 0.053,
+    # 27: new in F183 (a hand-written Czech invoice in plain CSS, no Tailwind preflight, so its `<img>`s are inline: a logo with
+    #     the company name beside it above a 2 px rule, a QR code alone in a payment cell, a small logo in a paragraph; one page
+    #     like Chrome's). On main's binary a line holding an image is only as tall as the image (Parley counts an inline box as
+    #     ascent), so the rule and the cell border sit 4 px high and everything below drifts up: 7.61 %; with the strut of
+    #     the block under the image (F183) 6.1 % (the text drift every fixture has). Worst page + 1 point.
+    "27-inline-logo": 0.071,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

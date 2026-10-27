@@ -494,10 +494,13 @@ fn fixture_27_header_rule_and_payment_cell_match_chrome() {
         .filter(|&y| (60..200).any(|x| is_black(page.at(x, y))))
         .collect();
     let (first, last) = (qr_rows[0], *qr_rows.last().unwrap() + 1);
+    // The items table above has its own 2 px of row-height drift against Chrome (text metrics), so the absolute rows
+    // get 3 px and the distance to the cell's border, which is the strut's, 1 px.
     assert!(
-        first.abs_diff(454) <= 1 && last.abs_diff(566) <= 1,
+        first.abs_diff(454) <= 3 && last.abs_diff(566) <= 3,
         "QR rows {first}..{last} (Chrome 454..566)"
     );
+
     // The cell's bottom border (grey, 1 px) is the last grey row across the cell.
     let grey_row = |y: usize| {
         (57..737)
@@ -513,7 +516,12 @@ fn fixture_27_header_rule_and_payment_cell_match_chrome() {
         .find(|&y| grey_row(y))
         .expect("cell border");
     assert!(
-        bottom.abs_diff(583) <= 1,
+        (bottom - last).abs_diff(583 - 566) <= 1,
+        "the cell's bottom border is {} rows below the QR code (Chrome 17: quiet zone, padding and the strut)",
+        bottom - last
+    );
+    assert!(
+        bottom.abs_diff(583) <= 3,
         "payment cell bottom border at row {bottom} (Chrome 583)"
     );
 }
