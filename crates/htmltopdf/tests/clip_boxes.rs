@@ -486,6 +486,34 @@ fn an_auto_height_card_after_a_spacer_loses_no_word() {
 }
 
 #[test]
+fn an_auto_height_clip_box_that_fits_the_page_is_laid_out_as_a_box_without_the_clip() {
+    // c/auto-lineheight-small: `overflow:hidden;line-height:5px` on 16 px text, one page. The first version put AFTER at
+    // 729 pt (the box was placed at its own height); main puts it at 740 pt, where the same box without `overflow` has
+    // it (Chrome: 726; that gap is the line boxes' height, not this change). A document with no fixed-size box does not
+    // move.
+    let layout = |style: &str| {
+        let pdf = render_styled(
+            &format!("{SMALL_HEAD}body{{font:16px/20px Inter;margin:0}}"),
+            &format!(
+                "<div style=\"{style}line-height:5px\">{}</div>{AFTER}",
+                short_names(600).join(" ")
+            ),
+        );
+        assert_eq!(page_count(&pdf), 1);
+        printed_words(&pdf)
+            .into_iter()
+            .find(|w| w.text == "AFTER")
+            .expect("AFTER is printed")
+            .y_min
+    };
+    let (clipped, plain) = (layout("overflow:hidden;"), layout(""));
+    assert!(
+        (clipped - plain).abs() < 0.1,
+        "AFTER at {clipped:.1} pt with `overflow:hidden`, {plain:.1} pt without"
+    );
+}
+
+#[test]
 fn a_clip_box_with_a_height_still_drops_the_lines_it_hides_when_lines_are_small() {
     // The other side: a fixed height below the content keeps ADR-0009's rule whatever the line height. 16 px text in a
     // 12 px pitch, `height:300px`: 25 lines of 12 px are visible, 12 words each at most.
