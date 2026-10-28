@@ -133,4 +133,25 @@ Sweep: the patch's 238 changed cases (`sweep3.py`) plus `f30fbv2/pad`. No case m
 
 ## 7. Evidence
 
-(Filled in when it lands: step 1 measurements, red/green tests, gates, sweep, deviations.)
+### Step 1: Chrome m141 measurements (A4, 15 mm, Inter, 14px/1.2, `padding:16px;border:1px solid #888;border-radius:8px`, 1500 words, `AFTER` paragraph below; harness `out/scratch/f30fd/{gen1,meas,tab}.py`, git-ignored)
+
+The gate holds: **gate passed**. Chrome puts the first line of the continuation page at 42.3 pt (the content box top is 42.5 pt; word boxes start 0.2 pt above the line box) with no top border on that page, for a body-level `<div>`, `<p>`, `<div>` in a `<section>`, a nested `<p>` and a padding-only box with a background, with and without `overflow:hidden` (the two PDFs have identical words and positions).
+
+| shape (spacer above) | Chrome words per page | last line yMax p1 | first line p2 | AFTER | main words per page / AFTER |
+|---|---|---|---|---|---|
+| div, direct text, `overflow` or not (0) | 763 / 737 | 798.3 | 42.3 | p2 760.8 | 776 / 724, p2 735.8; yMax 810.8 (below the content box, 799.4) |
+| same (300 px) | 530 / 798 / 172 | 796.8 | 42.3 | p3 231.3 | **0** / 776 / 724 (the whole card moves to page 2, F30c) |
+| same (700 px) | 223 / 773 / 504 | 794.5 | 42.3 | p3 533.6 | 0 / 776 / 724 |
+| `<p>` with the padding (0 / 300 / 700) | 763 / 737, 530 / 798 / 172, 223 / 773 / 504 | as above | 42.3 | as above | the same as the div: lost line and shifted frame |
+| `<div>` with a `<p>` inside (nested, 0 / 300 / 700) | as above | | 42.3 | | 763 / 737, AFTER 761.3; 530 / 793 / 177; 222 / 774 / 504: within 5 words of Chrome, lines at 42.1 on page 2 |
+| `<section>` > padded div, direct text (0 / 300 / 700) | as above | | 42.3 | | 763 / 737 but lines at **54.8** on page 2, AFTER 774.1 (+13.3 pt); 530 / 779 / 191; 222 / 761 / 517 |
+| `td` with `padding:16px;border` (0) | 742 / 758 / 0 and AFTER alone on page 3 | | 42.3 | | 763 / 737, p2 lines at 54.8 |
+| padding only, background (0) | 769 / 731 | 797.5 | 42.3 | p2 747.3 | 779 / 721, AFTER 723.1 |
+| `lh20` (14px/20px, 0 / 300 / 700) | 634 / 666 / 200; 442 / 647 / 411; 184 / 644 / 658 / 14 | 789.3 | 43.8 | | 646 / 663 / 191 (and 0 first with a spacer) |
+| `t16/A_direct_pad`, `B`, `E_leading` (Tailwind, section direct text) | 385 / 617; 385 / 617; 385 / 810 / 688 (words of the whole page) | 796.8 | 42.6 | | 84 / 684 / 238; 84 / 891 / 30; 84 / 792 / 782 / 228: **the card starts on page 2**, page 1 holds 84 words |
+| `pad16_h300.s700` (700 px spacer, `height:300px`, padding 16) | 199 / 13 | 799.0 | 43.8 | p2 60.3 | 185 / 26, p2 60.1 |
+
+What the PNG shows (`c286_ovf_s0`, 150 dpi crops of page 1's bottom, page 2's top and bottom): on page 1 the left and right borders run straight down to the page's content-box bottom (row 1065 px of 1065.8), there is no bottom border and no corner there; the top border and the radius are at the top of the card. Page 2 starts with the side borders at the content box top, no top border, no radius; the last fragment has the bottom border with its radius and `AFTER` right below it (the padding bottom is in the frame). So the frame of a non-last fragment runs to the page's bottom (css-break-3 §5) and `slice` is exactly what the plan predicted. A `td` is sliced the same way (its page-2 lines start at 42.3 and there is no top border), which is outside this plan's routed shapes and is left to F96.
+
+The step's scratch build with `inset_top = 0` on continuation pages was not made: step 3 produces that geometry in the fork, and the words, line positions and AFTER above are the numbers the tests are written against. The Tailwind shapes differ from Chrome first in where the card starts (page 1 holds 84 of Chrome's 385 words on main), which is the start rule the new branch changes; test 4 is decided after step 3 (§4).
+
