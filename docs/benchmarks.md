@@ -2,7 +2,9 @@
 
 `python3 scripts/bench.py` renders a fixed corpus with the release CLI and prints how long each document takes. `--check` turns it
 into a guard (CI runs it). Plan: `docs/plans/2026-10-18-b1-benchmark.md`. AGENTS.md goal 2 is the reason: a single-page invoice in
-low tens of ms, a 200-page document under a second.
+low tens of ms, a 200-page document under a second. The owner accepted an exception on 2026-10-27: a 200-page table of items
+(`b200-items`) may take about 1.2 s on the dev VM (it measured 1160-1220 ms after F99f); `bench.py` reports it against
+`GOAL_MS_B200_TABLE` (1250 ms). The gate (`HARD_MS_B200`, 1500 ms, and the baseline regression check) is unchanged.
 
 ```bash
 cargo build --release -p htmltopdf-cli

@@ -9,7 +9,8 @@ Read this file first. It is short on purpose; details live in `docs/`.
 
 1. **Precision** — output must match the CSS spec; Chrome is the *reference*, not the truth.
    When fulgur and Chrome disagree, cite the spec section before changing anything.
-2. **Speed** — single-page invoice in low tens of ms, 200-page document under a second.
+2. **Speed** — single-page invoice in low tens of ms, 200-page document under a second. Exception: a 200-page table of
+   items may take about 1.2 s (owner's decision, 2026-10-27; `docs/benchmarks.md`).
 3. **Determinism** — same input → byte-identical PDF. Never read host fonts or the network.
 
 ## Layout of the repo
