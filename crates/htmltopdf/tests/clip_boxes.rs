@@ -663,6 +663,145 @@ fn a_table_cell_with_a_height_and_overflow_hidden_is_not_a_clip_box_of_that_heig
     );
 }
 
+// ── Shapes this change does not fragment (vrt-validator, third pass) ─────────────────────────────────────────────────
+
+/// An 880 / 700 px spacer, then a clip box of `style` holding `inner`, then AFTER.
+fn clip_box(spacer: usize, style: &str, inner: &str) -> Vec<u8> {
+    render(&format!(
+        "<div style=\"height:{spacer}px;background:#eee\"></div>\
+         <div style=\"overflow:hidden;{style}\">{inner}</div>{AFTER}"
+    ))
+}
+
+/// The output of main for a shape: words in the text layer on each page, and where AFTER is (page, y in pt, ±0.5).
+/// `chrome_words` is how many of the first words Chrome shows (page 1 and page 2 together): every one of them has to be
+/// in the PDF, however far from Chrome's page the shape puts them.
+fn like_main(what: &str, pdf: &[u8], per_page: &[usize], after: (usize, f32), chrome_words: usize) {
+    assert_eq!(
+        words_per_page(pdf),
+        per_page,
+        "{what}: words per page (main's)"
+    );
+    let printed = printed_words(pdf);
+    let afters: Vec<&Word> = printed.iter().filter(|w| w.text == "AFTER").collect();
+    assert_eq!(afters.len(), 1, "{what}: AFTER is printed once");
+    assert_eq!(afters[0].page, after.0, "{what}: AFTER on page (main's)");
+    assert!(
+        (afters[0].y_min - after.1).abs() <= 0.5,
+        "{what}: AFTER at {:.1} pt, main {:.1}",
+        afters[0].y_min,
+        after.1
+    );
+    for i in 0..chrome_words {
+        let word = format!("word{i:05}");
+        assert!(
+            printed.iter().any(|w| w.text == word),
+            "{what}: {word} is shown by Chrome and missing from the PDF"
+        );
+    }
+}
+
+#[test]
+fn a_constrained_clip_box_whose_content_is_not_one_paragraph_at_its_top_is_what_main_made_of_it() {
+    // The clip semantics of this change (the box is fragmented by its own block size, the writer drops what lies below
+    // its clip) are written for a box whose content is direct text, or one paragraph at its content top (plan 7, "Supported
+    // shapes"). The fragmenter splits only the first thing on a strip (F30c): with anything above the paragraph the
+    // paragraph moved whole and was clipped, and lines Chrome shows on page 1 were not in the PDF (the third pass:
+    // hp_pad 14 words against main's 371 and Chrome's 98). Such a box keeps main's output until F30c (finding F30f-f).
+    // Numbers: main's binary (fork 516558cc) on these documents; Chrome m141 shows 98 / 105 / 98 / 101 / 84 / 98 words.
+    let w4 = w();
+    let img = "<img style=\"display:block\" width=\"120\" height=\"60\" \
+               src=\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'>\
+               <rect width='120' height='60' fill='red'/></svg>\">";
+    let cases: Vec<(&str, usize, &str, String, Vec<usize>, (usize, f32), usize)> = vec![
+        (
+            "heading above the paragraph",
+            700,
+            "height:300px;padding:16px",
+            format!("<h2 style=\"margin:0\">HEAD</h2><p>{w4}</p>"),
+            vec![0, 371, 0],
+            (3, 42.9),
+            98,
+        ),
+        (
+            "second paragraph",
+            700,
+            "height:300px;padding:16px",
+            format!(
+                "<p style=\"margin:0 0 14px\">{w4}</p><p style=\"margin:0 0 14px\">{}</p>",
+                words(4000, 4100)
+            ),
+            vec![0, 0, 371, 100],
+            (4, 267.9),
+            105,
+        ),
+        (
+            "the paragraph's own margin",
+            880,
+            "height:300px",
+            format!("<p style=\"margin:14px 0\">{w4}</p>"),
+            vec![0, 372, 0],
+            (3, 42.9),
+            98,
+        ),
+        (
+            "float above the paragraph",
+            700,
+            "height:300px;padding:16px",
+            format!(
+                "<div style=\"float:left;width:100px;height:80px;background:#ccc\"></div><p>{w4}</p>"
+            ),
+            vec![0, 371, 0],
+            (3, 42.9),
+            101,
+        ),
+        (
+            "image above the paragraph",
+            700,
+            "height:300px;padding:16px",
+            format!("{img}<p>{w4}</p>"),
+            vec![0, 371, 0],
+            (3, 42.9),
+            84,
+        ),
+        (
+            "heading and direct text",
+            880,
+            "height:300px;padding:16px",
+            format!("<h2 style=\"margin:0\">HEAD</h2>{w4}"),
+            vec![0, 371, 0],
+            (3, 42.9),
+            98,
+        ),
+        (
+            "padding in percent (Taffy resolves the vertical part to 0, plan 7)",
+            880,
+            "height:300px;padding:5%",
+            format!("<p>{w4}</p>"),
+            vec![0, 322, 0],
+            (3, 42.9),
+            96,
+        ),
+    ];
+    for (what, spacer, style, inner, per_page, after, chrome_words) in cases {
+        let pdf = clip_box(spacer, style, &inner);
+        like_main(what, &pdf, &per_page, after, chrome_words);
+    }
+}
+
+#[test]
+fn a_paragraph_that_avoids_a_break_inside_a_padded_clip_box_is_what_main_made_of_it() {
+    // `break-inside: avoid` on the paragraph (150 words: it fits a page): Chrome moves it whole to page 2 and shows 112
+    // words there. The first version of the clip part split it (98 / 14, farther from Chrome than main, which has 150
+    // words on page 2 and AFTER at 291.9 pt, Chrome 292.1); a box with such a paragraph is not a supported shape.
+    let pdf = clip_box(
+        700,
+        "height:300px;padding:16px",
+        &format!("<p style=\"break-inside:avoid\">{}</p>", words(0, 150)),
+    );
+    like_main("avoid", &pdf, &[0, 150], (2, 291.9), 112);
+}
+
 // ── Fixture 28 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 fn fixture_28() -> Vec<u8> {
