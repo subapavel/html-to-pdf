@@ -157,9 +157,16 @@ fn s1_ten_collapsed_rows_of_two_images_and_twenty_words_lose_nothing() {
     let pdf = render(
         "A4",
         "td { padding: 6px; border: 1px solid #000; vertical-align: top } table { border-collapse: collapse; table-layout: fixed }",
-        &format!("{}<table style=\"width: 100%\"><tbody>{rows}</tbody></table>", filler(0)),
+        &format!(
+            "{}<table style=\"width: 100%\"><tbody>{rows}</tbody></table>",
+            filler(0)
+        ),
     );
-    assert_eq!(not_once(&pdf, 260), BTreeMap::new(), "words lost or repeated");
+    assert_eq!(
+        not_once(&pdf, 260),
+        BTreeMap::new(),
+        "words lost or repeated"
+    );
     assert_eq!(pages(&pdf), 2, "Chrome: 2 pages");
     assert_eq!(words_on(&pdf, 1), range(1, 130));
     assert_eq!(words_on(&pdf, 2), range(131, 260));
@@ -188,7 +195,11 @@ fn s2_two_cells_per_row_are_cut_between_lines_as_in_chrome() {
             filler(673)
         ),
     );
-    assert_eq!(not_once(&pdf, 224), BTreeMap::new(), "words lost or repeated");
+    assert_eq!(
+        not_once(&pdf, 224),
+        BTreeMap::new(),
+        "words lost or repeated"
+    );
     assert_eq!(pages(&pdf), 2);
     let mut p1 = range(1, 64);
     p1.extend(85..=92);
@@ -224,7 +235,11 @@ fn s3_landscape_header_table_keeps_every_word_and_matches_chrome() {
     // `b_land_thead_357`: the second row is cut between its lines, Chrome keeps w001..w051 and 5 images on page 1 and
     // the rest (w052..w084, 4 images) on page 2, the header on both. The branch before the fix lost 5 words.
     let pdf = thead_table("A4 landscape", 357);
-    assert_eq!(not_once(&pdf, 84), BTreeMap::new(), "words lost or repeated");
+    assert_eq!(
+        not_once(&pdf, 84),
+        BTreeMap::new(),
+        "words lost or repeated"
+    );
     assert_eq!(pages(&pdf), 2);
     assert_eq!(words_on(&pdf, 1), range(1, 51));
     assert_eq!(words_on(&pdf, 2), range(52, 84));
@@ -235,7 +250,11 @@ fn s3_landscape_header_table_keeps_every_word_and_matches_chrome() {
     // page 2 with the other rows (Chrome: no word on page 1, images 2 | 7, header on both). The branch before the fix
     // lost 24 of the words of page 2.
     let pdf = thead_table("A4 landscape", 619);
-    assert_eq!(not_once(&pdf, 84), BTreeMap::new(), "words lost or repeated");
+    assert_eq!(
+        not_once(&pdf, 84),
+        BTreeMap::new(),
+        "words lost or repeated"
+    );
     assert_eq!(pages(&pdf), 2);
     assert_eq!(words_on(&pdf, 1), Vec::<u32>::new());
     assert_eq!(words_on(&pdf, 2), range(1, 84));
@@ -249,7 +268,11 @@ fn s4_a6_header_table_keeps_every_word_and_image() {
     // we cut it after its two image lines (8 | 1), as the main branch did (which lost 12 words here). Complete and
     // the words per page are Chrome's; the image split is not (noted in plan 7.8).
     let pdf = thead_table("A6", 475);
-    assert_eq!(not_once(&pdf, 84), BTreeMap::new(), "words lost or repeated");
+    assert_eq!(
+        not_once(&pdf, 84),
+        BTreeMap::new(),
+        "words lost or repeated"
+    );
     assert_eq!(pages(&pdf), 2);
     assert_eq!(words_on(&pdf, 1), range(1, 56));
     assert_eq!(words_on(&pdf, 2), range(57, 84));
@@ -286,5 +309,8 @@ fn s5_separated_table_with_header_and_footer_keeps_every_word_and_image() {
     assert_eq!(missing, BTreeMap::new(), "words lost or repeated");
     assert_eq!(pages(&pdf), 3, "Chrome: 3 pages");
     let images: usize = (1..=3).map(|p| images_on(&pdf, p)).sum();
-    assert!(images >= 22, "20 body images and the 2 of the footer: {images}");
+    assert!(
+        images >= 22,
+        "20 body images and the 2 of the footer: {images}"
+    );
 }
