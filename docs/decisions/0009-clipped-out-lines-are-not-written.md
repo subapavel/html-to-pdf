@@ -25,7 +25,11 @@ visible part has.
   "Shows" means at least 0.5 pt of the line box is inside the band: line boxes are quantised to the pixel (F78), and
   their tops are sums of the heights above.
 - The band is the padding box of a clipping box in page coordinates, intersected with the bands of the clipping boxes
-  around it. It exists for the block axis only (`overflow-y`); `overflow-x: clip` alone hides nothing here.
+  around it. Only a box whose block size the author constrains (a `height`, or a `max-height` other than `none`; a
+  percentage counts when its basis is definite) has a band: an auto-height box is as tall as its content and hides no
+  line, whatever its line boxes measure (Blitz's are as tall as the font when the line height is below it). Without this
+  rule the first version dropped words that showed (plan §7, "Auto-height clip boxes").
+  It exists for the block axis only (`overflow-y`); `overflow-x: clip` alone hides nothing here.
 - Inside a transform, and inside an inline box that the carrier paints under a translate, the coordinates are not page
   coordinates: no band is known there and none is set, so the output stays as it was. A clip box inside a transformed box
   still writes what it hid before.

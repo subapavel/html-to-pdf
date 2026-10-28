@@ -1,6 +1,6 @@
 # F30f-b (clip part): a clip box shorter than its content shows, or writes into the PDF, what it hides
 
-Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: **done** (§7). Fork commits `ce76bbfa` (writer) and `c700b372` (fragmenter) on `htmltopdf/srgb-colours`; ADR-0009.
+Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: **done** (§7). Fork commits `ce76bbfa` (writer), `c700b372` (fragmenter) and `16d281a3` (only constrained boxes, §7 "Auto-height clip boxes") on `htmltopdf/srgb-colours`; ADR-0009.
 
 - The fix goes on `subapavel/fulgur` `htmltopdf/srgb-colours` (`Cargo.lock` pins `516558c`), carried via `[patch.crates-io]`.
 - Line numbers are from the fork checkout, in `crates/fulgur/src/pagination_layout.rs` unless another file is named. Re-read them before editing.
@@ -303,3 +303,53 @@ A4, 15 mm, Inter, `p{margin:0;line-height:20px}`, `W` = 4000 words, `<p>AFTER</p
 ### Not verified
 
 `vrt-validator` and `pdf-reviewer` (to run: tagged output of a paragraph clipped out completely, empty structure elements; a clip box under a transform; table cells with `overflow:hidden`, F51); the Chrome comparison of bookmarks and counters in hidden content; clip boxes nested in flex or grid items (unchanged by design).
+
+### Auto-height clip boxes (vrt-validator, HIGH, 2026-10-28; fork `16d281a3`)
+
+**What the validator found.** An auto-height `overflow:hidden` box (no `height`, no `max-height`) that spans a page break lost lines, against decision 3 ("content-sized clip boxes are unchanged"). Scratch shapes (`out/scratch/f30fbv/`, git-ignored; words in the text layer, main / the fork at `c700b372` / Chrome):
+
+| Case | main | c700b372 | Chrome |
+|---|---|---|---|
+| `sc/c318` (`16px/12px`, `<div style="overflow:hidden">`, 1500 words) | 1500 | 1488 | 1500 |
+| `sc/c300` (`16px/0.9`) | 1500 | 1488 | 1500 |
+| `fz/s12_40` (lh 0.7, bordered padded card, h2 + p, 700 px spacer) | 1187 | 762 | 1187 |
+| `sc/c286` (`14px/1.2`, padded bordered card, 1500 direct words) | 1500 | 1484 | 1500 |
+| `c/auto-lineheight-small`, one page, AFTER y | 740.4 | 729.1 | 725.6 |
+
+In 157 of the 901 auto-height scratch cases below the output differed from main.
+
+**Why an auto-height box was treated as clipped.** Not a rule, a measurement. `clip_block_limit` returned a limit whenever `clip_hides_nothing` said "no", and `clip_hides_nothing` compares the bottom of the last *line box* with the box's height (plus `LINE_BOX_SLACK` = 2 px). Blitz's line boxes are as tall as the font's ascent + descent when the line height is below that, and they sit one line height apart. Logged for the repros (`collect_inline_line_metrics`, px from the content top):
+
+| Case | box height | first lines | last line | past the box |
+|---|---|---|---|---|
+| c318 (Inter 16 px in 12 px lines) | 1500 | (-4, 16), (8, 28) | (1484, 1504) | 4 px (> 2): "hides content" |
+| c300 (`0.9`: 14.4 px) | 1800 | (-3, 17), (11, 31) | (1783, 1803) | 3 px (> 2) |
+| c286 (`1.2`: 16.8 px, 17 / 17 inset) | 1966 | (-1, 17), (16, 34) | (1914, 1932) | -2 px: "hides nothing" |
+
+The validator's guess (px quantisation of the line heights) is half of it: it is the line box's height (the font's, 20 px) against the pitch (the line height, 12 px), which makes the last box end past a box that is exactly its lines' pitch high. With such a limit set, `clip_to` dropped the last lines of every fragment (c318, c300, s12_40), the place-whole rule and the capped closing changed the layout of a one-page box (`auto-lineheight-small`), and the writer's band (set for every clipping box) dropped the lines that main paints outside the fragment's frame (c286: no limit, only the band; those lines are not visible on main either, see F30f-d).
+
+**Decision (task giver, 2026-10-28).** The clip semantics of this change (fragmenter `clip_block_limit` / `ancestor_clip_limit` / `clip_to` / place whole / capped closing, and the writer's band) apply only to a box whose computed block size is constrained: a non-auto `height` or a `max-height` other than `none`. An auto-height clip box behaves as on main in fragmentation and drawing, and has no band.
+
+**Change (fork `16d281a3`).**
+
+- `pagination_layout::block_size_constrained(node)`: computed `height` is a `<length-percentage>` (not `auto`, `min-content`, `max-content`, `fit-content`, `stretch`) or `max-height` is a `<length-percentage>` (not `none` or a keyword). A percentage counts only when its basis is definite (`percentage_basis_is_definite`: walking the `layout_parent` chain, a `height` that is a length is reached before an `auto` or keyword one; the root's basis is the viewport; css-sizing-3 §5.2.1). `<html>` and `<body>` are never constrained. `min-height`, `box-sizing` and `overflow` do not matter. Style-only, so box-sizing (padding and border inside or outside) needs no handling.
+- `clip_block_limit` returns `None` for an unconstrained box; so do `ancestor_clip_limit` and `tightest_clip_limit` (built on it): every place of the fragmenter that reads a limit sees none.
+- `box_barrier(.., through_clips)`: an unconstrained box keeps main's rule (`clips_overflow` and not `clip_hides_nothing` → `ClipsItsContent`, whatever `through_clips` says; also for `overflow-x: clip` alone); a constrained one the rule of the first version (lifted in block flow, `clips_block_axis` only).
+- `BlockStyle::block_size_constrained`, set in `extract_block_style` for a box that clips `overflow-y`; `draw_under_clip` sets a `ClipBand` only for such a box. A constrained box inside an unconstrained one still has its band, and the unconstrained one adds none.
+
+**Red tests first.** Ours, `crates/htmltopdf/tests/clip_boxes.rs`: `an_auto_height_clip_box_with_lines_smaller_than_the_font_loses_no_word` (c318 and c300 shapes), `an_auto_height_card_with_direct_text_loses_no_word_in_the_text_layer` (c286), `an_auto_height_card_after_a_spacer_loses_no_word` (s12_40, 425 words missing), `an_auto_height_clip_box_that_fits_the_page_is_laid_out_as_a_box_without_the_clip` (AFTER 234.1 pt against 245.4 without `overflow`), and the other side, `a_clip_box_with_a_height_still_drops_the_lines_it_hides_when_lines_are_small` (green before and after). The first four are red on `c700b372` (words lost: 12, 16, 425; AFTER 11.3 pt higher) and green on `16d281a3`; the other 17 tests of the file stay green. Words are checked in the text layer: every word once and in order; page counts are Chrome's (2). AFTER's position is compared with the same box without `overflow`, not with Chrome: main is 14 pt below Chrome there for a reason of its own (the line boxes' height against the pitch).
+
+Fork lib, new: `block_size_constrained_reads_height_and_max_height`, `a_content_sized_clip_box_has_no_limit_however_tall_its_line_boxes_are` (line boxes of 19 px at 6 px, `clip_hides_nothing` false, limit `None`; with `height:180px` the limit is 180), `a_content_sized_clip_box_keeps_the_barrier_it_had_and_a_sized_one_loses_it_in_block_flow`. (Written with the change, not before it: they need the new function, so "red" is a compile error on `c700b372`; the behaviour was red in ours.)
+
+**Evidence.** GATES_PLACEHOLDER
+
+**The pre-existing loss of a line per page break (b).** Root cause found, fix not included: it is a new HIGH finding, **F30f-d** in `2026-10-15-m0-findings.md`, at the front of the queue. In short: main's body-level line path fits the lines of a paragraph with a border or padding as if they started at the top of its border box, but the renderer paints them `inset_top` lower on every fragment, so the last line of each page ends outside the page's frame and a clip box cuts it off the picture (c286: the 13 words of w0763-w0775 are on page 1 of main's text layer at y 798-811 pt, the content box ends at 799.4 pt, and page 2 starts at w0776; Chrome 763 / 737 words). The fix (route such a paragraph through the splitter that knows the insets) is 20 lines and gets c286 to Chrome's words per page, but over the 238 scratch cases it changes only 69 reach Chrome's numbers exactly and 86 stay more than 14 words off, because it then runs into `box-decoration-break: slice` (F96): Chrome does not repeat the top padding on the continuation page and ours does. So it is not an improvement everywhere yet. The patch:
+
+```diff
+PATCH_PLACEHOLDER
+```
+
+**Deviations from this plan.** The plan's decision 3 said "content-sized clip boxes are unchanged" and tested it with fixtures only; §7 now tests it with shapes whose line boxes are taller than their pitch. `overflow-x: clip` alone on an auto-height box keeps main's barrier (the first version lifted it; no Chrome probe covers that shape, P7xc has a `height`).
+
+**Not verified (added).** Percentage `height` / `max-height` with an abspos or flex-stretched basis (`percentage_basis_is_definite` walks `layout_parent` heights only, so a flex item stretched to a definite height and an abspos box with `top` and `bottom` count as auto: they keep main's behaviour); `min-height`-only boxes against Chrome; the Tailwind `t16/` shapes against Chrome (they are far from it on main already, see F30f-d).
+
