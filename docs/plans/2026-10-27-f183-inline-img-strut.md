@@ -1,7 +1,8 @@
 # F183 — an inline `<img>` sits on the floor of its line box (no strut below the baseline)
 
 Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **done** (Parley fork `1f23226`, Blitz fork `63628c03`; section 7.3) — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
-v0.6.0 release commit `3fe5c239`. Low impact on the product today:
+v0.6.0 release commit `3fe5c239`. The table-row part of **F83d** (and **F83a**, the `page-break-inside` alias) is folded into this PR (fulgur `9e14cba2`, section 7.6): the line-split path that section 7.5 opened for collapsed cells ignored `break-inside: avoid` on `td` / `tr` and made 45 sweep cases worse than main, so the fix could not wait for its own PR. The flex / grid part of F83d stays open.
+Low impact on the product today:
 Tailwind's preflight makes every `img` / `svg` `display: block`, so no Tailwind invoice (fixtures 01-26, `bench/corpus`)
 has an inline baseline image; hand-written HTML with an inline logo or QR code does.
 
@@ -291,7 +292,7 @@ ignores `break-inside: avoid` on the `td` and its `tr` and `orphans` / `widows`.
 "first"), which is what Chrome does; now they split it like a separated table already did. 45 sweep cases: `tr { break-inside: avoid }` over six rows of 50 words and
 an image (`t_row_avoid_*`, 6 of 6: 33 words | 267 against Chrome and main 0 | 300), `td { break-inside: avoid }` (`u_col1_tdavoid_*`, `u_col2_tdavoid_*`, 19) and `td { orphans: 4;
 widows: 4 }` (`u_col1_o4_*`, `u_col2_o4_*`, 20). Separated tables (`u_sep1_tdavoid_1000`, main) show the same split, so the cause is F83d, not this change. The fix is to let
-`nested_line_split` return `None` for a cell (or a cell of a row) with `avoid` that fits a page, so the cut moves the row whole; it moves separated tables too.
+`nested_line_split` return `None` for a cell (or a cell of a row) with `avoid` that fits a page, so the cut moves the row whole; it moves separated tables too. Done in section 7.6.
 
 Results (binary `htmltopdf-f183-fix3`, scratch outside the repo):
 
@@ -312,3 +313,57 @@ Results (binary `htmltopdf-f183-fix3`, scratch outside the repo):
 
 Not verified: the separated-border and padded-table variants against Chrome beyond the cases above; the effect on `tr` / `td` `avoid` (45 cases, above); the Blitz CI / Parley clippy (as in 7.3).
 
+### 7.6 `break-inside: avoid` on a `td` or `tr` (F83d, table part; F83a) (2026-10-28)
+
+**What and why folded in.** Section 7.5's fix sends the cell of every bordered or collapsed table down the line-split path (`nested_line_split`), the path that
+separated cells and cells of tables without a border always took on main. That path ignored `break-inside: avoid` on the `td` and on its `tr` (finding F83d),
+and the collapsed tables had only moved such a cell whole by accident (the cell was never "first"). So 7.5 made 45 sweep cases further from Chrome than main
+(`t_row_avoid_*` 6, `u_col1/2_tdavoid_*` 19, `u_col1/2_o4_*` 20). Landing 7.5 alone would have been a regression for a shape invoices do use (a row kept
+together), so the table-row part of F83d went into this PR; the flex / grid part of F83d is untouched and stays in the findings queue.
+
+**Fix (fulgur fork `htmltopdf/srgb-colours` `9e14cba2`).** css-break-3 §3.3 / §4.4: a break between rows is a class A break point and is preferred to one inside a
+row; `avoid` is dropped only when the row cannot fit a fragmentainer. `tr` has no box of its own in the fragmenter (Blitz gives `tbody` / `tr` no size), so the rule is read
+from the cell and from the `tr` that holds it.
+
+- `avoid_rows(table)` returns the rows of a table that `avoid` keeps (the cell has it, or the cell's `tr` does) and that fit a fresh page, keyed by the row's top (quarter pixels),
+  with the row's block size. It is empty, one pass over the cells, when nothing asks for it.
+- `leading_block_size` counts such a row whole (the table moves to the next page when the row does not fit, as an `avoid` box does in block flow).
+- `fragment_block_subtree` neither splits nor enters the cell of such a row, so the cut moves the row between rows. A row taller than a page, a row first on a strip that does not hold it
+  (nowhere better to go), and a cell with a forced break inside (css-break-3 §4.3) are split as before.
+- `page-break-inside` is read as the legacy alias of `break-inside` (css-break-3 §3.4; `auto` and `avoid` only, `avoid-page` / `avoid-column` are not valid there): **F83a is done** too.
+
+**Tests (red before, green after).** fulgur: `avoid_on_a_row_or_a_cell_moves_a_row_that_fits_a_page_whole` (four rules, separated and collapsed), `avoid_row_moves_alone_and_a_row_taller_than_a_page_still_splits`,
+`avoid_row_moved_to_the_next_page_sits_below_the_repeated_header`, `parse_page_break_inside_is_an_alias_for_auto_and_avoid`. html-to-pdf `crates/htmltopdf/tests/row_avoid.rs` (Chrome's numbers: words and ink rows
+per page, same HTML in headless Chromium): `a1` (`tr` / `td`, `break-inside` / `page-break-inside`, collapsed and separated, fillers 1000 and 1040: nothing on page 1, 50 words on page 2, border at row 0 or 1),
+`a2` (without `avoid` the row is still split between its lines), `a3` (six avoid rows move from the first), `a4` (the cells level with the avoid cell follow it), `a5` (only the row that straddles moves), `a6` (a row
+taller than a page is still split and loses nothing), `a7` (under a repeated header unchanged).
+
+**Results (binary `htmltopdf-f183-fix4`, scratch outside the repo).**
+
+- Sweeps (`out/scratch/f183v5`, all 6209 cases rendered again with `fix4`, `rerun4.py`; Chrome re-run on the 94 affected cases): 74 differ in bytes from `fix3`, all in `avoid` families, every other case
+  (6135: paragraphs, lists, flex, grid, multicol, nested inline-blocks, tables without `avoid`) is byte-identical to `fix3`. All 74 now equal Chrome's words and images per page; no case loses a word or an image.
+
+  | family (cases changed) | main | fix3 | fix4 | Chrome |
+  |---|---|---|---|---|
+  | `t_row_avoid_*` (7; six rows of 50 words and an image, collapsed) | 0 \| 300 in 7 | 33 \| 267 in 6, 0 \| 300 in 1 | 0 \| 300 in 7 | 0 \| 300 |
+  | `u_col1/2_tdavoid_*` (33; collapsed 1 px / 2 px, `td` avoid, 50 words) | 0 \| 50 in 31, all 50 on one page in 2 | 32 \| 18 or 31 \| 19 in 19, 0 \| 50 in 14 | 0 \| 50 in 33 | 0 \| 50 |
+  | `u_sep1/3_tdavoid_*` (34; separated, `td` avoid) | split 32 \| 18 or 31 \| 19 in 18, 15 \| 35 in 11, one page with all 50 words in 5 | same as main | 0 \| 50 in 34 | 0 \| 50 |
+
+  Words per page 1 \| page 2; "equal to Chrome" below compares words and images per page and the page count.
+
+  Positions (first word of page 2, `pdftotext -bbox`, pt): `u_col1_tdavoid_1000` main 35.6, fix3 none (cell on page 1), fix4 37.9, Chrome 37.9; `u_col2_tdavoid_1020` main 36.4, fix4 38.6, Chrome 38.6;
+  `u_sep1_tdavoid_1000` fix4 37.9, Chrome 37.9; `u_sep3_tdavoid_1020` fix4 39.4, Chrome 39.4; `u_col1_tdavoid_1036` (words equal in fix3 and fix4) fix3 37.1, fix4 37.9, Chrome 37.9;
+  `t_row_avoid_1042` main 2.6, fix4 3.4, Chrome 4.1 (0.75 pt = 1 px, the collapsed-border offset of F132; main was 1.5 pt off). The 34 separated cases are better than main (the cell was split, or the page was not broken, there on main already).
+- **Not fixed: `td { orphans: 4; widows: 4 }` (`u_col1_o4_*`, `u_col2_o4_*`, 20 cases).** Still 48 | 102 words (`u_col1`), 47 | 103 (`u_col2`), later 32 | 118 and 31 | 119 against main's and Chrome's 0 | 150 (Chrome moves the cell whole). fulgur does not read `orphans` / `widows`: the line planner uses the constants `ORPHANS_MIN` / `WIDOWS_MIN` = 2 (`pagination_layout.rs`), and no CSS reader maps the properties. Collapsed cells had met Chrome's answer only because they were never "first". This is the existing finding **F30c** ("`orphans` / `widows` in CSS are not read"),
+  no new finding (the id F83e is a different, older finding); the numbers are added to F30c. No content is lost in these cases; they are the only cases further from Chrome than main (20 of 6209), a
+  page-1 stub of the cell instead of the whole cell on page 2.
+- Byte identity with main's binary (`htmltopdf-f99f`) at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical. Fixtures 13 and 14 (keep-together) therefore did not move; no golden or threshold changes.
+  `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok, numbers unchanged (27: 6.1 %, 13: 11.7 % worst, 16: 20.8 %). `scripts/bench.py --check` ok (`b200-items` 1270 ms on this noisy host, under the hard limit; the PDFs are byte-identical to main's, so the
+  `avoid_rows` pass is the only added work and costs one pass over the cells of a table with no `avoid`).
+- fulgur: `cargo test -p fulgur --lib` 2356 pass (Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -D warnings`, `cargo fmt --check` clean.
+- html-to-pdf: `cargo test --release --locked` 792 passed, 0 failed (71 binaries; `row_avoid` 7), `cargo fmt --all --check`, `cargo clippy --release --all-targets --locked -- -D warnings` clean,
+  `cargo build --release --locked -p htmltopdf-cli` with the lock at `9e14cba2`; `Cargo.lock` holds git revisions of the forks only (no local paths).
+- fulgur VRT (`fulgur-vrt`, forks patched in): the same 35 of 64 fixtures fail against the goldens in this environment's fonts, the failure list is unchanged and the 70 actual files are byte-identical to the run before this change; no golden moves.
+
+Not verified: flex / grid items and rows entered through other paths (F83d's remaining half); `avoid` on a row in a table in columns or inside a transformed wrapper; rows with `rowspan` cells (the row key is the cell's top, as the
+fragmenter sees it); the Blitz CI / Parley clippy (as in 7.3).
