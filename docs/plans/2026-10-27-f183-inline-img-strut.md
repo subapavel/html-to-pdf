@@ -192,3 +192,53 @@ none is further from Chrome than main.
 
 Not verified: the Blitz CI / clippy; a `<button>` or `<input>` check has an html-to-pdf test but no Blitz lib test; Parley clippy
 (`-D warnings` fails on 7 sites in files this change does not touch, as before it).
+
+### 7.4 Dropped image in a collapsed table cell on page 2 (2026-10-28)
+
+vrt-validator, high: an inline `<img>` / `<svg>` in a `border-collapse: collapse` cell vanished (with the text beside it; only the bordered
+box stayed) when its row landed on page 2. Main draws it. Repro: a 1080 px filler `div`, then `<table style="border-collapse:collapse">` with
+`td { padding: 8px; border: 1px solid #000 }` holding a 60 px image.
+
+**Root cause (two links, the first is old, the second is what F183 exposed).**
+
+1. `pagination_layout.rs` `leading_block_size` (how much of a box has to fit below its placement before the fragmenter may enter it) treats
+   a distance between the content edge (`border + padding`) and the first in-flow child as a margin gap, a class C break point (css-break-3
+   section 4.1), and returns it as the box's leading size. The children of an inline root are not block children: the line puts them
+   where it wants. In a collapsed cell with a 1 px border the first line sits 1 px below the `border + padding` the cell's layout reports
+   (cell 0 + 8, image at 9; with a 2 px border it is 1 + 8 = 9, no gap, which is why the validator saw only odd widths), and a box shorter
+   than the strut's ascent sits below its line's top. The cell's leading came out as 9 px, fitted the 42 px left on page 1, the table was
+   entered and the image, which did not fit, was placed on page 2 as a box of its own. Result on main, already wrong: a 10 px stub of the
+   cell on page 1, on page 2 the image under a bottom-less cell (border rows 0..60 instead of 0..82; Chrome moves the row whole).
+2. The cell's fragment on page 2 is then as tall as that image, 60 px, and `render.rs` `paragraph_lines_for_page` (fallback for fragments
+   without line ranges) paints only lines that fit the fragment height; a line taller than it gives `None` and the paragraph is gone. On main
+   the line is 60 px (equal to the image) and fits; with the strut it is 64 px and does not. Hence "main renders it, F183 drops it". Not
+   fixed there: letting a line overflow its fragment would paint the same line on page 1 (the stub fragment) and on page 2.
+
+**Fix (fulgur fork `htmltopdf/srgb-colours` `9010b2bc`, one condition):** `leading_block_size` skips the class C gap check when `node` is an
+inline root. The first row then counts the image (9 + 60 px), which does not fit page 1, and the table moves whole, as in Chrome and as a
+separated-borders table already did. Not changed: the line extent is not added to the leading size, so for rooms between image bottom and line
+bottom (up to the strut's descent, 4 px) the table is still entered; those cases are the same as on main (`w_sep_*` below), F183f-territory.
+
+Tests (red before, green after): fulgur `a_collapsed_cell_with_an_inline_image_moves_to_the_next_page_whole` (collapsed and separated),
+`leading_block_size_of_an_inline_root_is_not_cut_short_by_where_its_line_puts_a_box`; html-to-pdf `inline_img_strut.rs` `w1_*` (image),
+`w2_*` (text beside it), `w3_*` (100 px image), Chrome rows: nothing on page 1; page 2 image 8..69 (100 px: 8..109), cell border 0..82
+(0..122). Our image sits 1 px lower (9..70), which is the known half-border offset of F22, inside the test's 1 px.
+
+Results (binary `htmltopdf-f183-fix2`, scratch outside the repo):
+
+- Chrome comparison of the repro family (`out/scratch/f183v2/c14.mjs`): image only, image with text, 100 px image, filler 1050 and 1100:
+  main shows a 10 px stub on page 1 and a cell 60 px tall on page 2 (and for filler 1080 / 1100 the image cut at row 59/60); the branch
+  after 7.3 dropped the image; now nothing on page 1 and page 2 equals Chrome within 1 px (cell bottom border 0..82 as in Chrome).
+- Height sweep, filler 1030..1066 step 2 (`c15.mjs`): collapsed cell with a 60 px image, a 10 px image, and a plain `div` with a 10 px image,
+  collapsed and separated: collapsed rows equal Chrome from 1030 to 1040 and from 1054 to 1066 up to the 1 px offset above; 1042..1052
+  the row moves whole like Chrome's (the bottom border is 81 against Chrome's 82). The 10 px image and the div rows equal Chrome in every case.
+  Separated borders, filler 1040..1052: the row stays on page 1 and overflows the page bottom by 1 px, Chrome moves it; the same on main
+  (the strut descent window above), unchanged.
+- Validator sets: `c1`..`c13` re-run, 477 cases, branch rows compared with the run of `htmltopdf-f183-fix`: two changed, both fixes:
+  `c13` `s_cell_1000` and `s_cell_1050` (a collapsed table, second row holds an image, row on page 2): the image of the second row was
+  missing, now present at rows 1..61 and the next block at 65 (Chrome 0..61 / 66; main 0..59 / 60). `q2`..`q5` (image counts per page for
+  collapsed and separated tables, thead, nested, colspan, multi-row, 100 px images, heights 960..1122): every one equals main's.
+- fulgur: `cargo test -p fulgur --lib` 2351 pass (the Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -D warnings` clean.
+- Byte identity with main's binary at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical.
+
+Not verified: fulgur-vrt (see below if run); the separated-border 1 px overflow above is not a regression and not fixed here.
