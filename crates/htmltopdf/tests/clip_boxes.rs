@@ -701,6 +701,17 @@ fn like_main(what: &str, pdf: &[u8], per_page: &[usize], after: (usize, f32), ch
     }
 }
 
+/// One shape a constrained clip box can hold that this change leaves to main, with main's numbers.
+struct MainShape {
+    what: &'static str,
+    spacer: usize,
+    style: &'static str,
+    inner: String,
+    per_page: Vec<usize>,
+    after: (usize, f32),
+    chrome_words: usize,
+}
+
 #[test]
 fn a_constrained_clip_box_whose_content_is_not_one_paragraph_at_its_top_is_what_main_made_of_it() {
     // The clip semantics of this change (the box is fragmented by its own block size, the writer drops what lies below
@@ -713,79 +724,79 @@ fn a_constrained_clip_box_whose_content_is_not_one_paragraph_at_its_top_is_what_
     let img = "<img style=\"display:block\" width=\"120\" height=\"60\" \
                src=\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'>\
                <rect width='120' height='60' fill='red'/></svg>\">";
-    let cases: Vec<(&str, usize, &str, String, Vec<usize>, (usize, f32), usize)> = vec![
-        (
-            "heading above the paragraph",
-            700,
-            "height:300px;padding:16px",
-            format!("<h2 style=\"margin:0\">HEAD</h2><p>{w4}</p>"),
-            vec![0, 371, 0],
-            (3, 42.9),
-            98,
-        ),
-        (
-            "second paragraph",
-            700,
-            "height:300px;padding:16px",
-            format!(
+    let cases: Vec<MainShape> = vec![
+        MainShape {
+            what: "heading above the paragraph",
+            spacer: 700,
+            style: "height:300px;padding:16px",
+            inner: format!("<h2 style=\"margin:0\">HEAD</h2><p>{w4}</p>"),
+            per_page: vec![0, 371, 0],
+            after: (3, 42.9),
+            chrome_words: 98,
+        },
+        MainShape {
+            what: "second paragraph",
+            spacer: 700,
+            style: "height:300px;padding:16px",
+            inner: format!(
                 "<p style=\"margin:0 0 14px\">{w4}</p><p style=\"margin:0 0 14px\">{}</p>",
                 words(4000, 4100)
             ),
-            vec![0, 0, 371, 100],
-            (4, 267.9),
-            105,
-        ),
-        (
-            "the paragraph's own margin",
-            880,
-            "height:300px",
-            format!("<p style=\"margin:14px 0\">{w4}</p>"),
-            vec![0, 372, 0],
-            (3, 42.9),
-            98,
-        ),
-        (
-            "float above the paragraph",
-            700,
-            "height:300px;padding:16px",
-            format!(
+            per_page: vec![0, 0, 371, 100],
+            after: (4, 267.9),
+            chrome_words: 105,
+        },
+        MainShape {
+            what: "the paragraph's own margin",
+            spacer: 880,
+            style: "height:300px",
+            inner: format!("<p style=\"margin:14px 0\">{w4}</p>"),
+            per_page: vec![0, 372, 0],
+            after: (3, 42.9),
+            chrome_words: 98,
+        },
+        MainShape {
+            what: "float above the paragraph",
+            spacer: 700,
+            style: "height:300px;padding:16px",
+            inner: format!(
                 "<div style=\"float:left;width:100px;height:80px;background:#ccc\"></div><p>{w4}</p>"
             ),
-            vec![0, 371, 0],
-            (3, 42.9),
-            101,
-        ),
-        (
-            "image above the paragraph",
-            700,
-            "height:300px;padding:16px",
-            format!("{img}<p>{w4}</p>"),
-            vec![0, 371, 0],
-            (3, 42.9),
-            84,
-        ),
-        (
-            "heading and direct text",
-            880,
-            "height:300px;padding:16px",
-            format!("<h2 style=\"margin:0\">HEAD</h2>{w4}"),
-            vec![0, 371, 0],
-            (3, 42.9),
-            98,
-        ),
-        (
-            "padding in percent (Taffy resolves the vertical part to 0, plan 7)",
-            880,
-            "height:300px;padding:5%",
-            format!("<p>{w4}</p>"),
-            vec![0, 322, 0],
-            (3, 42.9),
-            96,
-        ),
+            per_page: vec![0, 371, 0],
+            after: (3, 42.9),
+            chrome_words: 101,
+        },
+        MainShape {
+            what: "image above the paragraph",
+            spacer: 700,
+            style: "height:300px;padding:16px",
+            inner: format!("{img}<p>{w4}</p>"),
+            per_page: vec![0, 371, 0],
+            after: (3, 42.9),
+            chrome_words: 84,
+        },
+        MainShape {
+            what: "heading and direct text",
+            spacer: 880,
+            style: "height:300px;padding:16px",
+            inner: format!("<h2 style=\"margin:0\">HEAD</h2>{w4}"),
+            per_page: vec![0, 371, 0],
+            after: (3, 42.9),
+            chrome_words: 98,
+        },
+        MainShape {
+            what: "padding in percent (Taffy resolves the vertical part to 0, plan 7)",
+            spacer: 880,
+            style: "height:300px;padding:5%",
+            inner: format!("<p>{w4}</p>"),
+            per_page: vec![0, 322, 0],
+            after: (3, 42.9),
+            chrome_words: 96,
+        },
     ];
-    for (what, spacer, style, inner, per_page, after, chrome_words) in cases {
-        let pdf = clip_box(spacer, style, &inner);
-        like_main(what, &pdf, &per_page, after, chrome_words);
+    for c in cases {
+        let pdf = clip_box(c.spacer, c.style, &c.inner);
+        like_main(c.what, &pdf, &c.per_page, c.after, c.chrome_words);
     }
 }
 
