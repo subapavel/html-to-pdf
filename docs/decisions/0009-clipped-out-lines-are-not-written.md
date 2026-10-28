@@ -32,6 +32,13 @@ visible part has.
   never counts: its `height` is a minimum (CSS 2.1 §17.5.3) and the box grows with its content (plan §7, "Padded and
   bordered clip boxes").
   It exists for the block axis only (`overflow-y`); `overflow-x: clip` alone hides nothing here.
+- The policy applies to a constrained clip box whose content is a *supported shape* (plan §7, "Supported shapes"): direct
+  text, or exactly one in-flow child that starts at the box's content top (by the resolved layout, so a margin counts) and
+  is a paragraph or a block wrapper around one, with no `break-inside: avoid` and no percentage vertical padding on the way.
+  Any other constrained clip box (a heading, margin, float, image or earlier paragraph above the paragraph, a second
+  paragraph) has no band and keeps main's output, byte for byte, until F30c lets the fragmenter place more than the
+  first thing on a strip (finding F30f-f). Reason: the fragmenter moved such a paragraph whole and the band then dropped
+  lines that Chrome shows on the page the box starts on; a band is only as good as the layout under it.
 - Inside a transform, and inside an inline box that the carrier paints under a translate, the coordinates are not page
   coordinates: no band is known there and none is set, so the output stays as it was. A clip box inside a transformed box
   still writes what it hid before.
@@ -50,5 +57,7 @@ visible part has.
 - Not covered: the inline axis (a line wider than a `text-overflow` or `overflow-x` box keeps all its glyphs; Tailwind's
   `truncate` is not in the compiled CSS), tables with `overflow:hidden` (`draw_under_clip_table`, F51), images and boxes
   that are clipped out (their bytes are written and clipped), `overflow-clip-margin`.
+- A box that is not a supported shape still writes its hidden lines (main's behaviour); the text layer of a fixed-height box
+  with a heading above its text can hold words that are not on the page until F30f-f.
 - A wrong band would drop text that is visible. The 0.5 pt rule, the transform exemption and the tests in the fulgur
   fork and in `crates/htmltopdf/tests/clip_boxes.rs` pin it.
