@@ -354,7 +354,10 @@ fn a_link_in_the_hidden_part_is_not_written() {
     );
     let pdf = render(&body);
     let printed: Vec<String> = printed_words(&pdf).into_iter().map(|w| w.text).collect();
-    assert!(printed.iter().any(|t| t == "VISLINK"), "the visible link text is written");
+    assert!(
+        printed.iter().any(|t| t == "VISLINK"),
+        "the visible link text is written"
+    );
     assert!(
         !printed.iter().any(|t| t == "HIDLINK"),
         "the hidden link text is not written"
@@ -385,4 +388,55 @@ fn tagged_renders_of_clip_boxes_succeed() {
         let pdf = render_with(&body, tagged());
         assert!(pdf.starts_with(b"%PDF"), "{what}: tagged render");
     }
+}
+
+// ── Fixture 28 ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+fn fixture_28() -> Vec<u8> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = root.join("fixtures/invoices/28-notes-box-clip");
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let mut b = Renderer::builder()
+        .strict_fonts(true)
+        .css_file(root.join("fixtures/tailwind/tailwind.css"))
+        .unwrap();
+    for face in ["Regular", "Medium", "SemiBold", "Bold", "ExtraBold"] {
+        b = b
+            .font_file(root.join(format!("fixtures/fonts/Inter-{face}.ttf")))
+            .unwrap();
+    }
+    b.build()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .expect("fixture 28")
+}
+
+#[test]
+fn fixture_28_writes_the_words_chrome_writes() {
+    // The note is longer than its 112 px box and a body-direct child: main moved the box to page 2 and wrote (and showed)
+    // all of it, 491 words on 2 pages.
+    let ours = fixture_28();
+    let reference = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/invoices/28-notes-box-clip/reference/chrome.pdf"),
+    )
+    .unwrap();
+    assert_eq!(page_count(&ours), 1, "Chrome: 1 page");
+    let words =
+        |pdf: &[u8]| -> Vec<String> { printed_words(pdf).into_iter().map(|w| w.text).collect() };
+    let (ours, chrome) = (words(&ours), words(&reference));
+    // A one-line wrapping difference would move a word at most; the words themselves are the same.
+    assert_eq!(
+        ours.len(),
+        chrome.len(),
+        "words in the text layer: {} vs Chrome {}",
+        ours.len(),
+        chrome.len()
+    );
+    assert_eq!(ours, chrome);
 }

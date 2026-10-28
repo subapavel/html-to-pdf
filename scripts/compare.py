@@ -185,6 +185,11 @@ THRESHOLDS = {
     #     ascent), so the rule and the cell border sit 4 px high and everything below drifts up: 7.61 %; with the strut of
     #     the block under the image (F183) 6.1 % (the text drift every fixture has). Worst page + 1 point.
     "27-inline-logo": 0.071,
+    # 28: new in F30f-b (a Czech invoice whose template reserves a fixed note box, `h-28 overflow-hidden`, a body-direct div with
+    #     about 28 lines of direct text; one page like Chrome's, the box edge cutting the 5th line). On main's binary the hidden
+    #     lines run past the page bottom, so the box starts page 2 and shows all of them (2 pages, 4.2 % / 1.5 %); with the
+    #     F30f-b fix 3.6 % (the text drift every fixture has, and the totals table that 01 has too). Worst page + 1 point.
+    "28-notes-box-clip": 0.046,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
