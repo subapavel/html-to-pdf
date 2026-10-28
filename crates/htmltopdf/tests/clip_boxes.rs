@@ -390,6 +390,123 @@ fn tagged_renders_of_clip_boxes_succeed() {
     }
 }
 
+// ── Auto-height clip boxes are content-sized boxes (plan §7, deviation from the first version) ─────────────────────────
+//
+// A clip box with no `height` and no `max-height` hides nothing: it is as tall as its content. The first version of the
+// fragmenter judged "content reaches past the box" from the line boxes, and Blitz's line boxes are taller than their
+// pitch when the line height is below the font's ascent + descent (16 px Inter in 12 px lines: 20 px boxes, 12 px apart),
+// so the last line box "reached past" the box and the box was cut and clipped like a fixed one: words lost.
+
+const SMALL_HEAD: &str = "@page{size:A4;margin:15mm}p{margin:0}";
+
+fn render_styled(head: &str, body: &str) -> Vec<u8> {
+    Renderer::builder()
+        .font_bytes(inter())
+        .unwrap()
+        .strict_fonts(true)
+        .build()
+        .render(
+            &format!(
+                "<!doctype html><html><head><style>{head}</style></head><body>{body}</body></html>"
+            ),
+            &RenderOptions::default(),
+        )
+        .expect("render")
+}
+
+/// Every word of `expected` once, in order, in the text layer (the words all start with `w`).
+fn assert_every_word_once(what: &str, pdf: &[u8], expected: &[String]) {
+    let printed: Vec<String> = printed_words(pdf)
+        .into_iter()
+        .filter(|w| w.text.starts_with('w'))
+        .map(|w| w.text)
+        .collect();
+    let missing: Vec<&String> = expected.iter().filter(|e| !printed.contains(e)).collect();
+    assert!(
+        missing.is_empty(),
+        "{what}: {} of {} words are not in the text layer (first: {:?})",
+        missing.len(),
+        expected.len(),
+        missing.first()
+    );
+    assert_eq!(printed, expected, "{what}: every word once, in order");
+}
+
+/// `w0000 w0001 …`: the words of the validator's repros, ten or so to a line of the card.
+fn short_names(n: usize) -> Vec<String> {
+    (0..n).map(|i| format!("w{i:04}")).collect()
+}
+
+#[test]
+fn an_auto_height_clip_box_with_lines_smaller_than_the_font_loses_no_word() {
+    // c318 / c300: `overflow:hidden` and nothing else, 1500 words over a page break. Main: 1500 words; the first version
+    // of the clip part: 1488 (a 20 px last line box in a 12 px pitch "reached past" the box). Chrome: 1500, 2 pages.
+    for line_height in ["12px", "0.9"] {
+        let pdf = render_styled(
+            &format!("{SMALL_HEAD}body{{font:16px/{line_height} Inter;margin:0}}"),
+            &format!(
+                "<div style=\"overflow:hidden\">{}</div>{AFTER}",
+                short_names(1500).join(" ")
+            ),
+        );
+        assert_eq!(page_count(&pdf), 2, "lh {line_height}: Chrome 2 pages");
+        assert_every_word_once(&format!("lh {line_height}"), &pdf, &short_names(1500));
+    }
+}
+
+#[test]
+fn an_auto_height_card_with_direct_text_loses_no_word_in_the_text_layer() {
+    // c286: `14px/1.2`, `overflow:hidden;padding:16px;border:1px solid;border-radius:8px`, 1500 direct words. Main and
+    // Chrome: 1500; the first version: 1484 (the writer's band dropped the last line of each page fragment: main already
+    // cut it in the picture).
+    let pdf = render_styled(
+        &format!("{SMALL_HEAD}body{{font:14px/1.2 Inter;margin:0}}"),
+        &format!(
+            "<div style=\"overflow:hidden;padding:16px;border:1px solid #ccc;border-radius:8px\">{}</div>{AFTER}",
+            short_names(1500).join(" ")
+        ),
+    );
+    assert_eq!(page_count(&pdf), 2, "Chrome: 2 pages");
+    assert_every_word_once("card", &pdf, &short_names(1500));
+}
+
+#[test]
+fn an_auto_height_card_after_a_spacer_loses_no_word() {
+    // s12_40: a bordered, padded `overflow:hidden` card (h2 + p, `line-height: 0.7`) that starts 700 px down a page
+    // without margins. Chrome and main: 1187 words; the first version: 762.
+    let pdf = render_styled(
+        "@page{size:A4;margin:0}body{font:16px/0.7 Inter;margin:0}p{margin:0 0 4px}",
+        &format!(
+            "<div style=\"height:700px;background:#eee\"></div><div style=\"overflow:hidden;border-radius:8px;\
+             border:1px solid #ccc;padding:16px\"><h2 style=\"margin:0 0 6px\">H40</h2><p>{}</p></div>",
+            short_names(1187).join(" ")
+        ),
+    );
+    assert_every_word_once("s12_40", &pdf, &short_names(1187));
+}
+
+#[test]
+fn a_clip_box_with_a_height_still_drops_the_lines_it_hides_when_lines_are_small() {
+    // The other side: a fixed height below the content keeps ADR-0009's rule whatever the line height. 16 px text in a
+    // 12 px pitch, `height:300px`: 25 lines of 12 px are visible, 12 words each at most.
+    let pdf = render_styled(
+        &format!("{SMALL_HEAD}body{{font:16px/12px Inter;margin:0}}"),
+        &format!(
+            "<div style=\"overflow:hidden;height:300px\">{}</div>{AFTER}",
+            short_names(1500).join(" ")
+        ),
+    );
+    assert_eq!(page_count(&pdf), 1);
+    let n = printed_words(&pdf)
+        .iter()
+        .filter(|w| w.text.starts_with('w'))
+        .count();
+    assert!(
+        (60..=400).contains(&n),
+        "a 300 px box shows 25 lines, not the 1500 words: {n}"
+    );
+}
+
 // ── Fixture 28 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 fn fixture_28() -> Vec<u8> {
