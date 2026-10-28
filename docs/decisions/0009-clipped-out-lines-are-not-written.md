@@ -34,7 +34,8 @@ visible part has.
   It exists for the block axis only (`overflow-y`); `overflow-x: clip` alone hides nothing here.
 - The policy applies to a constrained clip box whose content is a *supported shape* (plan §7, "Supported shapes"): direct
   text, or exactly one in-flow child that starts at the box's content top (by the resolved layout, so a margin counts) and
-  is a paragraph or a block wrapper around one, with no `break-inside: avoid` and no percentage vertical padding on the way.
+  is a paragraph or a block wrapper around one, in block flow (its parent is not a flex, grid, multicol, table or
+  atomic inline box), with no `break-inside: avoid` and no percentage vertical padding on the way.
   Any other constrained clip box (a heading, margin, float, image or earlier paragraph above the paragraph, a second
   paragraph) has no band and keeps main's output, byte for byte, until F30c lets the fragmenter place more than the
   first thing on a strip (finding F30f-f). Reason: the fragmenter moved such a paragraph whole and the band then dropped
