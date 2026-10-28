@@ -241,4 +241,13 @@ Results (binary `htmltopdf-f183-fix2`, scratch outside the repo):
 - fulgur: `cargo test -p fulgur --lib` 2351 pass (the Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -D warnings` clean.
 - Byte identity with main's binary at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical.
 
-Not verified: fulgur-vrt (see below if run); the separated-border 1 px overflow above is not a regression and not fixed here.
+- html-to-pdf: `cargo test --release` 780 passed, 0 failed (70 binaries; `inline_img_strut` 26), `cargo fmt --all --check` and `cargo clippy
+  --release --all-targets -- -D warnings` clean, `cargo build --release --locked -p htmltopdf-cli` with the lock at `9010b2bc` (only that
+  line moved). `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok, numbers unchanged (27: 6.1 %).
+- fulgur VRT (`cargo test --release -p fulgur-vrt --test vrt_test`, forks patched in), with and without the one-line change: the same 35
+  fixtures fail against the goldens in this environment (fonts) and their 35 actual PDFs are byte-identical; no golden moves.
+- Side by side (main / branch / Chrome) of the cell with text and image on page 2: `out/scratch/f183v2/sb_r_img_text.png`: main has the
+  cell without its bottom border, the branch and Chrome the same box.
+
+Not verified: the separated-border 1 px overflow above is not a regression and not fixed here; the rounding of the 1 px collapsed-border
+offset itself (cell content at 9, Chrome 8.5) is F22's; the Blitz CI / Parley clippy (as in 7.3).
