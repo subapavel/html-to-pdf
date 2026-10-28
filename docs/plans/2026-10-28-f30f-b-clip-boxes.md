@@ -1,6 +1,6 @@
 # F30f-b (clip part): a clip box shorter than its content shows, or writes into the PDF, what it hides
 
-Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: planned (§7 is filled in when it lands).
+Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: **done** (§7). Fork commits `ce76bbfa` (writer) and `c700b372` (fragmenter) on `htmltopdf/srgb-colours`; ADR-0009.
 
 - The fix goes on `subapavel/fulgur` `htmltopdf/srgb-colours` (`Cargo.lock` pins `516558c`), carried via `[patch.crates-io]`.
 - Line numbers are from the fork checkout, in `crates/fulgur/src/pagination_layout.rs` unless another file is named. Re-read them before editing.
@@ -254,4 +254,52 @@ fn line_is_clipped_out(line: &ShapedLine, origin_y: Pt, band: (Pt, Pt)) -> bool 
 
 ## 7. Evidence
 
-(Filled in when it lands: step 1 probe table, red/green tests, gates, sweeps, deviations.)
+### Step 1: probes (Chrome m141 vs main's binary; `out/scratch/f30f-b/probe.mjs`, git-ignored)
+
+A4, 15 mm, Inter, `p{margin:0;line-height:20px}`, `W` = 4000 words, `<p>AFTER</p>` after the box. Words per page; AFTER as page@y (pt, `pdftotext -bbox`).
+
+| P | Box | Chrome | main |
+|---|---|---|---|
+| R1 | `overflow:hidden;height:300px` + direct text | 1 p, 105, AFTER 1@268.1 | 12 p, 4000, AFTER 12@327.9 |
+| R1p | same, `> p` | same as R1 | 2 p, 372 / 0, AFTER 2@42.9 (not a reveal: hidden text, AFTER on page 2) |
+| R1n | same, `> div > p` | same as R1 | 12 p, 4000 (reveals) |
+| R2 | `display:flex`, `> p` | 1 p, 105 | 1 p, 372 in the text layer, AFTER 1@267.9 |
+| R3 | `height:600px > p` | 1 p, 211, AFTER 1@493.1 | 2 p, 372 / 0, AFTER 2@42.9 |
+| R4 / R4t | `max-height:2000px`, `> p` / direct | 2 p, 351 / 350, AFTER 2@785.6 | 2 p 372 / 0 / 12 p 4000 |
+| P4 | `height:3000px` | 3 p, 351 / 350 / 344, AFTER 3@778.1 (fragmented, both shapes) | 2 p, 372 (`> p`) / 12 p, 4000 (direct) |
+| P5 | 900 px spacer, then 300 px box | fragmented: 2 p, 35 / 70, AFTER 2@185.6 | 3 p (`> p`) / 13 p (direct), 0 words on page 1 |
+| P5s | same, 6-line paragraph | fragmented, 28 / 12 (4 + 2), AFTER 2@185.6 | 2 p, box moved whole, 0 / 40, AFTER 2@267.9 |
+| P6 | `clip`, `auto`, `scroll` (direct, `> p`, `max-height`) | the same numbers as `hidden` | the same as `hidden` |
+| P7 | `overflow-y:hidden`, `overflow-y:clip`, `overflow-x:hidden`, each `height:300px` | the same as R1 | 12 p |
+| P7xc | `overflow-x:clip;height:300px` | 12 p, 4000 words once (351 / 350 / 351 / 365 …), AFTER 1@268.1: on top of the text of page 1 | 12 p, AFTER 12@327.9 |
+| P8 | `height:310px` | 112 words (16 lines, the 16th partly), AFTER 1@275.6 | 12 p / 2 p |
+| P9 | link in the hidden part (word 200), one in the visible part | 104 words, annotation for the visible link only, `HIDLINK` not written | both annotations, both link texts written |
+
+- **Stop conditions:** Chrome's text layer holds no clipped line (R1: 105 words, not 372), and main does not leave them out (R2, R3: 372). Neither fired.
+- **Predictions:** R1 to R4, the P8 line count (16) and the missing link (P9) are as the plan predicted. Unknowns settled: `height:3000px` and a straddling box are fragmented (no case where Chrome keeps the box whole, so the "keep whole" clause of decision 2 never applies); `auto` and `scroll` behave like `hidden`; `overflow-y:clip` clips. New: R1p does not reveal (it hides text and puts AFTER on page 2) and R1n reveals; a straddling box with short content is fragmented by Chrome too (P5s: not done here, new finding F30f-c); `overflow-x:clip` alone puts AFTER on top of the overflowing text.
+- **Chrome's page content box is 1010 px**, ours 1009.13: AFTER (20 px) fits under a spacer of 990 px in Chrome, under 989.13 here (probes `sp989.5`, `sp990`, `sp990.5`). The box heights of C4, C5 and C6 only match with that px (990.0 / 980.0 / 190.0 px of box on the last page).
+- The causes were confirmed by reading the code and by the results (R3's AFTER on page 2 comes from the cursor below the whole paragraph); the log lines of `fragment_inline_root` and `closing` that step 1 asked for were not added.
+
+### Steps 2 to 6: tests
+
+- Ours, `crates/htmltopdf/tests/clip_boxes.rs`: 16 tests (C1, C1p, C1n, C2, C3, C4, C4t, C5, C6, C7, C8 (two tests), C9, C10, the tagged guard, fixture 28). On main (fork `516558cc`) **13 of the first 15 were red**; the green ones were the `overflow-x:clip` case and the tagged guard. With the writer only (`ce76bbfa`) C2 and C10 turned green (C3 and C9 `> p` did not: their AFTER and page count come from the fragmenter, the plan's step 3 list was wrong there). With the fragmenter all 15 are green; fixture 28's test is red on main (2 pages, 491 words) and green after.
+- Fork lib: `clips_block_axis_reads_overflow_y`, `clip_block_limit_is_the_bottom_of_the_padding_box_when_content_reaches_past_it`, `ancestor_clip_limit_is_in_the_coordinates_of_the_node`, `clip_to_drops_the_lines_that_start_at_or_below_the_limit`, `a_body_level_clip_box_that_fits_is_placed_whole`, `a_clip_box_taller_than_the_room_is_fragmented_at_its_block_size`, `a_clip_box_that_straddles_the_page_bottom_is_fragmented_in_place`, `content_below_the_clip_gets_no_page`, `a_clip_box_with_direct_text_that_fits_is_not_split_by_the_body_line_path`; render units `a_line_outside_the_clip_band_is_not_drawn`, `a_partly_visible_line_is_drawn`, `no_band_under_a_transform`, `clip_boxes_inside_each_other_intersect_their_bands`; `render_smoke_clip_box_hides_lines_from_the_text_layer`, `render_smoke_max_height_clip_box_spans_pages`. (The new functions do not exist on main, so "red" is a compile error there; the behaviour is pinned by the red tests of ours.)
+- Fork gates: `cargo test -p fulgur --lib` 2371 passed (2362 before the fragmenter), the 42 integration test binaries all passed (`render_smoke` 323), clippy `-D warnings` and fmt clean; fulgur-vrt: 35 of 64 differ, the same 35 environment failures as before with byte-identical `.actual.pdf` files; the 21 examples: 10 of 11 tests pass, `committed_svg_matches_rendered` fails exactly as on `516558cc` (23890 vs 24816 bytes, the stale committed SVG example). The fork at this head builds only with the Blitz, Taffy and Parley forks patched in (it did not build against upstream Blitz before this change either), so "both Blitz versions" was one configuration.
+- Ours: fmt, clippy `--release --all-targets --locked -D warnings`, `cargo test --release --locked --no-fail-fast` (73 test binaries, 811 passed, 2 failed before the next line, both in `wrapper_line_split.rs`: `a_clip_box_with_a_max_height_below_its_paragraph_is_left_as_it_was` (2 pages now, Chrome's) and `a_clip_box_shorter_than_its_paragraph_keeps_hiding_it` (211 words in the text layer now, Chrome's): both pinned the bug, rewritten).
+- **Output identity:** fixtures 01 to 27 and the 7 corpus documents (`b200-*`, `slow-*`, `big_*`) are byte-identical to main's binary at 1 and 4 threads (`f183-gate.sh`), and the `scripts/render-fixtures.sh` outputs of 01 to 27 are `cmp`-identical; fixture 28 is new. `bench.py --check` ok (`b200-mixed` 853 ms vs 860 ms on main's binary, 02 and 01 within noise).
+- **Fixture 28** (`28-notes-box-clip`): compare 3.58 % (1 page of 1; threshold 4.6 %). Main's binary: 2 pages, 4.2 % / 1.5 %, 491 words (the box starts page 2 and shows every line of the note); now 1 page, 184 words = Chrome's. The side-by-side matches Chrome: header, parties, items and totals line up (the totals table sits 43 px too far right in ours, as in 01, part of the usual drift), the note box ends at the same row with the 5th line cut by its edge and the rounded border under it. The first draft of the note (18 lines) did not reveal on main (its lines still fit page 1); extended to 28 lines.
+
+### Deviations from the plan
+
+- Step 3 does not make C3 and C9 `> p` green (see above); steps 4 and 5 are one fork commit (`c700b372`).
+- `clipped_tail: bool` is not a field: a clip box that hides the last lines of a paragraph gives it one more `LineSlice` than fragments, for the hidden lines (`line_slices_tile` still covers every line; `paragraph_lines_for_page` accepts `fragments + 1` slices when the last ends at the last line).
+- The band is `ClipBand::{Open, Band, Off}`, not an `Option`, so that a clip box inside a transform or an inline box painted under a translate does not set a band in non-page coordinates.
+- `box_barrier(.., through_clips)`: `line_split_candidate` lifts `ClipsItsContent` when the parent is a block-flow container (a clip box that is a flex or grid container, a table cell or a grid item keeps its paragraph whole as before) and cuts the lines at `tightest clip` (`clip_to`).
+- `leading_block_size` counts a paragraph cut by a clip as its first lines (otherwise a straddling clip box was moved to the next page).
+- `PageStrips::chrome_bottom` and a 1 px slack for the child after a fragmented clip box at body level (Chrome's fragmentainer, above). Not done for the child after a nested clip box.
+- `a_clip_box_shorter_than_its_paragraph_keeps_it_whole` (fork) and two tests of `wrapper_line_split.rs` (ours) pinned the old behaviour and are rewritten, not "unchanged" as the plan said.
+- Writer slack: a line with less than 0.5 pt of its height inside the band is not written (the fragmenter drops a line that starts less than 0.5 px inside the clip).
+
+### Not verified
+
+`vrt-validator` and `pdf-reviewer` (to run: tagged output of a paragraph clipped out completely, empty structure elements; a clip box under a transform; table cells with `overflow:hidden`, F51); the Chrome comparison of bookmarks and counters in hidden content; clip boxes nested in flex or grid items (unchanged by design).

@@ -444,9 +444,10 @@ fn a_clip_box_shorter_than_its_paragraph_keeps_hiding_it() {
         w()
     ));
     assert_eq!(page_count(&pdf), 1);
+    // F30f-b: the text layer holds the 30 lines that show (211 words, Chrome's number), not the 372 that fit the page.
     assert_eq!(
         words_per_page(&pdf),
-        vec![372],
+        vec![211],
         "main: 372 words in the text layer"
     );
     let box_bottom_pt = MARGIN_PT + 600.0 * 0.75;
@@ -458,15 +459,19 @@ fn a_clip_box_shorter_than_its_paragraph_keeps_hiding_it() {
 }
 
 #[test]
-fn a_clip_box_with_a_max_height_below_its_paragraph_is_left_as_it_was() {
-    // `max-height: 2000px`: Chrome prints 701 words on 2 pages (the box fragments, clipped at 2000 px: F30f-b); main
-    // printed 372 on page 1. Unchanged here.
+fn a_clip_box_with_a_max_height_below_its_paragraph_is_fragmented_at_its_height() {
+    // `max-height: 2000px`: Chrome prints 701 words on 2 pages (the box fragments, clipped at 2000 px); main printed 372
+    // on page 1. F30f-b: two pages, 350 words each (one line less than Chrome's 351 on page 1; `clip_boxes.rs` C4).
     let pdf = render(&format!(
         "<div style=\"overflow:hidden;max-height:2000px\"><p>{}</p></div>",
         w()
     ));
-    assert_eq!(page_count(&pdf), 1);
-    assert_eq!(words_per_page(&pdf), vec![372], "main: 372 words");
+    assert_eq!(page_count(&pdf), 2);
+    let per_page = words_per_page(&pdf);
+    assert!(
+        per_page.iter().all(|n| n.abs_diff(350) <= 7),
+        "words per page {per_page:?}, Chrome 351 / 350"
+    );
 }
 
 // ── A10: wrappers that split already ─────────────────────────────────────────────────────────────────────────────────
