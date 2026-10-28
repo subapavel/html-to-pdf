@@ -1,6 +1,6 @@
 # F30f-b (clip part): a clip box shorter than its content shows, or writes into the PDF, what it hides
 
-Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: **done** (§7). Fork commits `ce76bbfa` (writer), `c700b372` (fragmenter) and `16d281a3` (only constrained boxes, §7 "Auto-height clip boxes") on `htmltopdf/srgb-colours`; ADR-0009.
+Date: 2026-10-28. Finding: F30f-b in `2026-10-15-m0-findings.md`, the clip bullets only. Status: **done** (§7). Fork commits `ce76bbfa` (writer), `c700b372` (fragmenter), `16d281a3` (only constrained boxes, §7 "Auto-height clip boxes"), `820c6e3e` (table boxes, padded and bordered boxes) and `aecc013a` (boxes between the clip box and its paragraph; §7 "Padded and bordered clip boxes") on `htmltopdf/srgb-colours`; ADR-0009.
 
 - The fix goes on `subapavel/fulgur` `htmltopdf/srgb-colours` (`Cargo.lock` pins `516558c`), carried via `[patch.crates-io]`.
 - Line numbers are from the fork checkout, in `crates/fulgur/src/pagination_layout.rs` unless another file is named. Re-read them before editing.

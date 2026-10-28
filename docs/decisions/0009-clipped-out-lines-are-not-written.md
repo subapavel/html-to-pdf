@@ -28,7 +28,9 @@ visible part has.
   around it. Only a box whose block size the author constrains (a `height`, or a `max-height` other than `none`; a
   percentage counts when its basis is definite) has a band: an auto-height box is as tall as its content and hides no
   line, whatever its line boxes measure (Blitz's are as tall as the font when the line height is below it). Without this
-  rule the first version dropped words that showed (plan §7, "Auto-height clip boxes").
+  rule the first version dropped words that showed (plan §7, "Auto-height clip boxes"). A table, row group, row or cell
+  never counts: its `height` is a minimum (CSS 2.1 §17.5.3) and the box grows with its content (plan §7, "Padded and
+  bordered clip boxes").
   It exists for the block axis only (`overflow-y`); `overflow-x: clip` alone hides nothing here.
 - Inside a transform, and inside an inline box that the carrier paints under a translate, the coordinates are not page
   coordinates: no band is known there and none is set, so the output stays as it was. A clip box inside a transformed box

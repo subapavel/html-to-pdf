@@ -612,6 +612,27 @@ fn a_clip_box_with_a_top_padding_or_a_border_box_sizing_keeps_the_lines_of_its_f
 }
 
 #[test]
+fn a_padded_box_inside_a_clip_box_that_straddles_a_page_keeps_the_lines_of_its_first_page() {
+    // The validator's `a_in_c_pad`: `overflow:hidden;height:300px;padding:20px` > `overflow:hidden;padding:10px` > `<p>`.
+    // The inner box is content-sized (its padding sits above the paragraph), the outer one clips it; the paragraph moved
+    // whole to page 2 and page 1 showed an empty frame, where main showed the lines (and Chrome shows 85 / 12 words).
+    for (spacer, per_page, after) in [(700, vec![85, 12], 65.6), (880, vec![31, 66], 200.6)] {
+        let pdf = render(&format!(
+            "<div style=\"height:{spacer}px;background:#eee\"></div>\
+             <div style=\"overflow:hidden;height:300px;padding:20px\">\
+             <div style=\"overflow:hidden;padding:10px\"><p>{}</p></div></div>{AFTER}",
+            w()
+        ));
+        like_chrome(
+            &format!("nested, spacer {spacer}"),
+            &pdf,
+            &per_page,
+            (2, after),
+        );
+    }
+}
+
+#[test]
 fn a_table_cell_with_a_height_and_overflow_hidden_is_not_a_clip_box_of_that_height() {
     // `height` on a table cell is a minimum (CSS 2.1 §17.5.3): the cell grows with its content, so it is not a box
     // whose block size the author constrains, and the clip semantics of this change do not apply to it. Chrome grows the
