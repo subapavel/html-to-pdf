@@ -251,3 +251,64 @@ Results (binary `htmltopdf-f183-fix2`, scratch outside the repo):
 
 Not verified: the separated-border 1 px overflow above is not a regression and not fixed here; the rounding of the 1 px collapsed-border
 offset itself (cell content at 9, Chrome 8.5) is F22's; the Blitz CI / Parley clippy (as in 7.3).
+
+### 7.5 Later lines of a collapsed cell dropped from page 2 (2026-10-28)
+
+vrt-validator, third pass, high: a `border-collapse: collapse` cell (1 px or 2 px border, any padding; not 0 px, not separated borders) with two or
+more image lines near the bottom of a page was cut between the lines and the later lines (image and text) were gone from page 2. Repro:
+`td { padding: 5px; border: 1px solid #000 }`, a 1000 px filler, a cell `img60<br>img60`. Images per page, page 1 | page 2: 7.4's binary 1 | 0, main
+1 | 1, Chrome 0 | 2. Text variants (`img60 w001..w040 <br> img20 w041..w080`, 1000 px): 40 words | none, main 40 | 16 of 40, Chrome 40 | 40.
+
+**Root cause.** Not "collapsed", but "the cell is below the border of its table". `nested_line_split` decides whether a paragraph in a box is split between
+its line boxes: it splits one that overflows when it is the first thing in its box, `child_page_y <= strip_top + 0.5`, with `strip_top` the border edge
+of the box. A cell's offset in its table is the table's own border: a collapsed table holds half of its outer borders (Blitz rounds 0.5 to 1 px), a
+separated table with `border: 3px` holds 3 px. Such a cell was never "first", the paragraph was not split (the validator's guess that collapsed and
+separated cells take different paths was right, the difference is the 1 px), and the cell went down the block path: the table was entered, the cell
+was cut between its two images (a 71 px stub on page 1, the second image alone on page 2 in a fragment as tall as the image), and 7.4's second
+link, `paragraph_lines_for_page` dropping a 64 px line from a 60 px fragment, did the rest. A separated table with `border: 3px` failed the same way
+(repro `x_sep3_1000`: 1 | 0 on 7.4's binary), so the frame of the table, not `border-collapse`, is the variable.
+
+**Fix (fulgur fork `htmltopdf/srgb-colours` `96b1ea5e`).** `nested_line_split` adds the table's `border.top + padding.top` to the "first" test when `child` is a cell of
+the table (`is_cell_of_table`: table box parent, a `table-cell` or an anonymous cell as child, the test `split_barrier` already used). The cell is then a
+line-split candidate like a cell of a table without a border. For two lines at the bottom of the page the cut that keeps the first two lines (orphans)
+together moves the row to the next page whole, as Chrome does; the cell is no longer cut between its boxes, so nothing is dropped. A block child of a padded
+box keeps its test (it moves whole, F30c): only table cells changed.
+
+Chrome numbers (rows at 96 dpi, page 2; ours in brackets, all within 1 px): collapsed 1 px border, padding 5, `img<br>img` at 1000, 1030 and 1060 px: images
+5..130, cell 0..140 (ours 5..130 / 0..139); 2 px border: 6..131, 0..142 (6..131 / 0..141); three images: 5..194, 0..204 (5..194 / 0..203); padding 0: 0..125,
+0..130 (0..125 / 0..129); separated table with `border: 3px`: 0 | 2 images. Nothing is left on page 1 in any of them (the 71 px stub is gone).
+
+Tests (red before, green after): fulgur `a_cell_of_a_bordered_table_is_split_between_its_lines` (seven table styles; fails on the collapsed ones with the cell cut
+without line ranges and the images on 0 and 1); html-to-pdf `inline_img_strut.rs` `x1_*` (border 1 and 2, three fillers), `x2_*` (three lines; no padding), `x3_*` (separated
+table with a border), `x4_*` and `x5_*` (every word and image on the two pages, page 1 rows as in Chrome).
+
+Not as in Chrome (noted, nothing is lost): `img60<br>img60` in a plain table with no border still splits 1 | 1 where Chrome moves the row (F30c, unchanged); the page-2 part
+of a split cell starts 4-5 px lower than Chrome's because the continuation reserves the cell's top border and padding, as it does for a separated cell
+on main (`x4`: small image at rows 4..25, Chrome 0..21).
+
+**Side effect, a regression to decide on (F83d, filed earlier).** A collapsed cell now takes the line-split path that separated cells always took on main, and that path
+ignores `break-inside: avoid` on the `td` and its `tr` and `orphans` / `widows`. Collapsed tables used to move such a cell whole by accident (it was never
+"first"), which is what Chrome does; now they split it like a separated table already did. 45 sweep cases: `tr { break-inside: avoid }` over six rows of 50 words and
+an image (`t_row_avoid_*`, 6 of 6: 33 words | 267 against Chrome and main 0 | 300), `td { break-inside: avoid }` (`u_col1_tdavoid_*`, `u_col2_tdavoid_*`, 19) and `td { orphans: 4;
+widows: 4 }` (`u_col1_o4_*`, `u_col2_o4_*`, 20). Separated tables (`u_sep1_tdavoid_1000`, main) show the same split, so the cause is F83d, not this change. The fix is to let
+`nested_line_split` return `None` for a cell (or a cell of a row) with `avoid` that fits a page, so the cut moves the row whole; it moves separated tables too.
+
+Results (binary `htmltopdf-f183-fix3`, scratch outside the repo):
+
+- Sweeps (`out/scratch/f183v5`: sweep1, 2, 3, 4, 5, 6209 cases, rendered with main, `fix2` and `fix3`): 474 differ in bytes from `fix2`, 469 in content (words / images per
+  page). No case loses a word or an image. 79 cases that `fix2` lost content in are complete now (`s4_H_img60_br_img60` 44, `s4_A_*` 35; main lost content in 35 of them). 235 equal Chrome's
+  words and images per page where `fix2` and main did not (collapsed cells that were moved whole where Chrome splits them: `t_col_b*_p*_txtimg`, `u_col1/2_img_long`, `u_col*_imgbr`,
+  `u_col*_wrapdiv`, `s4_I_*`, `rh_td_txt`, `s5_tbl_col_*`). 155 are complete and not Chrome's, but none is further from Chrome than main and `fix2` (typically one line); the exceptions are the 45
+  above. Every other family of the sweeps is byte-identical to `fix2`: separated tables, paragraphs, lists, flex, grid, multicol, nested inline-blocks.
+- `c1`..`c15` (561 cases, Chrome and the branch): `fix2` and `fix3` give identical lines for every case; `c16` (`x_two`, `x_three`: the new repros) differs, as in the table above.
+- fulgur: `cargo test -p fulgur --lib` 2352 pass (forks patched in), `clippy -p fulgur --lib --tests -D warnings`, `cargo fmt --check` clean.
+- html-to-pdf: `cargo test --release --locked` 785 passed, 0 failed (70 binaries; `inline_img_strut` 31), `cargo fmt --all --check`, `cargo clippy --release --all-targets
+  --locked -- -D warnings` clean, `cargo build --release --locked -p htmltopdf-cli` with the lock at `96b1ea5e` (only that line moved).
+- Byte identity with main's binary at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical. `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok,
+  numbers unchanged (27: 6.1 %).
+- fulgur VRT (`fulgur-vrt`, forks patched in): the same 35 of 64 fixtures fail against the goldens in this environment's fonts, and their 70 actual files are byte-identical to the run before this change;
+  no golden moves.
+- Side by side (main / `fix2` / `fix3` / Chrome, page 2 of `s4_I_*`): `out/scratch/f183v5/sbs_I_p2.png`.
+
+Not verified: the separated-border and padded-table variants against Chrome beyond the cases above; the effect on `tr` / `td` `avoid` (45 cases, above); the Blitz CI / Parley clippy (as in 7.3).
+
