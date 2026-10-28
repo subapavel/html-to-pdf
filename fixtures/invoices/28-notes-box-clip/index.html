@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0028</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[11pt] text-gray-900 leading-snug">
+
+<!-- Hlavička: flex -->
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-4 mb-8">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600 mt-1">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0028</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Datum vystavení:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Datum splatnosti:</span> 29. 10. 2026</p>
+    <p><span class="text-gray-500">DUZP:</span> 15. 10. 2026</p>
+  </div>
+</header>
+
+<!-- Dodavatel / odběratel: grid -->
+<section class="grid grid-cols-2 gap-8 mb-8 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12</p>
+    <p>541 01 Trutnov</p>
+    <p class="mt-2">IČO: 12345678</p>
+    <p>DIČ: CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5</p>
+    <p>110 00 Praha 1</p>
+    <p class="mt-2">IČO: 87654321</p>
+    <p>DIČ: CZ87654321</p>
+  </div>
+</section>
+
+<!-- Položky: tabulka -->
+<table class="w-full text-sm mb-6">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 px-2 font-semibold text-right">Cena/ks</th>
+      <th class="py-2 px-2 font-semibold text-right">DPH</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+      <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+      <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+      <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Školení – půldenní workshop pro tým zákazníka</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 px-2 text-right tabular-nums">9 900,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">9 900,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Podpora po spuštění – hypercare, 2 týdny</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 px-2 text-right tabular-nums">14 000,00</td>
+      <td class="py-2 px-2 text-right tabular-nums">21 %</td>
+      <td class="py-2 pl-2 text-right tabular-nums">14 000,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Součty -->
+<section class="flex justify-end mb-10">
+  <table class="text-sm w-72">
+    <tbody>
+      <tr>
+        <td class="py-1 text-gray-600">Základ daně</td>
+        <td class="py-1 text-right tabular-nums">96 700,00 Kč</td>
+      </tr>
+      <tr>
+        <td class="py-1 text-gray-600">DPH 21 %</td>
+        <td class="py-1 text-right tabular-nums">20 307,00 Kč</td>
+      </tr>
+      <tr class="border-t-2 border-gray-900 text-lg font-bold">
+        <td class="pt-2">Celkem k úhradě</td>
+        <td class="pt-2 text-right tabular-nums">117 007,00 Kč</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Poznámka: šablona vyhrazuje pevný box, ERP do něj vložilo delší text. -->
+<div class="h-28 overflow-hidden rounded-lg border border-gray-300 p-4 text-sm">Poznámka: Dodávka byla uskutečněna v rámci rámcové smlouvy o poskytování služeb integrace podnikových systémů ze dne 3. 3. 2025 a navazuje na objednávku č. OBJ-2026-0412. Fakturované práce zahrnují analýzu stávajících rozhraní, návrh a implementaci nových integračních toků, testování se zástupci zákazníka a dvoutýdenní podporu po spuštění do produkce. Přístupové údaje do testovacího prostředí byly zákazníkovi předány samostatně a po skončení podpory budou zablokovány. Zdrojové kódy a dokumentace jsou uloženy v repozitáři zákazníka; předávací protokol podepsaly obě strany dne 9. 10. 2026. Případné reklamace uplatněte písemně do čtrnácti dnů od doručení této faktury na adresu dodavatele nebo e-mailem. Při prodlení s úhradou si dodavatel vyhrazuje právo účtovat smluvní úrok z prodlení ve výši 0,05 % z dlužné částky za každý den prodlení a náhradu nákladů spojených s vymáháním pohledávky. Faktura je splatná bankovním převodem na účet uvedený výše, jako variabilní symbol prosím použijte číslo této faktury. Upozorňujeme, že dodavatel je plátcem DPH a daňový doklad slouží zároveň jako doklad o zdanitelném plnění. Pokud se na dodávku vztahuje režim přenesení daňové povinnosti, bude to na faktuře výslovně uvedeno. Děkujeme za spolupráci a těšíme se na další společné projekty. Kontaktní osobou pro účetní dotazy je paní Marie Nováková, telefon 603 123 456, e-mail ucetni@priklad.example; pro technické dotazy ke zprovoznění slouží e-mail podpora@priklad.example. Dále uvádíme, že veškeré činnosti byly prováděny na základě písemného zadání a odsouhlaseného harmonogramu, který byl v průběhu projektu dvakrát aktualizován na žádost zákazníka. První aktualizace se týkala přesunu termínu školení na druhý říjnový týden, druhá doplnění testovacích scénářů o zpracování opravných dokladů a dobropisů. Všechny změny byly potvrzeny e-mailem zástupců obou stran a jsou uloženy v projektové dokumentaci. Cestovní náklady nejsou součástí této faktury a budou vyúčtovány samostatně po skončení podpory. Pokud zákazník do pěti pracovních dnů nepotvrdí převzetí plnění, považuje se plnění za převzaté bez výhrad. Dodavatel prohlašuje, že není v úpadku ani v likvidaci a že nemá nedoplatky vůči správci daně, orgánům sociálního zabezpečení ani zdravotním pojišťovnám. Bankovní spojení uvedené na této faktuře je zveřejněno ve smyslu zákona o dani z přidané hodnoty; platba na jiný účet nemá účinky splnění závazku. Veškeré údaje v této poznámce byly do šablony vloženy automaticky z podnikového informačního systému a jejich délka se může lišit podle konkrétní zakázky.</div>
+
+</body>
+</html>
