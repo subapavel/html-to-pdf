@@ -813,6 +813,28 @@ fn a_paragraph_that_avoids_a_break_inside_a_padded_clip_box_is_what_main_made_of
     like_main("avoid", &pdf, &[0, 150], (2, 291.9), 112);
 }
 
+#[test]
+fn clip_boxes_in_a_grid_keep_what_main_made_of_them() {
+    // Two grid items with `overflow:hidden;height:256px;padding:16px`, one holding a heading and a paragraph, one a
+    // paragraph, 880 px down the page. A clip box is a supported shape only in block flow: the fragmenter lifts the clip
+    // only below a block container, so with the second item "supported" the pair came out worse than main in the
+    // validator's `tw_clip_grid_card.s880` (3 pages, twice the ink; Chrome and main 2). Main: 300 words on page 2,
+    // AFTER at 258.9 pt (Chrome: 27 / 48 words, AFTER 161.6 pt; the fork before the narrowing was close to it, F30f-f).
+    let item = |inner: &str| {
+        format!("<div style=\"overflow:hidden;height:256px;padding:16px\">{inner}</div>")
+    };
+    let pdf = render(&format!(
+        "<div style=\"height:880px;background:#eee\"></div>\
+         <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:16px\">{}{}</div>{AFTER}",
+        item(&format!(
+            "<h3 style=\"margin:0\">HEAD</h3><p>{}</p>",
+            words(0, 150)
+        )),
+        item(&format!("<p>{}</p>", words(0, 150))),
+    ));
+    like_main("grid", &pdf, &[0, 300], (2, 258.9), 0);
+}
+
 // ── Fixture 28 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 fn fixture_28() -> Vec<u8> {
