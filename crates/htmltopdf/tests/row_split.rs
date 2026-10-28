@@ -1,4 +1,4 @@
-//! A table cell made of image lines and text, cut by a page break, keeps every word and every image (F183, plan 7.8).
+//! A table cell made of image lines and text, cut by a page break, keeps every word and every image (F183, plan 7.7).
 //!
 //! An inline root (a cell, a block whose content is lines) holds its `<img>` as inline boxes: the line puts them where
 //! it wants, so the block walk of the fragmenter must never cut it between two boxes. It did, for every row of a table
@@ -13,7 +13,7 @@
 //! `b_a4_two_673`, `b_land_thead_357`, `b_land_thead_619`, `b_a6_thead_475`, `g_hf2_none_sep_0`); the numbers are
 //! Chrome's (headless Chromium, same HTML, `pdftotext` and `pdfimages` on its PDF). The words are numbered in document
 //! order (`w001`..), so a lost word shows as a gap and a repeated one as a count of 2.
-//! Plan: docs/plans/2026-10-27-f183-inline-img-strut.md section 7.8.
+//! Plan: docs/plans/2026-10-27-f183-inline-img-strut.md section 7.7.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -266,7 +266,7 @@ fn s3_landscape_header_table_keeps_every_word_and_matches_chrome() {
 fn s4_a6_header_table_keeps_every_word_and_image() {
     // `b_a6_thead_475`: words as in Chrome (w001..w056 | w057..w084). Chrome moves the whole third row (6 | 3 images);
     // we cut it after its two image lines (8 | 1), as the main branch did (which lost 12 words here). Complete and
-    // the words per page are Chrome's; the image split is not (noted in plan 7.8).
+    // the words per page are Chrome's; the image split is not (noted in plan 7.7).
     let pdf = thead_table("A6", 475);
     assert_eq!(
         not_once(&pdf, 84),

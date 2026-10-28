@@ -1,7 +1,7 @@
 # F183 — an inline `<img>` sits on the floor of its line box (no strut below the baseline)
 
 Date: 2026-10-27. Finding: F183 (`2026-10-15-m0-findings.md`). Status: **done** (Parley fork `1f23226`, Blitz fork `63628c03`; section 7.3) — the owner created `subapavel/parley` on 2026-10-27; fix branch `htmltopdf/inline-box-strut` on the
-v0.6.0 release commit `3fe5c239`. The table-row part of **F83d** (and **F83a**, the `page-break-inside` alias) is folded into this PR (fulgur `9e14cba2`, section 7.6): the line-split path that section 7.5 opened for collapsed cells ignored `break-inside: avoid` on `td` / `tr` and made 45 sweep cases worse than main, so the fix could not wait for its own PR. The flex / grid part of F83d stays open.
+v0.6.0 release commit `3fe5c239`. The table-row part of **F83d** (and **F83a**, the `page-break-inside` alias) is folded into this PR (fulgur `9e14cba2`, section 7.6): the line-split path that section 7.5 opened for collapsed cells ignored `break-inside: avoid` on `td` / `tr` and made 45 sweep cases worse than main, so the fix could not wait for its own PR. The flex / grid part of F83d stays open. A fourth pass of the validator found an inline root cut between its inline boxes in every row but the first of a table (fulgur `516558cc`, section 7.7).
 Low impact on the product today:
 Tailwind's preflight makes every `img` / `svg` `display: block`, so no Tailwind invoice (fixtures 01-26, `bench/corpus`)
 has an inline baseline image; hand-written HTML with an inline logo or QR code does.
@@ -367,3 +367,70 @@ taller than a page is still split and loses nothing), `a7` (under a repeated hea
 
 Not verified: flex / grid items and rows entered through other paths (F83d's remaining half); `avoid` on a row in a table in columns or inside a transformed wrapper; rows with `rowspan` cells (the row key is the cell's top, as the
 fragmenter sees it); the Blitz CI / Parley clippy (as in 7.3).
+
+### 7.7 An inline root cut between its inline boxes: lost lines in every row but the first (2026-10-28)
+
+vrt-validator, fourth pass, high: a table cell of the shape `img<br>(img<br>)text(2+ lines)[<br>img]` in a row that a page break cuts (no `break-inside: avoid`) lost its text and / or
+its trailing image on page 2, or drew an image at the bottom of page 1. Repro `min2_tf0_0` (ten collapsed rows of `img<br>img<br>20 words` and two short cells, `table-layout: fixed`):
+images page 1 | page 2 and words, main 10 | 10 and 260 words, 7.6's binary 11 | 8 and 240 (20 lost), Chrome 10 | 10 and all. Sweep `m` (6966 cases: 9 cell shapes, collapsed / separated /
+no border, with and without `thead`, 129 filler heights): cases that lose words, main 559, 7.6's binary 344 (122 only there); cases that lose an image, main 106, 7.6's binary 398.
+Regressions of 7.6's binary against main, words lost main | branch: `b_land_thead_357` 0 | 5, `b_a4_two_673` 8 | 24, `b_a6_thead_475` 12 | 28, `b_land_thead_619` 4 | 28, `g_hf2_none_sep_0` 0 | 12.
+
+**Root cause (three links; the validator's guess, "only the first cell is line-split, a later row goes down the block path and is cut between its inline boxes, then
+`paragraph_lines_for_page` drops the line", was right, with one more link and a part it did not name).**
+
+1. `nested_line_split` decides whether an inline root is cut between its lines: when it is taller than a page, or first on its strip and overflowing. In a table that is the first
+   row on a page (7.5 made the cell of a bordered table count). A cell of any later row is neither, so it is not line-split; it goes down the block path.
+2. The block path enters a child when the gate (`would_split_block_subtree`) sees one of its children overflow the strip. The children of an inline root are its inline boxes (`<img>`),
+   not block children: the gate walked them as a column (`img` at 7..67, `img` at 72..132, summed against the room) and never saw the text lines, which are not nodes. A cell of
+   `img<br>img<br>words` whose second image did not fit the room was entered and cut between the two images, into fragments as tall as the images (72 px and 60 px), with no
+   line ranges (`tests::an_inline_root_with_boxes_is_never_cut_between_its_boxes`, red on 7.6's fulgur: 365 of 365 cut cells have none). `paragraph_lines_for_page` then measures the lines from
+   the fragment heights, and the 64 px line (60 px image plus the strut, F183) does not fit a 60 px fragment: no line, the words under it with it (7.4 link 2). Without the strut the lines were
+   60 px, equal to the fragments, so main drew most of these cuts by luck (and lost words in the rest: 559 cases); the strut turned luck into loss. That is why `fix2`..`fix4` are identical
+   on `min2` and why it looked like F183 moved a bug: the strut is what the bug needs to be visible.
+3. `leading_block_size` (how much of a box has to fit below its placement before the fragmenter may enter it) of an inline root with a box counted `top of the first box + its height` since
+   7.4's fix (which removed the "gap" reading that main used). For `text<br><img>` the image sits below the text lines, so the cell asked for the text and the image, did not fit, and the
+   table moved to the next page where Chrome (and main, by the old gap rule) keeps the first two lines (`ti`, `tit` shapes: 56 words from Chrome's at the thresholds). For two image lines
+   it asked for 67 px and the table was entered where its first two lines (about 135 px) could not stay: a 10 px stub of the table on page 1.
+
+**Fix (fulgur fork `htmltopdf/srgb-colours` `516558cc` (`b7f475a1` the cut, `f994c8a6` the leading size, `516558cc` comments only):** css-break-3 section 4.1 (a line box is monolithic, the break points of an inline root are
+between its lines) and section 4.4 (orphans and widows of 2).
+
+- `fragment_block_subtree`: when the gate would enter an inline root that `line_split_candidate` accepts (two lines or more, no `split_barrier`: not multicol, floating, transformed,
+  orthogonal, sharing its line with an atomic inline, clipping, or a pseudo-element box of a table) and nothing inside it forces a break, the root is cut between its lines with the F30
+  machinery (`fragment_nested_inline_root`) instead of being entered. Where the first two lines do not fit the room it moves to the next page whole, as before for a root that is a leaf.
+  A one-line root and a root the line splitter must keep whole are entered as before.
+- `leading_block_size`: an inline root with two lines or more and a box in it asks for `LineSplit::leading` (inset and ORPHANS lines), like a cut paragraph, not for the bottom of its first box.
+  A plain paragraph (no in-flow child with a height) still counts whole, so documents without inline boxes are untouched.
+
+Tests (red before, green after): fulgur `an_inline_root_with_boxes_is_never_cut_between_its_boxes` (four cell shapes, collapsed / separated / no border, 44 fillers, eight rows: every cut cell has
+line ranges that tile its lines and every image has one fragment), `an_inline_root_asks_for_its_first_lines_not_for_its_first_box`; `a_cell_of_a_bordered_table_is_split_between_its_lines`
+changed its first row: the plain table (no border) with two image lines at 1000 px now moves the cell to page 2 whole, as Chrome does (7.5 noted it as "split 1 | 1, not as Chrome"). html-to-pdf
+`crates/htmltopdf/tests/row_split.rs` (red on 7.6's lock, 5 of 5): `s1` (`min2`: w001..w130 and 10 images | the rest, as Chrome), `s2` (`b_a4_two_673`: Chrome's words per page, 10 | 14 images),
+`s3` (`b_land_thead_357` and `_619`: Chrome's words per page and images, header on both), `s4` (`b_a6_thead_475`: words as Chrome, images 8 | 1 against Chrome's 6 | 3), `s5` (`g_hf2_none_sep_0`: 3 pages like
+Chrome, every word once).
+
+**Results (binary `htmltopdf-f183-fix5`, scratch outside the repo; Chrome 148 for every case that differs, same HTML).**
+
+- Content loss (words / images against the HTML), cases that lose any: sweep `m` words main 559, 7.6's binary 344, now **0**; images main 106, 7.6's binary 398, now **0**; no case duplicates a word. `min2` (120 cases: the filler
+  heights of the repro) 80 / 98 / 0. All six repros above are complete (`min2_tf0_0` 10 | 10 images, 130 | 130 words, Chrome's; `b_land_thead_357` and `_619`, `b_a4_two_673` equal Chrome in words and images per page; `g_hf2_none_sep_0`
+  3 pages, 130 | 131 | 1 words, 10 | 10 | 2 images, main 3 pages, Chrome 3 pages with the footer repeated). The other sweeps of the vrt-validator (`f183v6`, rendered with main, 7.6's binary and this one): `b` (400) words lost main 12 / 7.6 6 / now 0;
+  `g` (400) 112 / 20 / 0; `l` (1640) 213 / 202 / 0; `h` (288) and `i` (672) none; `a`, `a2`, `c`, `c2` 153 + 85 `tall_*` cases and 40 `c_mc*` / `C2mc*` cases lose words **in every binary alike, unchanged** (F192, F193, filed; main has them).
+- Against Chrome (words per page and page count; `m` has 1903 cases where this binary differs from main or from 7.6's binary): this binary equals Chrome in 1812, 7.6's binary in 836, main in 654; closer than main in 1215, equal distance 666, farther
+  in 22 (one filler step at a threshold in the shapes `iti`, `iiti`, `ti`, identical in 7.6's binary: 32-56 words, one row, the first-two-lines test is one pixel off Chrome's room). Farther than 7.6's binary: 15 (`ti` / `tit`, one filler step of 6 px at a
+  threshold each; 7.6's binary had them by the luck that this fix removes: not farther than main in any: equal for `ti`, 10 to 28 words closer for `tit`). `b` 320 (main) / 371 (7.6) / 383 equal Chrome of 400; `g` 4 / 4 / 4, 20 cases improved (the 60 further than main are
+  the table-layout cases of F194, unchanged from 7.6's binary); `l` (449 with Chrome) 243 / 297 / 429, 7 further than main, all the same as 7.6's binary; `i` 52 / 432 / 432; `a`, `a2`, `fx`, `h`, `c`, `c2` identical to 7.6's binary.
+- The `f183v5` sweeps (6209 cases, `rerun5.py`): 311 differ in bytes from 7.6's binary; words lost main 152 (images 66) / 7.6 0 / now 0, no duplicates. Chrome run on all 311: **306 equal Chrome** (7.6's binary 208, main 172),
+  one closer than main, 2 equal distance, 2 farther than main and than 7.6's binary: `t_sep_b1_p0_txtimg_1078` and `t_sep_b2_p5_txtimg_1072` (main 33 | 147 words as Chrome, 7.6's binary 17 | 163, now 0 | 180: the cell moves whole one 6 px filler step
+  before Chrome's room runs out; the neighbouring steps 940..1072 and 1084..1120 equal Chrome's or main's within the same step). One more, `u_grid_rows_1040` (a grid of cells with an `img` and 30 words, 83 px below the filler): Chrome 30 | 210 words, 2 | 6
+  images; main 60 | 180, 2 | 6; 7.6's binary 30 | 210, 1 | 7 (an image of the first row on page 2 under its words on page 1); now 45 | 195, 2 | 6: the first item stays whole, the second is cut after two lines, Chrome cuts both after two (a grid row is cut at one line for all items).
+- Positions of the cut cells equal the F30 path's (the fragments are the lines' extent): `s1`..`s5` check words and images per page, not pixel rows; the cut cell of a row has its top border and padding repeated on page 2 as the first-row case of 7.5 (4-5 px lower than Chrome, noted there).
+- fulgur: `cargo test -p fulgur --lib` 2358 pass (Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -- -D warnings`, `cargo fmt --check` clean. fulgur VRT (`fulgur-vrt`, forks patched in): the same 35 of 64 fixtures fail against the goldens
+  in this environment's fonts, the failure list is unchanged and all 70 actual files are byte-identical to the run of 7.6's binary: no golden moves.
+- html-to-pdf: `cargo test --release --locked` 797 passed, 0 failed (71 binaries and the doc tests; `row_split` 5), `cargo fmt --all --check`, `cargo clippy --release --all-targets --locked -- -D warnings` clean, `cargo build --release --locked -p htmltopdf-cli` with the lock at `516558cc` (only that line moved; the test run itself was with `f994c8a6`, the same code).
+- Byte identity with main's binary (`htmltopdf-f99f`) at 1 and 4 threads: fixtures 01-26 and the seven `bench/corpus` documents identical (the gate passes `tailwind.css` to fixture 27, so it does not exercise 27). With the real flags (`scripts/render-fixtures.sh`)
+  the 27 PDFs of this binary equal 7.6's binary's byte for byte, and only fixture 27 (the F183 target) differs from main. `scripts/compare.py`: all 27 ok, numbers unchanged (27: 6.1 %, 13: 11.7 % worst, 16: 20.8 %); no PNG moved against 7.6's binary, so none was re-read. BENCH_LINE
+
+Not fixed here, filed or known: F192 (a word lost or cut at the edge of a narrow auto-layout cell: `tall_*`), F193 (a table in `columns: 2` near the bottom of a page with `tr { break-inside: avoid }`), F194 (`table-layout: fixed`
+columns are not equal thirds); a grid row is not cut at one line for all items (`u_grid_rows_1040`, F83d's flex / grid half); a root with one line or a barrier is still entered by the block walk (a one-line cell holding an image cannot be cut anyway).
+Not verified: the Blitz CI / Parley clippy (as in 7.3); inline roots inside multicol and nested inline roots in flex items beyond the sweeps above; documents with inline images in paragraphs at the bottom of a page other than the generated ones.
