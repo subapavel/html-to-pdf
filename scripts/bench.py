@@ -476,8 +476,10 @@ def binary() -> str:
 
 
 def render_cmd(doc: Doc, pdf: Path) -> list[str]:
-    cmd = [binary(), "render", str(doc.path.relative_to(ROOT)), "-o", str(pdf.relative_to(ROOT)),
-           "--css", "fixtures/tailwind/tailwind.css"]
+    cmd = [binary(), "render", str(doc.path.relative_to(ROOT)), "-o", str(pdf.relative_to(ROOT))]
+    # A fixture gets the Tailwind sheet only when it links it (27 is plain CSS), like scripts/render-fixtures.sh.
+    if doc.kind != "fixture" or "tailwind.css" in doc.path.read_text(encoding="utf-8"):
+        cmd += ["--css", "fixtures/tailwind/tailwind.css"]
     for f in sorted((ROOT / "fixtures/fonts").glob("Inter-*.ttf")):
         cmd += ["--font", str(f.relative_to(ROOT))]
     if doc.kind == "fixture":

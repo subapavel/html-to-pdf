@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0027</title>
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(../../fonts/Inter-Regular.ttf) format("truetype"); }
+  @font-face { font-family: Inter; font-weight: 600; src: url(../../fonts/Inter-SemiBold.ttf) format("truetype"); }
+  @font-face { font-family: Inter; font-weight: 700; src: url(../../fonts/Inter-Bold.ttf) format("truetype"); }
+
+  /* Plain CSS written for a browser, no Tailwind and so no preflight: <img> stays `display: inline`, as in any
+     hand-written invoice template. */
+  @page { size: A4; margin: 15mm; }
+  body { margin: 0; font: 10pt Inter, sans-serif; color: #111827; }
+  h1 { margin: 0; font-size: 20pt; font-weight: 700; }
+  h2 { margin: 0 0 4px; font-size: 8pt; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; }
+  p { margin: 0; }
+  .head { padding-bottom: 12px; border-bottom: 2px solid #111827; }
+  .head .name { font-size: 13pt; font-weight: 700; }
+  .meta { margin: 16px 0; }
+  .meta div { display: inline-block; vertical-align: top; width: 49%; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th, td { padding: 6px 10px; border: 1px solid #d1d5db; text-align: left; }
+  th { background: #f3f4f6; font-weight: 600; }
+  td.n, th.n { text-align: right; }
+  .total td { font-weight: 700; background: #111827; color: #fff; border-color: #111827; }
+  .pay td { vertical-align: top; padding: 8px; border: 1px solid #d1d5db; }
+  .pay td.qr { width: 123px; border-right: 0; }
+  .pay dl { margin: 6px 0 0; }
+  .pay dt { display: inline-block; width: 60px; color: #6b7280; }
+  .pay dd { display: inline; margin: 0; font-weight: 600; }
+  .note { margin-top: 16px; font-size: 9pt; color: #4b5563; }
+  .note img { height: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Hlavička: logo je inline <img> na řádku s názvem firmy a pod ním je linka. Řádek má strut (CSS 2.1 §10.8.1):
+     mezi spodkem loga a linkou zbývá místo pod základní linií, ne nula. -->
+<div class="head"><img src="logo.png" height="48" alt="Příkladná integrace"> <span class="name">Příkladná integrace s.r.o.</span></div>
+
+<div class="meta">
+  <div>
+    <h1>Faktura 2026-0027</h1>
+    <p>Daňový doklad · Vystaveno 2. 11. 2026</p>
+    <p>Splatnost 16. 11. 2026</p>
+  </div>
+  <div>
+    <h2>Odběratel</h2>
+    <p><b>Zákazník a syn, a.s.</b></p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1</p>
+    <p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Popis</th><th class="n">Množství</th><th class="n">Cena/ks</th><th class="n">DPH</th><th class="n">Celkem</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Licence iFlowMonitor – 12 měsíců</td><td class="n">1 ks</td><td class="n">30 000,00</td><td class="n">21 %</td><td class="n">30 000,00</td></tr>
+    <tr><td>Implementace a zaškolení</td><td class="n">4 h</td><td class="n">2 500,00</td><td class="n">21 %</td><td class="n">10 000,00</td></tr>
+    <tr><td>Technická podpora – prioritní linka</td><td class="n">12 měs.</td><td class="n">800,00</td><td class="n">21 %</td><td class="n">9 600,00</td></tr>
+  </tbody>
+  <tfoot>
+    <tr><td colspan="4" class="n">Základ daně</td><td class="n">49 600,00</td></tr>
+    <tr><td colspan="4" class="n">DPH 21 %</td><td class="n">10 416,00</td></tr>
+    <tr class="total"><td colspan="4" class="n">Celkem k úhradě</td><td class="n">60 016,00 Kč</td></tr>
+  </tfoot>
+</table>
+
+<!-- Platba: QR kód je inline <img> v buňce tabulky. Dolní okraj buňky je o strut níž, než kdyby obrázek stál na dně řádku. -->
+<table class="pay">
+  <tr>
+    <td class="qr"><img src="qr.png" width="123" height="123" alt="QR Platba"></td>
+    <td>
+      <h2>QR Platba</h2>
+      <p>Naskenujte kód v bankovní aplikaci, nebo zadejte údaje ručně:</p>
+      <dl>
+        <dt>Účet</dt><dd>123456789/0300</dd><br>
+        <dt>IBAN</dt><dd>CZ65 0300 0000 0001 2345 6789</dd><br>
+        <dt>VS</dt><dd>20260027</dd><br>
+        <dt>Částka</dt><dd>60 016,00 CZK</dd>
+      </dl>
+    </td>
+  </tr>
+</table>
+
+<p class="note">Fakturu vystavila společnost <img src="logo.png" alt=""> Příkladná integrace s.r.o. v elektronické podobě; podpis ani razítko nejsou nutné. Reklamace uplatňujte do 8 dnů od doručení.</p>
+
+</body>
+</html>

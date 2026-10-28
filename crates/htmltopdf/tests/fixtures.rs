@@ -15,14 +15,27 @@ fn root() -> PathBuf {
 }
 
 fn renderer() -> Renderer {
+    renderer_with(true)
+}
+
+/// A fixture is rendered with the compiled Tailwind sheet only when its `index.html` links it (like
+/// `scripts/render-fixtures.sh`; 27 is plain CSS and must not get the preflight).
+fn uses_tailwind(html: &str) -> bool {
+    html.contains("tailwind.css")
+}
+
+fn renderer_with(tailwind: bool) -> Renderer {
     let root = root();
     // Fixtures are under our control, so every font-family they mention must resolve: strict.
     let mut b = Renderer::builder()
         .strict_fonts(true)
         // Every `<img>` of a fixture must name a bundled image that decodes (F32a).
-        .strict_images(true)
-        .css_file(root.join("fixtures/tailwind/tailwind.css"))
-        .expect("tailwind.css");
+        .strict_images(true);
+    if tailwind {
+        b = b
+            .css_file(root.join("fixtures/tailwind/tailwind.css"))
+            .expect("tailwind.css");
+    }
     let fonts = std::fs::read_dir(root.join("fixtures/fonts"))
         .expect("fixtures/fonts — run scripts/fetch-fonts.sh")
         .filter_map(|e| e.ok())
@@ -78,9 +91,14 @@ fn fixtures() -> Vec<PathBuf> {
 
 #[test]
 fn every_fixture_renders_to_a_pdf_deterministically() {
-    let r = renderer();
+    let (with, without) = (renderer_with(true), renderer_with(false));
     for dir in fixtures() {
         let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+        let r = if uses_tailwind(&html) {
+            &with
+        } else {
+            &without
+        };
         let opts = RenderOptions {
             lang: Some("cs".into()),
             ..Default::default()
@@ -425,9 +443,14 @@ fn inline_spacing_invoice_keeps_its_label_spaces() {
 #[test]
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.
-    let r = renderer();
+    let (with, without) = (renderer_with(true), renderer_with(false));
     for dir in fixtures() {
         let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+        let r = if uses_tailwind(&html) {
+            &with
+        } else {
+            &without
+        };
         if let Err(e) = r.render(&html, &RenderOptions::default()) {
             panic!("{}: {e}", dir.display());
         }
