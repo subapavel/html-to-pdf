@@ -624,6 +624,197 @@ fn w3_100px_image_in_a_collapsed_cell() {
     assert!(bbox(&p1, is_black).is_none(), "page 1 keeps a stub");
 }
 
+// --- X. a cell with two or more image lines near the page bottom (plan section 7.5) -------------------------------
+
+fn images_on(pdf: &[u8], page: usize) -> usize {
+    let path = temp(pdf);
+    let out = Command::new("pdfimages")
+        .args(["-list", "-f", &page.to_string(), "-l", &page.to_string()])
+        .arg(&path)
+        .output()
+        .expect("pdfimages (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    String::from_utf8_lossy(&out.stdout).lines().skip(2).count()
+}
+
+/// The words `w001`.. on `page` as numbers.
+fn words_on(pdf: &[u8], page: usize) -> Vec<u32> {
+    let path = temp(pdf);
+    let out = Command::new("pdftotext")
+        .args(["-f", &page.to_string(), "-l", &page.to_string()])
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .filter_map(|w| w.strip_prefix('w')?.parse().ok())
+        .collect()
+}
+
+fn words(from: u32, n: u32) -> String {
+    (from..from + n)
+        .map(|i| format!("w{i:03}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A cell after `filler` px: `table_css` for the table, `td_css` for the cell (vertical-align top as in the sweeps).
+fn cell_after(table_css: &str, td_css: &str, filler: usize, cell: &str) -> Vec<u8> {
+    render_with(
+        false,
+        &format!("table {{ {table_css} }} td {{ {td_css}; vertical-align: top }}"),
+        &format!(
+            "<div style=\"height: {filler}px; background: #ccc\"></div><table><tr><td>{cell}</td></tr></table>"
+        ),
+    )
+}
+
+const COLLAPSED: &str = "border-collapse: collapse; border-spacing: 0";
+
+#[test]
+fn x1_two_image_lines_in_a_collapsed_cell_move_to_page_2_whole() {
+    // `td { padding: 5px; border: 1px solid #000 }`, `<img><br><img>`: the table starts in the last 120 px of page 1
+    // and the cell (two 64 px lines) does not fit. Chrome moves the row whole: nothing on page 1, page 2 has both
+    // images (rows 5..130, cell border 0..140; 2 px border: 6..131, 0..142). The table sits below its own half border,
+    // and the fragmenter did not take the cell for the first thing in the table: it cut the cell between its images
+    // and the second line, 64 px tall in a fragment as tall as the image, was not painted (plan 7.5).
+    for (border, red, black) in [(1, (5, 130), (0, 140)), (2, (6, 131), (0, 142))] {
+        for filler in [1000, 1030, 1060] {
+            let pdf = cell_after(
+                COLLAPSED,
+                &format!("padding: 5px; border: {border}px solid #000"),
+                filler,
+                &format!("{}<br>{}", img60(), img60()),
+            );
+            let what = format!("border {border}px, filler {filler}");
+            assert_eq!(
+                (images_on(&pdf, 1), images_on(&pdf, 2)),
+                (0, 2),
+                "{what}: images per page (Chrome 0 | 2)"
+            );
+            let (p1, p2) = (raster_page(&pdf, 1), raster_page(&pdf, 2));
+            assert!(bbox(&p1, is_black).is_none(), "{what}: a stub on page 1");
+            rows(&bbox(&p2, is_red), red.0, red.1, &format!("{what}: images"));
+            rows(
+                &bbox(&p2, is_black),
+                black.0,
+                black.1,
+                &format!("{what}: cell"),
+            );
+        }
+    }
+}
+
+#[test]
+fn x2_three_image_lines_and_no_padding_in_a_collapsed_cell() {
+    let pdf = cell_after(
+        COLLAPSED,
+        "padding: 5px; border: 1px solid #000",
+        1000,
+        &format!("{}<br>{}<br>{}", img60(), img60(), img60()),
+    );
+    assert_eq!(
+        (images_on(&pdf, 1), images_on(&pdf, 2)),
+        (0, 3),
+        "Chrome 0 | 3"
+    );
+    let p2 = raster_page(&pdf, 2);
+    rows(&bbox(&p2, is_red), 5, 194, "three images");
+    rows(&bbox(&p2, is_black), 0, 204, "cell");
+
+    let pdf = cell_after(
+        COLLAPSED,
+        "padding: 0; border: 1px solid #000",
+        1000,
+        &format!("{}<br>{}", img60(), img60()),
+    );
+    assert_eq!((images_on(&pdf, 1), images_on(&pdf, 2)), (0, 2));
+    let p2 = raster_page(&pdf, 2);
+    rows(&bbox(&p2, is_red), 0, 125, "images without padding");
+    rows(&bbox(&p2, is_black), 0, 130, "cell without padding");
+}
+
+#[test]
+fn x3_separated_table_with_a_border_loses_nothing() {
+    // The same defect without `border-collapse`: a cell below the border of its table was not "first" either.
+    // Chrome 0 | 2.
+    let pdf = cell_after(
+        "border: 3px solid #00f",
+        "padding: 5px; border: 1px solid #000",
+        1000,
+        &format!("{}<br>{}", img60(), img60()),
+    );
+    assert_eq!((images_on(&pdf, 1), images_on(&pdf, 2)), (0, 2));
+}
+
+#[test]
+fn x4_collapsed_cell_with_long_text_lines_keeps_every_word_and_image() {
+    // `img60 w001..w040 <br> img20 w041..w080` in a collapsed cell 1000 px down: Chrome splits between the lines, 40
+    // words and the 60 px image (rows 1005..1066) on page 1, 40 words and the small image on page 2. Main lost 24
+    // words, the branch before this fix all of page 2. Page 2 sits 4 px lower than Chrome's (the continuation
+    // reserves the cell's top padding and border, as it does for a cell with separated borders).
+    let cell = format!(
+        "{} {}<br>{} {}",
+        img60(),
+        words(1, 40),
+        img(20, 20, ""),
+        words(41, 40)
+    );
+    let pdf = cell_after(
+        COLLAPSED,
+        "padding: 5px; border: 1px solid #000",
+        1000,
+        &cell,
+    );
+    assert_eq!(words_on(&pdf, 1), (1..=40).collect::<Vec<_>>());
+    assert_eq!(words_on(&pdf, 2), (41..=80).collect::<Vec<_>>());
+    assert_eq!((images_on(&pdf, 1), images_on(&pdf, 2)), (1, 1));
+    rows(
+        &bbox(&raster_page(&pdf, 1), is_red),
+        1005,
+        1066,
+        "image on page 1",
+    );
+    let p2 = raster_page(&pdf, 2);
+    let img2 = bbox(&p2, is_red).expect("the small image on page 2");
+    assert!(
+        img2.y0 <= 6 && img2.y1 <= 26,
+        "small image rows {}..{}",
+        img2.y0,
+        img2.y1
+    );
+}
+
+#[test]
+fn x5_collapsed_cell_with_images_text_and_breaks_keeps_every_word_and_image() {
+    // `img60 <br> w001..w010 <br> img20 <br> w011..w020`, 1024 px down: Chrome page 1 has the first 10 words and the
+    // 60 px image (rows 1029..1090), page 2 the small image and the other 10 words.
+    let cell = format!(
+        "{}<br>{}<br>{}<br>{}",
+        img60(),
+        words(1, 10),
+        img(20, 20, ""),
+        words(11, 10)
+    );
+    let pdf = cell_after(
+        COLLAPSED,
+        "padding: 5px; border: 1px solid #000",
+        1024,
+        &cell,
+    );
+    assert_eq!(words_on(&pdf, 1), (1..=10).collect::<Vec<_>>());
+    assert_eq!(words_on(&pdf, 2), (11..=20).collect::<Vec<_>>());
+    assert_eq!((images_on(&pdf, 1), images_on(&pdf, 2)), (1, 1));
+    rows(
+        &bbox(&raster_page(&pdf, 1), is_red),
+        1029,
+        1090,
+        "image on page 1",
+    );
+}
+
 // --- Fixture 27: a hand-written invoice with inline images --------------------------------------------------
 
 #[test]
