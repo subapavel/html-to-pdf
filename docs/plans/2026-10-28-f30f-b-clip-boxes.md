@@ -346,7 +346,47 @@ Fork lib, new: `block_size_constrained_reads_height_and_max_height`, `a_content_
 **The pre-existing loss of a line per page break (b).** Root cause found, fix not included: it is a new HIGH finding, **F30f-d** in `2026-10-15-m0-findings.md`, at the front of the queue. In short: main's body-level line path fits the lines of a paragraph with a border or padding as if they started at the top of its border box, but the renderer paints them `inset_top` lower on every fragment, so the last line of each page ends outside the page's frame and a clip box cuts it off the picture (c286: the 13 words of w0763-w0775 are on page 1 of main's text layer at y 798-811 pt, the content box ends at 799.4 pt, and page 2 starts at w0776; Chrome 763 / 737 words). The fix (route such a paragraph through the splitter that knows the insets) is 20 lines and gets c286 to Chrome's words per page, but over the 238 scratch cases it changes only 69 reach Chrome's numbers exactly and 86 stay more than 14 words off, because it then runs into `box-decoration-break: slice` (F96): Chrome does not repeat the top padding on the continuation page and ours does. So it is not an improvement everywhere yet. The patch:
 
 ```diff
-PATCH_PLACEHOLDER
+diff --git a/crates/fulgur/src/pagination_layout.rs b/crates/fulgur/src/pagination_layout.rs
+index 277755f7..2308c962 100644
+--- a/crates/fulgur/src/pagination_layout.rs
++++ b/crates/fulgur/src/pagination_layout.rs
+@@ -2570,9 +2570,25 @@ impl<'a> PaginationLayoutTree<'a> {
+             .flatten();
+             let clip_whole_now = clip_limit_here.is_some()
+                 && cursor_y + child_h <= self.strips.bottom(page_index) + 0.5;
++            // html-to-pdf F30f-b (plan §7, separate fix): a paragraph with a border or padding that spans pages is cut
++            // by the splitter that knows its insets. `fragment_inline_root` fits the lines as if they started at the
++            // top of the border box, but the renderer paints them at `y + inset_top` on every fragment, so the last line
++            // of each page ended `inset_top` below the page's bottom, in the margin, and a clipping box (`overflow`) cut
++            // it off the picture: a line lost per page break, while the text layer still held it.
++            let has_insets = layout.border.top
++                + layout.padding.top
++                + layout.border.bottom
++                + layout.padding.bottom
++                > 0.0;
++            let inset_split_here = clip_limit_here.is_none()
++                && has_insets
++                && body_block_flow
++                && !is_float
++                && !avoid_inside
++                && !crate::blitz_adapter::is_multicol_container(child)
++                && cursor_y + child_h > self.strips.bottom(page_index) + 0.5;
+             if line_metrics.len() > 1
+-                && clip_limit_here.is_some()
+-                && !clip_whole_now
++                && (clip_limit_here.is_some() && !clip_whole_now || inset_split_here)
+                 && let Some(body_node) = self.doc.get_node(body_id)
+                 && let Some(split) = line_split_candidate(self.doc, body_node, child)
+             {
+@@ -2602,7 +2618,7 @@ impl<'a> PaginationLayoutTree<'a> {
+                 page_index = new_page_index;
+                 cursor_y = new_cursor_y;
+                 emitted += 1;
+-                after_clip_box = true;
++                after_clip_box = clip_limit_here.is_some();
+                 prev_bottom_y_in_body = this_top_in_body + child_h;
+                 if let Some((row_page, row_end, row_bottom)) = parallel_row {
+                     if page_index == row_page {
 ```
 
 **Deviations from this plan.** The plan's decision 3 said "content-sized clip boxes are unchanged" and tested it with fixtures only; §7 now tests it with shapes whose line boxes are taller than their pitch. `overflow-x: clip` alone on an auto-height box keeps main's barrier (the first version lifted it; no Chrome probe covers that shape, P7xc has a `height`).
