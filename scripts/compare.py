@@ -117,10 +117,14 @@ THRESHOLDS = {
     # 16: new in F30f (an `overflow-hidden rounded-lg border` card whose one long paragraph is a direct child and crosses the
     #     page break, the shape of 06 with the clip added). 16.6 / 20.8 %, 2 pages like Chrome's: on main's binary the paragraph
     #     was placed whole, its tail was lost (the warning says 307 px below the content box), the payment block moved to a
-    #     third page: 3 pages, 11.4 / 25.0 / 0.9 %. The diff is dense text: ours repeats the card's top border and padding
-    #     on page 2 (`box-decoration-break: slice` is not implemented, F96), so every line of page 2 sits about 20 px lower
-    #     than Chrome's, and the drift every fixture has. Worst page + 1 point; F96 brings it down.
-    "16-terms-card": 0.218,
+    #     third page: 3 pages, 11.4 / 25.0 / 0.9 %. The diff is dense text: ours repeated the card's top border and padding
+    #     on page 2 (`box-decoration-break: slice` was not implemented), so every line of page 2 sat about 20 px lower
+    #     than Chrome's, and the drift every fixture has. Worst page + 1 point.
+    #     F30f-d (step 4) slices the paragraph inside the card at its break: page 2's lines start at the content top like
+    #     Chrome's. 9.5 / 20.8 -> 9.5 / 12.9 %; worst page + 1 point. What is left is the drift every fixture has (a word
+    #     moves between lines a few lines into page 2) and the frame of the `<section>` itself, which the block fragmenter still
+    #     closes on both pages (bottom border and radius on page 1, top border and radius on page 2: F96, block boxes).
+    "16-terms-card": 0.139,
     # 17: new in F102 (a running footer, `position: running(paticka)` in an inline `<style>`, printed by `@bottom-center` on
     #     both pages; Chrome ignores `running()`, so its reference prints the same two halves from `@bottom-left` /
     #     `@bottom-right` strings, see the fixture's README). 12.0 / 10.0 %, 2 pages like Chrome's. The diff is the text drift
@@ -190,6 +194,16 @@ THRESHOLDS = {
     #     lines run past the page bottom, so the box starts page 2 and shows all of them (2 pages, 4.2 % / 1.5 %); with the
     #     F30f-b fix 3.6 % (the text drift every fixture has, and the totals table that 01 has too). Worst page + 1 point.
     "28-notes-box-clip": 0.046,
+    # 29: new in F30f-d (a Czech invoice whose terms are the direct text of a bordered `rounded-lg p-4` card that is not a clip
+    #     box, about 1.3 pages, across the page break; the shape of 16 without the clip and the inner paragraph). 9.9 / 12.6 %,
+    #     2 pages like Chrome's (497 / 505 words, 43 / 40 lines per page like Chrome's). On main's binary the card moved whole to page 2
+    #     (84 / 684 / 238 words, 3 pages), its last line was painted 5 pt below the content box and the frame closed above
+    #     it. Now the card is sliced at the break (css-break-3 5.4): top border and radius on page 1, side borders to the
+    #     page bottom, no bottom border, no line in the margin; page 2 starts at the content top without a top border and
+    #     closes with the bottom border and radius above the payment block. The diff is dense text: our lines break one
+    #     word differently from Chrome's a few lines into page 2 (sub-pixel advances), so most of page 2 is shifted by a word,
+    #     and the drift every fixture has. Worst page + 1 point.
+    "29-card-direct-text": 0.136,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

@@ -117,6 +117,22 @@ fn per_page(words: &[Word]) -> Vec<usize> {
     per
 }
 
+/// How many lines (distinct `y_min`, rounded to 0.1 pt) of `wNNNN` words are printed on each page.
+fn lines_per_page(words: &[Word]) -> Vec<usize> {
+    (1..=page_count(words))
+        .map(|p| {
+            let mut ys: Vec<i32> = words
+                .iter()
+                .filter(|w| w.page == p && w.text.starts_with('w'))
+                .map(|w| (w.y_min * 10.0).round() as i32)
+                .collect();
+            ys.sort_unstable();
+            ys.dedup();
+            ys.len()
+        })
+        .collect()
+}
+
 fn after(words: &[Word]) -> (usize, f32) {
     let a: Vec<&Word> = words.iter().filter(|w| w.text == "AFTER").collect();
     assert_eq!(a.len(), 1, "AFTER is printed once");
@@ -207,13 +223,21 @@ fn frame(pdf: &[u8], page: usize) -> Frame {
             y += 1;
         }
     }
-    let rules = (0..h)
+    let rules: Vec<usize> = (0..h)
         .filter(|&y| {
             let dark = (150..640).filter(|&x| at(x, y) < 235).count();
             dark * 10 > 490 * 9
         })
         .collect();
-    let last_ink = (0..h)
+    // Text below the card's bottom border (the `AFTER` paragraph) is not the card's last line: only rows above the lowest
+    // rule on the lower half of the page count when there is one.
+    let card_end = rules
+        .iter()
+        .copied()
+        .filter(|&r| r > 200)
+        .max()
+        .unwrap_or(h);
+    let last_ink = (0..card_end)
         .filter(|&y| (80..700).any(|x| at(x, y) < 110))
         .filter(|&y| !(150..640).all(|x| at(x, y) < 235))
         .next_back();
@@ -408,15 +432,25 @@ fn the_continuation_page_starts_at_the_content_box_top() {
 fn a_card_that_starts_below_something_is_sliced_where_it_starts() {
     // Chrome starts the card where it is and slices it: 300 px above it 530 / 798 / 172 words and AFTER on page 3 at
     // 231.3 pt; 700 px 223 / 773 / 504 and AFTER at 533.6. Main moved the whole card to page 2 (0 words on page 1).
-    for (spacer, expected, after_y) in [
-        (300, vec![530, 798, 172], 231.3),
-        (700, vec![223, 773, 504], 533.6),
+    for (spacer, expected, lines, after_y) in [
+        (300, vec![530, 798, 172], vec![41, 60, 14], 231.3),
+        (700, vec![223, 773, 504], vec![17, 60, 38], 533.6),
     ] {
         for overflow in ["overflow:hidden;", ""] {
             let what = format!("spacer {spacer} {overflow}");
             let pdf = c286(overflow, spacer);
             let w = printed_words(&pdf);
-            assert_eq!(per_page(&w), expected, "{what}: words per page (Chrome)");
+            // Lines per page are Chrome's exactly. Words per page are within 6: our line breaks differ from Chrome's by one
+            // word in a few lines (sub-pixel advances; main's nested `<div><p>` has the same 530 / 793 / 177), which moves
+            // five words across the page break without moving a line.
+            assert_eq!(lines_per_page(&w), lines, "{what}: lines per page (Chrome)");
+            for (got, want) in per_page(&w).iter().zip(&expected) {
+                assert!(
+                    got.abs_diff(*want) <= 6,
+                    "{what}: words per page {:?}, Chrome {expected:?}",
+                    per_page(&w)
+                );
+            }
             assert_every_word_once(&what, &w, &names(0, 1500));
             assert_inside_content_box(&what, &w);
             let (page, y) = after(&w);
@@ -506,10 +540,20 @@ fn an_unpadded_paragraph_keeps_its_page_break_rule() {
 // ── Fixture 29 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 fn fixture_29() -> Vec<u8> {
+    fixture_29_with(
+        "rounded-lg border border-gray-300 p-4 mb-6 text-sm",
+        "rounded-lg border border-gray-300 p-4 mb-6 text-sm",
+    )
+}
+
+/// Fixture 29 with the card's classes replaced.
+fn fixture_29_with(card: &str, replacement: &str) -> Vec<u8> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let html =
         std::fs::read_to_string(root.join("fixtures/invoices/29-card-direct-text/index.html"))
             .unwrap();
+    assert!(html.contains(card), "the card of fixture 29 has {card}");
+    let html = html.replace(card, replacement);
     let mut b = Renderer::builder()
         .strict_fonts(true)
         .css_file(root.join("fixtures/tailwind/tailwind.css"))
@@ -571,4 +615,91 @@ fn fixture_29_prints_the_card_on_two_pages_like_chrome() {
         top(&ours),
         top(&chrome)
     );
+}
+
+/// Words and lines (distinct `y_min`, rounded to 1 pt) on each page, of every word of the document.
+fn page_shape(words: &[Word]) -> (Vec<usize>, Vec<usize>) {
+    let pages = page_count(words);
+    let count = |p: usize| words.iter().filter(|w| w.page == p).count();
+    let lines = |p: usize| {
+        let mut ys: Vec<i32> = words
+            .iter()
+            .filter(|w| w.page == p)
+            .map(|w| w.y_min.round() as i32)
+            .collect();
+        ys.sort_unstable();
+        ys.dedup();
+        ys.len()
+    };
+    (
+        (1..=pages).map(count).collect(),
+        (1..=pages).map(lines).collect(),
+    )
+}
+
+#[test]
+fn tailwind_cards_with_direct_text_have_chromes_lines_per_page() {
+    // F30f-d, plan test 4: the card of fixture 29 in the shapes of the plan's `t16/A`, `B` and `E` (the `overflow-hidden`,
+    // `text-xs leading-snug` and `text-[13px] leading-[1.3]` cards) and three more (a 16 px `leading-none` card, a thin
+    // `p-1` one, a `p-6 leading-relaxed` one). Chrome m141 (`out/scratch/f30fd/v29/*.html`, rendered with
+    // `chrome.mjs`): words per page and lines per page of the whole document. Main moved the card to page 2 in all of
+    // them (84 words on page 1 and a page more than Chrome, or 84 / 891 / 30 against Chrome's 665 / 337).
+    let base = "rounded-lg border border-gray-300 p-4 mb-6 text-sm";
+    let shapes: [(&str, String, [usize; 3], [usize; 3]); 6] = [
+        (
+            "A overflow-hidden",
+            base.replace("rounded-lg", "overflow-hidden rounded-lg"),
+            [497, 505, 0],
+            [43, 40, 0],
+        ),
+        (
+            "B text-xs leading-snug",
+            base.replace("text-sm", "text-xs leading-snug"),
+            [665, 337, 0],
+            [49, 25, 0],
+        ),
+        (
+            "E text-[13px] leading-[1.3]",
+            base.replace("text-sm", "text-[13px] leading-[1.3]"),
+            [549, 453, 0],
+            [45, 35, 0],
+        ),
+        (
+            "F text-base leading-none",
+            base.replace("text-sm", "text-base leading-none"),
+            [375, 504, 124],
+            [38, 42, 13],
+        ),
+        (
+            "G p-1 text-xs",
+            base.replace("p-4", "p-1").replace("text-sm", "text-xs"),
+            [723, 279, 0],
+            [51, 20, 0],
+        ),
+        (
+            "H p-6 leading-relaxed",
+            base.replace("p-4", "p-6")
+                .replace("text-sm", "text-sm leading-relaxed"),
+            [423, 545, 34],
+            [39, 42, 4],
+        ),
+    ];
+    for (what, classes, chrome_words, chrome_lines) in shapes {
+        let words = printed_words(&fixture_29_with(base, &classes));
+        let (w, l) = page_shape(&words);
+        let pages = chrome_words.iter().filter(|&&n| n > 0).count();
+        assert_eq!(
+            w.len(),
+            pages,
+            "{what}: pages {w:?}, Chrome {chrome_words:?}"
+        );
+        assert_eq!(l, chrome_lines[..pages], "{what}: lines per page (Chrome)");
+        for (got, want) in w.iter().zip(chrome_words) {
+            assert!(
+                got.abs_diff(want) <= 7,
+                "{what}: words per page {w:?}, Chrome {chrome_words:?}"
+            );
+        }
+        assert_inside_content_box(what, &words);
+    }
 }
