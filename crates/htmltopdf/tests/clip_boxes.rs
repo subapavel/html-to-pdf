@@ -535,6 +535,113 @@ fn a_clip_box_with_a_height_still_drops_the_lines_it_hides_when_lines_are_small(
     );
 }
 
+// ── A clip box with a `height` and padding or a border that straddles a page (vrt-validator, second pass) ─────────────
+
+/// A 700 / 800 / 900 / 960 px spacer, then a clip box of `style` holding one `<p>` of the 4000 words (or the words
+/// directly), then AFTER: the box starts `spacer` px down a page of 1009 px and straddles its bottom.
+fn straddling(spacer: usize, style: &str, direct: bool) -> Vec<u8> {
+    let inner = if direct {
+        w()
+    } else {
+        format!("<p>{}</p>", w())
+    };
+    render(&format!(
+        "<div style=\"height:{spacer}px;background:#eee\"></div>\
+         <div style=\"overflow:hidden;{style}\">{inner}</div>{AFTER}"
+    ))
+}
+
+#[test]
+fn a_padded_clip_box_with_a_paragraph_that_straddles_a_page_keeps_the_lines_of_its_first_page() {
+    // `padding:16px;height:300px` (content-box: 332 px tall). Main moved the box to page 3 (4 pages, 371 words in the
+    // text layer, the clip showing a part); the first version of the clip part kept the box on page 1 and moved its
+    // paragraph whole to page 2: an empty frame on page 1, 14 words in the PDF where Chrome has 105. The paragraph is
+    // split where it is, like the same box with the words directly in it (the `direct` rows, which were right). Chrome:
+    // words per page and AFTER (m141, A4, 15 mm, 20 px lines; `out/scratch/f30fbv3/probe3.mjs`).
+    for (spacer, per_page, after) in [
+        (700, vec![98, 7], 59.6),
+        (800, vec![63, 42], 134.6),
+        (900, vec![28, 77], 209.6),
+        (960, vec![0, 112], 292.1),
+    ] {
+        for direct in [false, true] {
+            let pdf = straddling(spacer, "padding:16px;height:300px", direct);
+            like_chrome(
+                &format!("padding 16, spacer {spacer}, direct {direct}"),
+                &pdf,
+                &per_page,
+                (2, after),
+            );
+        }
+    }
+}
+
+#[test]
+fn a_bordered_clip_box_with_a_paragraph_that_straddles_a_page_keeps_the_lines_of_its_first_page() {
+    // `border:2px solid;height:300px`: the paragraph sat 2 px below the box's top, so it was not "first in the box" and
+    // moved whole to page 2 (66 words in the PDF at spacer 800 against Chrome's 105).
+    for (spacer, per_page, after) in [
+        (800, vec![70, 35], 113.6),
+        (900, vec![35, 70], 188.6),
+        (960, vec![14, 91], 233.6),
+    ] {
+        let pdf = straddling(spacer, "border:2px solid #888;height:300px", false);
+        like_chrome(
+            &format!("border 2, spacer {spacer}"),
+            &pdf,
+            &per_page,
+            (2, after),
+        );
+    }
+}
+
+#[test]
+fn a_clip_box_with_a_top_padding_or_a_border_box_sizing_keeps_the_lines_of_its_first_page() {
+    // `padding-top:16px` alone (13 words in the PDF at spacer 700, Chrome 98) and `box-sizing:border-box` with padding
+    // and border.
+    let pdf = straddling(700, "padding-top:16px;height:300px", false);
+    like_chrome("padding-top 16, spacer 700", &pdf, &[98, 0], (2, 47.6));
+    let pdf = straddling(900, "padding-top:16px;height:300px", false);
+    like_chrome("padding-top 16, spacer 900", &pdf, &[28, 70], (2, 197.6));
+    let pdf = straddling(
+        900,
+        "padding:16px;border:2px solid #888;box-sizing:border-box;height:300px",
+        false,
+    );
+    like_chrome("border-box, spacer 900", &pdf, &[28, 69], (2, 185.6));
+}
+
+#[test]
+fn a_table_cell_with_a_height_and_overflow_hidden_is_not_a_clip_box_of_that_height() {
+    // `height` on a table cell is a minimum (CSS 2.1 §17.5.3): the cell grows with its content, so it is not a box
+    // whose block size the author constrains, and the clip semantics of this change do not apply to it. Chrome grows the
+    // cell and prints all 4000 words on 13 pages (70 / 350 / ..., AFTER on page 13): a gap of its own (F51, F30f-b
+    // "limits"), not closed here; what this pins is that the output stays what main's was (371 words in the text layer,
+    // 2 pages, AFTER on page 2 at 269.4 pt) instead of the half-line clipped 35 words the first version wrote.
+    let pdf = render(&format!(
+        "<div style=\"height:800px;background:#eee\"></div><table style=\"width:100%\"><tr>\
+         <td style=\"height:300px;overflow:hidden\"><p>{}</p></td></tr></table>{AFTER}",
+        w()
+    ));
+    let per_page = words_per_page(&pdf);
+    assert_eq!(per_page.len(), 2, "pages (main's): {per_page:?}");
+    assert!(
+        per_page[1] >= 300,
+        "words on page 2: {} (main 371; the first version 35)",
+        per_page[1]
+    );
+    let after = printed_words(&pdf)
+        .into_iter()
+        .find(|w| w.text == "AFTER")
+        .expect("AFTER is printed");
+    assert_eq!(after.page, 2);
+    assert!(
+        (after.y_min - 269.4).abs() <= 2.0,
+        "AFTER at {:.1} pt (main 269.4, the first version 111.9)",
+        after.y_min
+    );
+}
+
 // ── Fixture 28 ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 fn fixture_28() -> Vec<u8> {
