@@ -240,7 +240,7 @@ Results (binary `htmltopdf-f183-fix2`, scratch outside the repo):
   missing, now present at rows 1..61 and the next block at 65 (Chrome 0..61 / 66; main 0..59 / 60). `q2`..`q5` (image counts per page for
   collapsed and separated tables, thead, nested, colspan, multi-row, 100 px images, heights 960..1122): every one equals main's.
 - fulgur: `cargo test -p fulgur --lib` 2351 pass (the Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -D warnings` clean.
-- Byte identity with main's binary at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical.
+- Byte identity with main's binary at 1 and 4 threads: fixtures 01-26 and the seven `bench/corpus` documents (33 files), identical; fixture 27 is the F183 target and is not byte-identical (it is improved, 6.1 % against main's 7.6 % in `compare.py`; the gate script passes `tailwind.css` to it, so the byte gate does not exercise it).
 
 - html-to-pdf: `cargo test --release` 780 passed, 0 failed (70 binaries; `inline_img_strut` 26), `cargo fmt --all --check` and `cargo clippy
   --release --all-targets -- -D warnings` clean, `cargo build --release --locked -p htmltopdf-cli` with the lock at `9010b2bc` (only that
@@ -305,7 +305,7 @@ Results (binary `htmltopdf-f183-fix3`, scratch outside the repo):
 - fulgur: `cargo test -p fulgur --lib` 2352 pass (forks patched in), `clippy -p fulgur --lib --tests -D warnings`, `cargo fmt --check` clean.
 - html-to-pdf: `cargo test --release --locked` 785 passed, 0 failed (70 binaries; `inline_img_strut` 31), `cargo fmt --all --check`, `cargo clippy --release --all-targets
   --locked -- -D warnings` clean, `cargo build --release --locked -p htmltopdf-cli` with the lock at `96b1ea5e` (only that line moved).
-- Byte identity with main's binary at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical. `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok,
+- Byte identity with main's binary at 1 and 4 threads: fixtures 01-26 and the seven `bench/corpus` documents (33 files), identical; fixture 27 is the F183 target and is not byte-identical (it is improved, 6.1 % against main's 7.6 % in `compare.py`; the gate script passes `tailwind.css` to it, so the byte gate does not exercise it). `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok,
   numbers unchanged (27: 6.1 %).
 - fulgur VRT (`fulgur-vrt`, forks patched in): the same 35 of 64 fixtures fail against the goldens in this environment's fonts, and their 70 actual files are byte-identical to the run before this change;
   no golden moves.
@@ -357,7 +357,7 @@ taller than a page is still split and loses nothing), `a7` (under a repeated hea
 - **Not fixed: `td { orphans: 4; widows: 4 }` (`u_col1_o4_*`, `u_col2_o4_*`, 20 cases).** Still 48 | 102 words (`u_col1`), 47 | 103 (`u_col2`), later 32 | 118 and 31 | 119 against main's and Chrome's 0 | 150 (Chrome moves the cell whole). fulgur does not read `orphans` / `widows`: the line planner uses the constants `ORPHANS_MIN` / `WIDOWS_MIN` = 2 (`pagination_layout.rs`), and no CSS reader maps the properties. Collapsed cells had met Chrome's answer only because they were never "first". This is the existing finding **F30c** ("`orphans` / `widows` in CSS are not read"),
   no new finding (the id F83e is a different, older finding); the numbers are added to F30c. No content is lost in these cases; they are the only cases further from Chrome than main (20 of 6209), a
   page-1 stub of the cell instead of the whole cell on page 2.
-- Byte identity with main's binary (`htmltopdf-f99f`) at 1 and 4 threads: fixtures 01-27 and the seven `bench/corpus` documents (34 files), identical. Fixtures 13 and 14 (keep-together) therefore did not move; no golden or threshold changes.
+- Byte identity with main's binary (`htmltopdf-f99f`) at 1 and 4 threads: fixtures 01-26 and the seven `bench/corpus` documents (33 files), identical; fixture 27 is the F183 target and is not byte-identical (it is improved, 6.1 % against main's 7.6 % in `compare.py`; the gate script passes `tailwind.css` to it, so the byte gate does not exercise it). Fixtures 13 and 14 (keep-together) therefore did not move; no golden or threshold changes.
   `scripts/render-fixtures.sh` + `scripts/compare.py`: all 27 ok, numbers unchanged (27: 6.1 %, 13: 11.7 % worst, 16: 20.8 %). `scripts/bench.py --check` ok (`b200-items` 1270 ms on this noisy host, under the hard limit; the PDFs are byte-identical to main's, so the
   `avoid_rows` pass is the only added work and costs one pass over the cells of a table with no `avoid`).
 - fulgur: `cargo test -p fulgur --lib` 2356 pass (Parley / Blitz forks patched in), `clippy -p fulgur --lib --tests -D warnings`, `cargo fmt --check` clean.
