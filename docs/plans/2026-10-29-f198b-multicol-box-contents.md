@@ -152,7 +152,7 @@ Filed shapes, main against Chrome (all of them warn on main; none is touched her
 |---|---|---|---|
 | F198e `abspos` (badge child in the card) | 2 / 361 | 4 / 2500 | `float/abspos child` |
 | F198f `float` | 2 / 344 | 4 / 2500 | the same |
-| F198g `height` (card `height:2000px`, no clip) | 2 / 361 | 4 / 2500 (346+344 / 353+363 / 360+359 / 192+183, 2 pages of ink in 2000 px) | `block_size_constrained` |
+| F198g `height` (card `height:2000px`, no clip) | 2 / 361 | 4 / 2500 | `block_size_constrained` |
 | F198g `clipheight` (`height:2000px; overflow:hidden`) | 2 / 361 | 2 / 696 words printed: the box hides the rest, ADR-0009 | `overflow(wrapped)`, `block_size_constrained` |
 | F198g `opacity`, `transform` | 2 / 361 | 4 / 2500 | `opacity` / `transform(wrapped)` |
 | F198g `pctpad` (`padding:5%`) | 2 / 378 | 4 / 2500 | `pct-padding` |
