@@ -182,3 +182,84 @@ put the last line alone on page 2. Neither is in the scope of F66f; filed as F30
 - A text whose last cluster is a newline that the breaker did not treat as `BreakReason::Explicit` (for instance a `\r` that is
   the first half of a `\r\n` split across two text nodes) was not constructed.
 - fulgur-vrt goldens were not re-blessed (the host does not reproduce 35 of 64).
+
+## 7.1 Validator round 1: findings and fixes
+
+`vrt-validator` found five defects in the first F66f build (Blitz `6c2da16d`, htmltopdf `be468ab`). Repros: `out/scratch/f66fv/{a..j,k}`,
+harness `harness.py DIR`; Chrome is m141. Two of them were caused by F66f, the others by a pre-existing reader that F66f exposed.
+
+| # | Finding | Root cause | Fix |
+|---|---|---|---|
+| HIGH 1 | Text lost: `<div>a<br style="page-break-after:always"></div>b` gave a blank page and no "a" (also `d2`, `d6`, `d9`, `d11`, `e6`, `e11-13`, `c1`, `c2`, `c7`, `b/pb_inside`); `c6` (`<div>a<span style="break-after:page"></span></div>b`) lost "a" already on main | fulgur's break reader (`column_css::walk`, which fills the side table every `break_before` / `break_after` lookup reads) kept `break-*` on **inline-level** boxes. The pagination walk then entered the inline root, found a zero-height `<br>` / `<span>` child with a forced break, and cut the line at an offset at or past the end of the block | css-break-3 §3.1 (and css-page-3 §5.1, legacy `page-break-*` in CSS 2.1 §13.3.1): the properties apply to block-level boxes, flex and grid items and table parts only. The reader drops `break-before` / `break-after` for an element whose computed outer display is `inline` (`blitz_adapter::is_inline_level_box`). A flex or grid item, a float and a `display:block` span are blockified and keep theirs. Chrome ignores them on inline boxes (one page in `d1`, `c6`, `c7`) |
+| HIGH 2 | `e2` (`<p>a<br clear=all style='page-break-before:always'></p><p>b</p>`) drew a and b at the same y; `d3`, `d4` printed b before a; `h7` (`<p><br style="break-after:page"></p><p>b</p>`) two pages against one | same cause | same fix |
+| LOW | Word idiom `<p><span><br clear=all style='page-break-before:always'></span></p>` (`g1`, `h3`, `h4`): the next block at 58.6, Chrome 73.8 | same cause: the break cut the paragraph's only line | same fix: 73.6 now |
+| MEDIUM | An empty inline with padding or border after `<br>` (`a/br_empty_span_pad`, `br_empty_span_border`) and `<wbr>` (`a/wbr`): AFTER 73.6 on main, 58.6 with F66f, Chrome 73.8 | F66f's takeback checked only for an atomic inline box after the newline | Blitz `3dadc1b1`: `InlineOp::LineContent` marks the start of an inline element with non-zero **inline-axis** margin, padding or border (a percentage or `calc()` counts; `auto` and a border with style `none` do not) and a `<wbr>`; `TextLayout::content_after_last_break` says whether one starts after the last forced break; `break_lines` then keeps the line |
+
+What Chrome does, measured (`out/scratch/f66fv/k`, AFTER below `<div>a<br>X</div>`): `padding:0 4px` 73.8, `border-left:1px` 73.8, `margin:0 4px` 73.8, `padding:1%` 73.8,
+`<wbr>` and two `<wbr>` 73.8, with whitespace inside the padded span 73.8; **no line** (58.8) for `padding:4px 0`, `padding-top`, `margin:4px 0`,
+`margin-left:0`, an empty `<a id>`, a `display:none` / `hidden` span, and for the closing edge of a padded span that ends in the break
+(`<span style="padding:0 4px">x<br></span>`: 73.8 = two lines). So the rule is the inline axis only (Chrome, as css-inline-3 reads
+"inline-size > 0"), and the marker is at the start tag, not the end tag. CSS 2.1 §9.4.2 says "margins, padding or borders" without an axis; where
+spec and Chrome might differ, `margin-top` / `padding-top` alone (zero-height line in Chrome) was left as Chrome has it.
+
+### What was built
+
+- fulgur fork `subapavel/fulgur` `htmltopdf/srgb-colours` `aba83f75`: `column_css::walk` clears `break_before` / `break_after` of an inline-level
+  element before it enters the table; lib test `extract_column_style_table_drops_breaks_on_inline_level_boxes` (`<br>`, `<span>`, inline-block,
+  `<img>`, empty `<b>` lose it; `div`, `display:block` span, float, flex item, `tr` keep it; red before), `render_smoke`
+  `render_smoke_forced_break_on_an_inline_level_box_is_ignored` (five shapes, one page each, red before). One existing test changed:
+  `subtree_facts::anonymous_wrappers_and_mixed_inline_and_block_children` used `<i style="break-before:page">` as the forced break below an
+  anonymous wrapper; the break is now in a block inside an inline-block (`<i style="display:inline-block"><div style="break-before:page">`),
+  which still gives the wrapper a forced break below.
+- Blitz fork `3dadc1b1`: `whitespace.rs` (`InlineOp::LineContent`, `line_content_after_last_break`, a unit test), `construct.rs`
+  (`has_inline_axis_pbm` through `stylo_taffy::convert`, set on the generic inline branch before `PushSpan`), `node/element.rs` (the field),
+  `inline.rs` (`break_lines` takes the flag; two tests, 14 shapes).
+- html-to-pdf: `tests/trailing_break.rs` gained five tests (`a_forced_break_on_an_inline_box_is_ignored_and_loses_no_text`,
+  `..._between_paragraphs_does_not_overlap_or_reorder`, `the_word_idiom_...`, `a_forced_break_on_a_block_level_box_still_breaks`,
+  `an_inline_box_with_padding_border_or_a_wbr_...`): every printed word with page and top against Chrome (within 1 pt), so a lost word fails.
+  Red before (four of the five; the block-level one is the guard), green after. `Cargo.lock`: the two Blitz lines and the fulgur line.
+  An inline-block with `break-after` is checked by page and order only: it sits 2 pt below Chrome (F183b strut, not this change).
+
+### Gates
+
+| gate | result |
+|---|---|
+| Blitz `cargo test -p blitz-dom --lib` (run from the fulgur workspace with the fork patched in; Blitz has no target dir on this host) | 147 passed (144 + 3 new); one earlier run showed the two `log`-capturing `svg_log_tests` failing, a rerun was green (the known flake of §7) |
+| fulgur `cargo test -p fulgur --lib` | 2420 passed, 1 failed (`subtree_facts::anonymous_wrappers...`, see above), fixed, that test green afterwards; the other 2420 not rerun after that one-line test edit; `render_smoke` binary: new test green, red without the fix |
+| fulgur integration binaries | **not run after the change**: the disk filled up while linking them (see `docs/postmortems/2026-10-29-f66f-disk-full-integration-tests.md`) |
+| fulgur-vrt (release, forks patched in) | 35 of 64 differ on this host, as on the base; the diff directory (70 files) is identical to the one of the F66f build |
+| `cargo fmt --check` (all three repos), `clippy -D warnings`: fulgur `--all-targets`, blitz-dom `--all-targets` | clean; html-to-pdf clippy and the full `cargo test --locked` **not rerun** (disk) |
+| `cargo test --release --locked -p htmltopdf --test trailing_break` | 15 passed |
+| byte gate, fixtures 01-33 and the 7 corpus documents (40 files), `f183-gate.sh`, 1 and 4 threads | identical to the F66f build (`be468ab`) at both; 1 and 4 threads identical to each other; against `main` (`htmltopdf-main-f30fh`) only fixture 33 differs, as before |
+| `render-fixtures.sh` + `compare.py` | all 33 ok; every number equal to §7's, fixture 33 3.8 % (threshold 4.8 %), no threshold moved |
+
+### Validator batches a-i, j and k against Chrome
+
+`out/scratch/f66fv/{a,b,c,d,e,g,h,i}` (validator's, 192 cases), `j` (30 new: `<input>`, hidden input, `<button>`, `<select>`, `<textarea>`,
+inline `<svg>`, `<img>`, `<a id>`, empty `<a href>`, margin-only span, `::before` inline-block after the `<br>`, `font-size:0`,
+`visibility:hidden`, `hidden`, `display:none`, abspos and float with padding, zero-width space, nested padding, `display:contents`,
+`<wbr>` in a span, ...) and `k` (15: the inline-axis rule above and block-level guards). Per case the distance to Chrome is
+(words differing, words on another page, sum of top errors beyond 1 pt); the build is compared with main's binary.
+
+| batch | cases | closer than main | equal | further |
+|---|---|---|---|---|
+| a-i, j, k | 249 | 170 | 78 | 1 |
+
+Every repro of the validator's report is at Chrome's positions now (error 0.0 over all words): `d1 d2 d3 d4 d6 d9 d11`, `e2 e6 e11 e12 e13`,
+`c1 c2 c5 c6 c7`, `b/pb_inside`, `h3 h4 h7`, `g1`, `a/br_empty_span_pad`, `br_empty_span_border`, `wbr`. In `j`, nothing is further than main;
+still off, the same as on main: an empty inline-block after the `<br>` and a `::before` inline-block (66.1 / 58.6 against 73.8: the
+F183b family), `font-size:0` text (73.6 against 77.6), `<input>` / `<textarea>` / `<button>` (a few pt, F183b / form controls).
+
+The one case that is further, `b/bigpre_nl2` (a `pre` of 150 lines ending in a blank line): AFTER at the top of page 4 (43.6), Chrome 73.8, main 73.6. It was already
+so in the F66f build. It is the F30f-l family of §7: the same bytes as main with one trailing `\n` less (checked), so the fix made a trailing
+newline equal to none, and what is left is the pagination of a block whose last line fits the page by less than a line (Chrome keeps the
+last two lines together on page 4 with the blank one). Filed under F30f-l, not part of this change.
+
+### Not verified
+
+- fulgur's 43 integration binaries and html-to-pdf's full `cargo test --locked` / clippy after this change (disk full, postmortem).
+- Nothing was measured for `break-*` on an inline box inside a multi-column container or a table cell, nor for `break-inside`
+  on an inline box (the reader keeps it; only before / after were in the report).
+- `margin-top` / `padding-top` on an inline element after the `<br>` follows Chrome (no line); CSS 2.1 §9.4.2 read literally keeps the line.
+- The side-by-sides `out/scratch/f66fv/sbs_d1.png`, `sbs_e2.png` (main | now | Chrome) were looked at; the fixtures did not move, so there is no
+  new golden.
