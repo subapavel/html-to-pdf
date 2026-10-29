@@ -750,3 +750,55 @@ fn terms_clip_card_columns_invoice_prints_every_clause() {
         "{name}: two pages like Chrome"
     );
 }
+
+/// F66f: fixture 33 has `pre-line` / `<br>`-terminated address blocks and a note card ending in `<br>`. A forced break at
+/// the end of a block makes no line of its own, so what follows sits where Chrome puts it. On main's binary the items
+/// table was 15 pt too low and "PLATEBNÍ" 30 pt (556.6 pt, Chrome 526.8 pt). Chrome's y (m141, `reference/chrome.pdf`).
+#[test]
+fn address_trailing_break_invoice_is_laid_out_like_chrome() {
+    let name = "33-address-trailing-break";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-33.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(xml.matches("<page ").count(), 1, "one page like Chrome");
+    let y_min = |word: &str| -> f32 {
+        let line = xml
+            .lines()
+            .find(|l| l.contains(&format!(">{word}</word>")))
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"));
+        let start = line.find("yMin=\"").unwrap() + "yMin=\"".len();
+        line[start..start + line[start..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    for (word, chrome) in [("Celkem", 325.9), ("Poznámka", 376.8), ("PLATEBNÍ", 526.8)] {
+        let y = y_min(word);
+        assert!(
+            (y - chrome).abs() <= 1.0,
+            "`{word}` at {y:.1} pt, Chrome puts it at {chrome} pt"
+        );
+    }
+}

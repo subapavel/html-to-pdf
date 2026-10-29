@@ -136,7 +136,18 @@ Chrome's do; the `<br>` followed by an inline-block keeps its second line.
 
 No fixture or corpus document ends a block in a `<br>` or a preserved newline (the grep of §6 found none; fixture 27's
 `<dd>…</dd><br>` is inline-level inside the `dl` and not trailing), which is why the fixtures do not move. The change is shown by
-`tests/trailing_break.rs` and the sweeps, not by a fixture; a Chrome-referenced fixture for it is not added here.
+`tests/trailing_break.rs` and the sweeps, and by fixture 33 added afterwards (below).
+
+### Fixture 33 (`33-address-trailing-break`, added at the coordinator's request, AGENTS.md "fixtures are the spec")
+
+A one-page Czech invoice: `pre-line` supplier address with a trailing newline, customer address of `<br>`-terminated lines, a padded
+note card ending in `<br>`, the payment block below (`whitespace-pre-line` is not in the compiled Tailwind sheet, so inline style).
+`compare.py`: 7.8 % on main's binary -> 3.8 % now, threshold 4.8 %. y of "Celkem" / "Poznámka" / "PLATEBNÍ" (pt): main 340.7 / 391.6 /
+556.6, now 325.7 / 376.6 / 526.6, Chrome 325.9 / 376.8 / 526.8. Side-by-side: on main the party grid and the card each carry one
+blank line, the items table and everything below are shifted down (the payment block 30 pt); now the page is Chrome's line for line,
+the diff heat map shows only the usual text-drift glyph edges. Test: `fixtures.rs` `address_trailing_break_invoice_is_laid_out_like_chrome`
+(three words within 1 pt of Chrome, one page). Byte gate: fixtures 01-32 and the corpus (39 documents) identical to main at 1 and 4
+threads; only 33 differs. The test was run green on the branch; it was not run on main's binary (the numbers above are main's).
 
 ### Sweeps (F30f-h's `f30fbv*`, `f30fd`, `f30fdv`, `f30fh`, `f30fhv`: 3381 cases, `out/scratch/f66f/sweep.{py,jsonl}`, main = `htmltopdf-main-f30fh`)
 

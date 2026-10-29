@@ -225,6 +225,12 @@ THRESHOLDS = {
     #     (the card and the block below it are at Chrome's y: heading at 526.6 pt, Chrome 526.8). On main's binary the block started at the
     #     end of the card's lines, over its bottom border and last line (501.1 pt), 5.0 %. Worst page + 1 point.
     "32-note-card": 0.048,
+    # 33: new in F66f (a one-page Czech invoice: supplier address `white-space: pre-line` with a trailing newline, customer
+    #     address `<br>`-terminated lines, a padded note card ending in `<br>`, the payment block below; 1 page like Chrome's).
+    #     3.8 %: the text drift every fixture has (Celkem 325.7 pt, Chrome 325.9; Poznámka 376.6 / 376.8; PLATEBNÍ 526.6 /
+    #     526.8). On main's binary every block ending in a forced break had an empty line after it: the items table was 15 pt and the
+    #     payment block 30 pt too low (556.6 pt), 7.8 %. Worst page + 1 point.
+    "33-address-trailing-break": 0.048,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
