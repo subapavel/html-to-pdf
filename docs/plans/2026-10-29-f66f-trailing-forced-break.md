@@ -98,3 +98,76 @@ Not done: nothing in fulgur or htmltopdf changes (they take line metrics from th
 - The fork's VRT goldens (`fulgur-vrt`) may hold a trailing-`<br>` case; any that moves must be one, Chrome-confirmed, and is
   recorded in `docs/upstream.md` like `basic/box-shadow` (not re-blessed on this host).
 - Performance: one comparison per inline layout; no measurable cost.
+
+## 7. Evidence
+
+### What was built
+
+- Blitz fork `subapavel/blitz` `htmltopdf/blitz-dom-0.2.4`, commit `6c2da16d` (on `63628c03`): `break_lines(layout, text, width, nowrap)`
+  takes back the final empty line when `breaker.is_done()`, the advance is 0, the text ends in `\n` / `\r` and no inline box
+  sits at the end of the text (one more condition on the F32a branch). Both callers pass `inline_layout.text`; the measuring
+  clone and the real pass use the same function, so Taffy's height shrinks with the painted lines (checked: `div.final_layout`
+  height is `20 * lines` in the fork tests). Seven lib tests `trailing_forced_break_tests` (five red before the change). Parley
+  and fulgur are unchanged; htmltopdf only locks the new Blitz commit (`cargo update -p blitz-dom -p blitz-html`; cargo also
+  tried to move `skrifa 0.44.0 -> 0.42.1` under `swash`; that line was put back by hand, the lock diff is the two Blitz
+  lines).
+- `crates/htmltopdf/tests/trailing_break.rs`: ten tests, 30 shapes (plain, and inside the F30f-h card), the three exact-fit cards,
+  the widows split. Eight red before, ten green after; the two that passed before are the "what stays" guards.
+
+### Chrome against the fix (`out/scratch/f66f/a`, 37 shapes x plain / `_box` / `_nest`)
+
+Every shape of §3 now gives Chrome's AFTER within 0.3 pt (examples: `a<br>b<br>` 73.6 / Chrome 73.8, `pre-line` address block
+88.6 / 88.8, `a<br><br>` 73.6 / 73.8, `<br>` alone 58.6 / 58.8, `pre` `a\n\nb` and `pre` `a\n  ` unchanged). The only shapes still
+off are the two inline-block-after-`<br>` ones (4 pt, F183b: `s17`, `s28`), unchanged from main. Side-by-side main | fixed |
+Chrome (`out/scratch/f66f/v/sbs.png`): the pre-line address card and the four-line card lose the empty line and end where
+Chrome's do; the `<br>` followed by an inline-block keeps its second line.
+
+### Gates
+
+| gate | result |
+|---|---|
+| Blitz `cargo test -p blitz-dom --lib` | 144 passed (137 on the base); with `parallel-construct` 146 passed. Two `log`-capturing tests failed once in a run that shared the machine with another cargo job and never again (3 reruns green); not related to layout |
+| fulgur (forks patched in) `cargo test -p fulgur --lib` | 2420 passed |
+| fulgur integration binaries, one at a time | all 44 binaries ok (`render_smoke` 326 passed) |
+| fulgur-vrt | 35 of 64 differ on this host, as on the F30f-h base; the whole diff directory (70 files) is byte-identical to the base's: no golden moves, `basic/box-shadow` stays as recorded |
+| html-to-pdf `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings` | clean |
+| byte gate vs `htmltopdf-main-f30fh`, 1 and 4 threads | all 39 documents (fixtures 01-32, 7 bench corpus) byte-identical; 1 thread and 4 threads identical to each other |
+| `render-fixtures.sh` + `compare.py` | all 32 ok; every number equal to main's, so no threshold is lowered and none raised |
+
+No fixture or corpus document ends a block in a `<br>` or a preserved newline (the grep of §6 found none; fixture 27's
+`<dd>…</dd><br>` is inline-level inside the `dl` and not trailing), which is why the fixtures do not move. The change is shown by
+`tests/trailing_break.rs` and the sweeps, not by a fixture; a Chrome-referenced fixture for it is not added here.
+
+### Sweeps (F30f-h's `f30fbv*`, `f30fd`, `f30fdv`, `f30fh`, `f30fhv`: 3381 cases, `out/scratch/f66f/sweep.{py,jsonl}`, main = `htmltopdf-main-f30fh`)
+
+3345 byte-identical, 36 changed, all trailing-`<br>` documents. Of the 36, AFTER within 1 pt of Chrome: 10 on main -> 31 now;
+page counts different from Chrome's: 5 -> 1.
+
+- `f30fhv/g1/z01`, `z02`, `z06` (padded card ending in `<br>`): AFTER 118.6 -> 103.6, 88.6 -> 73.6, 133.6 -> 118.6 (Chrome 103.8,
+  73.8, 118.8). `f30fh/z/z1`-`z3`: 148.6 / 133.6 / 148.6 -> 133.6 / 118.6 / 133.6 (Chrome 133.8 / 118.8 / 133.8).
+- Exact fits: `exact_n44_pb22`, `exact_n45_pb20`, `exact_n45_pb21`, `un_n47` back on one page like Chrome (were two);
+  `exact_n44_pb20/21` AFTER 784.6 -> 768.8, 785.3 -> 769.6 (Chrome 769.1, 769.8); `exact_n47_pb20-22`, `exact_n48_*`, `pd_n48`,
+  `pd_n49`, `pdt_n48`, `pd_n50/51`, `pdt_n49-51`, `un_n50/51`, `exact_n46_pb20/21`: the split is now Chrome's (45 / 3 lines
+  etc.), `exact_n47_pb21` is the finding's widows case.
+- `br.html` (f30fdv, 3 pages): AFTER on page 3 459.1 -> 446.3 (Chrome 445.8).
+
+### Moved away from Chrome, or still off: pre-existing, exposed, filed as F30f-l
+
+Five f30fdv cases are not Chrome's: `exact_n45_pb22`, `exact_n46_pb22`, `pd_n47`, `pdt_n47`, `un_n49`. One of them, `un_n49`,
+moved away (AFTER 75.8 on main, Chrome 76.1, now 44.3). Each renders the same bytes as **main with the trailing `<br>`
+removed from the source** (`out/scratch/f66f/w`: 7 shapes, main without `<br>` == fixed with and without), i.e. the fix makes a
+trailing `<br>` equal to no trailing `<br>`, and what is left is the no-`<br>` behaviour: (a) `un_n49` / `un49_nobr`: a plain
+49-line block (1029 px) on a page of 1009 px is not split, `w0048` is at 800-813 pt over the content bottom (799.4 pt), Chrome
+splits 47 / 2; the empty fiftieth line used to push the block over whatever tolerance admits a less-than-a-line overflow;
+(b) `exact_n46_pb22`, `pd_n47`, `pdt_n47`, `exact_n45_pb22`: every line fits, only the bottom padding and border do not;
+Chrome keeps all lines on page 1 (46 / 1, 47 / 1) and ends the box at the top of page 2, we move two lines back (widows) or
+put the last line alone on page 2. Neither is in the scope of F66f; filed as F30f-l.
+
+### Not verified
+
+- No Chrome measurement of `<br>` before an `<img>` (the data-URI size problem, F201) or a trailing `<br>` in a multi-column
+  box; inline-block / `<svg>` after `<br>` were measured (the line stays; 4 pt strut difference is F183b).
+- Parley `main` (0.12) was not checked; the fix does not depend on Parley's behaviour beyond the line count it returns.
+- A text whose last cluster is a newline that the breaker did not treat as `BreakReason::Explicit` (for instance a `\r` that is
+  the first half of a `\r\n` split across two text nodes) was not constructed.
+- fulgur-vrt goldens were not re-blessed (the host does not reproduce 35 of 64).
