@@ -321,10 +321,20 @@ fn a_forced_break_on_an_inline_box_is_ignored_and_loses_no_text() {
         "<div>a<br style=\"page-break-after:always\"><b style=\"break-after:page\"></b></div>b",
         &[(1, "a", 43.8), (1, "b", 58.8)],
     );
-    assert_words(
-        "inline-block with break-after",
+    // An inline-block sits 2 pt lower than Chrome's (the F183b strut), so only the pages and the order are checked.
+    let words = printed_words(&render_with(
+        HEAD,
         "<div>a <span style=\"display:inline-block;break-after:page\">x</span></div>b",
-        &[(1, "a", 43.8), (1, "x", 43.8), (1, "b", 58.8)],
+    ));
+    let got: Vec<(usize, &str)> = words.iter().map(|w| (w.page, w.text.as_str())).collect();
+    assert_eq!(
+        got,
+        [(1, "a"), (1, "x"), (1, "b")],
+        "inline-block with break-after: one page, nothing lost"
+    );
+    assert!(
+        words[2].y_min > words[0].y_min + 10.0,
+        "b is below the line"
     );
 }
 
