@@ -263,3 +263,62 @@ last two lines together on page 4 with the blank one). Filed under F30f-l, not p
 - `margin-top` / `padding-top` on an inline element after the `<br>` follows Chrome (no line); CSS 2.1 §9.4.2 read literally keeps the line.
 - The side-by-sides `out/scratch/f66fv/sbs_d1.png`, `sbs_e2.png` (main | now | Chrome) were looked at; the fixtures did not move, so there is no
   new golden.
+
+## 7.2 Validator round 2: the end edge of an open ancestor
+
+`vrt-validator` round 2 (repros `out/scratch/f66fv2/p/`) found one MEDIUM regression in the round-1 build (Blitz `3dadc1b1`, htmltopdf `76fd399`):
+`<div><span style="padding:0 4px">a<br><span></span></span></div><p>AFTER</p>` (`p/e4`) gave AFTER 58.6; main 73.6, Chrome 73.8. Same for `b_empty`,
+`margin`, `nested_deeper`, `ws_inside`, `pre_e4`, `a_btn` (`<a style="padding:4px 8px">a<br><span class="i"></span></a>`). Right already (58.6 = Chrome 58.8):
+`plain_outer`, `border` (only `border-left`), `pad_tb`, `closing_pad_only`, `txt_ws`. The round-1 rule looked only at boxes that *start* after the break.
+
+### What Chrome does (m141, `out/scratch/f66fv3/q`, `q2`, `q3`, generator `gen_q.py`; AFTER below `<div>…</div>`, 58.8 = one line, 73.8 = two)
+
+The validator's hypothesis held. The line after the last break is kept when (a) a box starts after the break and (b) the **inline-end** margin, padding
+or border of some box that ends on that line is non-zero. The close tags that directly follow the `<br>` (nothing started in between) belong to the line the
+break ends. Measured with `A` = the open span and `E` = an empty `<span></span>` after the break:
+
+| shape | AFTER |
+|---|---|
+| `A{padding-right}` / `margin-right` / `border-right` / `margin-right:-4px` / `padding-right:1%`, `a<br>E` | 73.8 (kept) |
+| `A{padding-left}` / `margin-left` / `border-left` / `padding-top` / nothing, `a<br>E` | 58.8 |
+| `A{padding-right}` `a<br>` alone; `A{pr}a<br></A>E` (E after A closed); `<span><A{pr}>a<br></A></span>` | 58.8 |
+| `<S><A{pr}>a<br></A>E</S>` (outer plain: nothing with an edge ends after E started) | 58.8 |
+| `<A{pr}><b>a<br></b>E</A>`, `<A{pr}><b>a<br>E</b></A>`, `<A{pr}>a<br> E </A>`, `<a href style=pr>a<br>E</a>`, `E` = `<i>`, `<a id>` | 73.8 |
+| `A{pr}` with `a<br><br>E` | 88.8 (3 lines) |
+| `white-space: pre` / `pre-line`, `a\n` + E | 73.8 |
+| after the break instead of E: `display:none`, `display:contents`, `<input type=hidden>`, a comment | 58.8 |
+| `direction: rtl` (CSS) on the span or its parent: `padding-left` is the end side (kept), `padding-right` is the start side (58.8) | as stated |
+| E = float or abspos span (with `A{pr}`) | 73.8 (not handled, below) |
+
+So the line is the box's own **logical** end side, taken from the direction of that box, and the end edge counts only once some box has started on the line.
+
+### Fix (Blitz `67e6be6f`, tests first in `3c0f6ca4`)
+
+`InlineOp::LineContent` is replaced by `InlineOp::BoxStart { edge }` (pushed for every inline element that generates a box, before its `PushSpan`; `edge` is the
+inline-start side, or a `<wbr>`) and `InlineOp::EndEdge` (before the `PopSpan` of an element with a non-zero inline-end side). `construct.rs`
+`inline_axis_edges(node) -> (start, end)` reads the six lengths as in round 1 (percentage and `calc()` count, `auto` and a `none` border do not) and swaps the
+sides for `direction: rtl`. `whitespace.rs::line_content_after_last_break` walks the collapsed ops after the last forced break: `BoxStart { edge: true }` is content,
+any `BoxStart` sets "a box started", `EndEdge` is content when a box started. `display:none`, `display:contents` and hidden inputs push no `BoxStart`. Parley is not told
+anything. Tests: Blitz `trailing_forced_break_tests` (three new, seven edge styles x eight contexts, one red before; the other two are guards), `whitespace::tests` (two),
+`crates/htmltopdf/tests/trailing_break.rs::an_open_box_with_an_end_edge_keeps_the_line_when_a_box_starts_after_the_br` (red before at `padding-right`).
+
+### Evidence
+
+- The 19 repros of `p/`: all at Chrome's AFTER (73.6 / 58.6 against 73.8 / 58.8), the 7 that were wrong in round 1 included.
+- `q` (59 shapes), `q3` (6 RTL): every shape of the table above matches Chrome except float / abspos / inline-block after the break (below).
+- The validator's batches `n` (167), `p` (19), `r1/a-k` (249), 435 documents against Chrome, `out/scratch/f66fv3/batch.py`: closer to Chrome than main 234, equal 198, further 3.
+  Compared with the round-1 build 427 are the same and **none is further** (the 8 that differ moved to Chrome). The three that are further than main: `b/bigpre_nl2`
+  (F30f-l, known), `b/long200_p` and `k/k1`, both identical to the round-1 build and artefacts of the sum (page-mismatch words 889 -> 259, now compared on the right
+  page; and an inline-block 4 pt F183b strut instead of a missing word).
+
+### Left open (rare, measured, not part of this change)
+
+- An **empty float or abspos span after the `<br>` inside a padded open span** (`P_float`, `P_abs`, `B_float`, `B_abs`): Chrome keeps the line (73.8), we do not (58.6;
+  main gave 73.6 for the float by accident and 58.6 for abspos). Blitz treats an inline that contains a block-level box as a block (`is_or_contains_block`), so such a span is
+  not in the inline run at all; this is the block-in-inline gap, not the takeback.
+- An empty inline-block after the `<br>` (58.6 against 73.8, F183b), unchanged from main.
+- The HTML `dir="rtl"` attribute: Blitz does not read it (no presentational hint), so only CSS `direction` flips the end side. Pre-existing; it would show first in the text direction.
+
+### Gates
+
+Filled in at the end of the run, see the commit message and the PR body.
