@@ -375,6 +375,44 @@ fn a_card_has_its_background_in_both_columns_of_every_page() {
 }
 
 #[test]
+fn the_text_of_every_column_is_painted_above_the_frames() {
+    // A box that is its own paragraph (a `<div>` or `<p>` of text) has a frame in each column, and the text of both
+    // columns is one slice list painted once: it has to come after the last frame, or the background of column 2 covers
+    // the text of column 1 and 2 (the first version painted it with the first piece and column 2 was blank).
+    let col_w = (PAGE_W_PT - 2.0 * MARGIN_PT - GAP_PT) / 2.0;
+    for (what, inner) in [
+        ("div of text", card(2500)),
+        (
+            "p of text",
+            format!("<p style='{CARD}'>{}</p>", words(0, 2500)),
+        ),
+    ] {
+        let pdf = render(&two_columns(&inner));
+        for page in 1..=3 {
+            let (w, _, px) = gray_page(&pdf, page);
+            for (col, x0) in [MARGIN_PT, MARGIN_PT + col_w + GAP_PT]
+                .into_iter()
+                .enumerate()
+            {
+                let mut ink = 0;
+                for y in 100..700 {
+                    for x in (x0 as usize + 5)..(x0 + col_w - 5.0) as usize {
+                        if px[y * w + x] < 150 {
+                            ink += 1;
+                        }
+                    }
+                }
+                assert!(
+                    ink > 800,
+                    "{what}: page {page} column {} has {ink} dark pixels, its text is hidden",
+                    col + 1
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn a_plain_div_of_text_flows_over_columns_and_pages() {
     // B. The same `<div>` without padding, border or background. Chrome: 742 / 801 / 803 / 154 words.
     let pdf = render(&two_columns(&format!("<div>{}</div>", words(0, 2500))));
