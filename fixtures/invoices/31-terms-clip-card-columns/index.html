@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0031</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  /* The terms are a two-column container holding ONE card that is taller than a page in a single column and clips its content,
+     `overflow-hidden rounded-lg border` (Tailwind's card idiom: the grey strip on top is clipped to the rounded corners), F198b.
+     The clauses hold inline icons (an inline <svg>, as heroicons are used) and one inline <img>. No margins inside the columns, and
+     orphans / widows are 1: fulgur does not implement margins there or orphans / widows in columns (F30d-b). `.icon` is what
+     `size-3` would be: the committed tailwind.css is not rebuilt for a fixture. */
+  .terms { columns: 2; column-gap: 24px; }
+  .terms h3 { margin: 0; }
+  .terms p { margin: 0; orphans: 1; widows: 1; }
+  .icon { width: 12px; height: 12px; color: #4f46e5; vertical-align: -2px; margin-right: 3px; }
+  .logo { display: inline; height: 14px; vertical-align: -3px; } /* preflight makes img block */
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0031</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 15. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 29. 10. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+    </div>
+  </div>
+</section>
+
+<table class="w-full text-sm mb-4">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+      <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+      <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold mb-6">Celkem k úhradě <span class="tabular-nums ml-1">88 000,00 Kč</span></p>
+
+<!-- Obchodní podmínky ve dvou sloupcích: jediná orámovaná karta vyšší než stránka -->
+<section class="terms text-xs">
+  <div class="card overflow-hidden rounded-lg border border-gray-300">
+    <h3 class="bg-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-300">Obchodní podmínky</h3>
+    <div class="px-3 py-3">
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>1. Předmět plnění</h3>
+    <p class="text-gray-600">Tyto všeobecné obchodní podmínky upravují vzájemná práva a povinnosti dodavatele a odběratele při poskytování služeb uvedených na této faktuře a jsou její nedílnou součástí. Odběratel jejich převzetím potvrzuje, že se s nimi seznámil, že jim rozumí a že s nimi souhlasí.</p>
+    <h3 class="font-semibold text-gray-900">2. Odborná péče</h3>
+    <p class="text-gray-600">Dodavatel se zavazuje poskytnout služby s odbornou péčí, <svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>v dohodnutém rozsahu a v termínech odpovídajících písemně potvrzenému harmonogramu prací. Při plnění postupuje podle pokynů odběratele, pokud nejsou v rozporu s právními předpisy nebo s dobrými mravy.</p>
+    <h3 class="font-semibold text-gray-900">3. Plátce DPH</h3>
+    <p class="text-gray-600">Dodavatel <img class="logo" src="logo.png" alt="Příkladná integrace"> je plátcem DPH.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>4. Fakturace a zálohy</h3>
+    <p class="text-gray-600">Dodavatel vystavuje fakturu vždy po skončení kalendářního měsíce, v němž byly služby poskytnuty, a to na základě odsouhlaseného výkazu činností; odběratel se zavazuje výkaz potvrdit nebo k němu vznést písemné výhrady nejpozději do pěti pracovních dnů od jeho doručení, jinak se výkaz považuje za odsouhlasený v plném rozsahu a dodavatel je oprávněn fakturu vystavit.</p>
+    <h3 class="font-semibold text-gray-900">5. Součinnost odběratele</h3>
+    <p class="text-gray-600">Odběratel je povinen poskytnout dodavateli včas veškerou součinnost potřebnou k řádnému plnění, <svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>zejména přístup do testovacích a produkčních systémů, kontaktní osoby a podklady k rozhraním. Pokud odběratel součinnost neposkytne ani po písemné výzvě v přiměřené lhůtě, prodlužují se dohodnuté termíny o dobu, po kterou součinnost chyběla, a dodavatel má nárok na úhradu prokazatelně vynaložených nákladů.</p>
+    <h3 class="font-semibold text-gray-900">6. Cena a platební podmínky</h3>
+    <p class="text-gray-600">Cena služeb je sjednána jako cena za odpracovanou hodinu podle vykázaného rozsahu a je uvedena bez daně z přidané hodnoty, která bude účtována ve výši stanovené právními předpisy platnými v den uskutečnění zdanitelného plnění.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>7. Splatnost a úrok z prodlení</h3>
+    <p class="text-gray-600">Faktura je splatná ve lhůtě uvedené na jejím prvním listu; za okamžik úhrady se považuje připsání celé fakturované částky na bankovní účet dodavatele pod správným variabilním symbolem. Při prodlení s úhradou je dodavatel oprávněn požadovat zákonný úrok z prodlení a paušální náhradu nákladů spojených s uplatněním pohledávky, a to ve výši stanovené nařízením vlády.</p>
+    <h3 class="font-semibold text-gray-900">8. Dodací lhůty</h3>
+    <p class="text-gray-600">Podkladem pro vyúčtování je měsíční výkaz práce, <svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>který dodavatel předá odběrateli nejpozději do pátého pracovního dne následujícího měsíce a který odběratel schválí nebo písemně reklamuje do pěti pracovních dnů od doručení. Neobdrží-li dodavatel ve lhůtě žádnou připomínku, považuje se výkaz práce za schválený a odpovídající skutečně provedeným činnostem.</p>
+    <h3 class="font-semibold text-gray-900">9. Převzetí plnění</h3>
+    <p class="text-gray-600">Odběratel bere na vědomí, že dodavatel může při plnění využívat nástroje třetích stran, jejichž licenční podmínky se řídí pravidly jejich poskytovatelů a nejsou těmito podmínkami dotčeny.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>10. Reklamace</h3>
+    <p class="text-gray-600">Reklamaci vad služeb uplatní odběratel písemně bez zbytečného odkladu poté, co vadu zjistil, a v reklamaci uvede popis vady a způsob, jakým se projevuje; dodavatel vadu odstraní v přiměřené lhůtě dohodnuté s odběratelem. Uplatněním reklamace není dotčena povinnost odběratele uhradit nesporné části fakturované částky ve lhůtě splatnosti.</p>
+    <h3 class="font-semibold text-gray-900">11. Odpovědnost za škodu</h3>
+    <p class="text-gray-600">Dodavatel neodpovídá za škodu, <svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>která vznikla v důsledku nesprávných nebo neúplných podkladů předaných odběratelem, ani za škodu způsobenou výpadkem systémů či služeb třetích stran, které dodavatel neovlivňuje. Celková odpovědnost dodavatele za škodu vzniklou v souvislosti s plněním je omezena na výši ceny služeb uhrazené odběratelem za období dvanácti měsíců předcházejících události, která škodu způsobila, s výjimkou škody způsobené úmyslně nebo z hrubé nedbalosti.</p>
+    <h3 class="font-semibold text-gray-900">12. Ochrana informací</h3>
+    <p class="text-gray-600">Dodavatel není oprávněn bez předchozího písemného souhlasu odběratele zpřístupnit třetí osobě informace označené jako důvěrné; tento závazek trvá i po ukončení spolupráce po dobu pěti let.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>13. Ochrana osobních údajů</h3>
+    <p class="text-gray-600">Osobní údaje, které dodavatel při plnění zpracovává pro odběratele, zpracovává výhradně na základě pokynů odběratele a v souladu s nařízením o ochraně osobních údajů; podrobnosti stanoví samostatná smlouva o zpracování. Dodavatel přijme taková technická a organizační opatření, aby nemohlo dojít k neoprávněnému nebo nahodilému přístupu k osobním údajům.</p>
+    <h3 class="font-semibold text-gray-900">14. Duševní vlastnictví</h3>
+    <p class="text-gray-600">Veškerá autorská práva k dílům vytvořeným výhradně pro odběratele přecházejí na odběratele okamžikem úplné úhrady ceny, <svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>přičemž dodavatel si ponechává práva k nástrojům, knihovnám a postupům, které používal již před zahájením spolupráce, a poskytuje odběrateli nevýhradní licenci k jejich užití v rozsahu nutném pro provoz dodaného řešení.</p>
+    <h3 class="font-semibold text-gray-900">15. Řešení sporů</h3>
+    <p class="text-gray-600">Smluvní strany se zavazují řešit případné spory nejprve jednáním zástupců oprávněných jednat jejich jménem a teprve nedojde-li k dohodě do třiceti dnů, může kterákoli z nich předložit spor příslušnému soudu.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>16. Rozhodné právo</h3>
+    <p class="text-gray-600">Vztahy touto fakturou výslovně neupravené se řídí právním řádem České republiky, zejména občanským zákoníkem, a strany vylučují použití ustanovení, která by vedla k aplikaci práva jiného státu. Změny a doplňky těchto podmínek vyžadují písemnou formu a podpis obou smluvních stran.</p>
+    <h3 class="font-semibold text-gray-900">17. Doručování</h3>
+    <p class="text-gray-600">Oznámení podle těchto podmínek se doručují elektronicky na adresy uvedené v záhlaví faktury; oznámení se považuje za doručené následující pracovní den po odeslání, nedoloží-li adresát, že je neobdržel z důvodu, který nezavinil.</p>
+    <h3 class="font-semibold text-gray-900">18. Vyšší moc</h3>
+    <p class="text-gray-600">Žádná ze stran nenese odpovědnost za nesplnění povinnosti, pokud k němu došlo v důsledku okolnosti vylučující odpovědnost, o níž druhou stranu bez zbytečného odkladu písemně informovala a jejíž následky se snažila zmírnit. Trvá-li taková okolnost déle než devadesát dnů, může kterákoli strana spolupráci písemně ukončit.</p>
+    <h3 class="font-semibold text-gray-900"><svg class="inline icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>19. Uchovávání dokladů</h3>
+    <p class="text-gray-600">Dodavatel uchovává pracovní výkazy a podklady k vyúčtování po dobu stanovenou právními předpisy a na žádost odběratele mu je při kontrole fakturace zpřístupní v běžně používaném elektronickém formátu.</p>
+    <h3 class="font-semibold text-gray-900">20. Závěrečná ustanovení</h3>
+    <p class="text-gray-600">Pokud by se kterékoli ustanovení těchto podmínek ukázalo jako neplatné nebo nevymahatelné, nedotýká se to platnosti ostatních ustanovení a strany nahradí neplatné ustanovení platným, které se co nejvíce blíží jeho smyslu a hospodářskému účelu.</p>
+    </div>
+  </div>
+</section>
+
+<p class="text-sm mt-4">Fakturu vystavila Jana Nováková · Děkujeme za včasnou úhradu.</p>
+
+</body>
+</html>
