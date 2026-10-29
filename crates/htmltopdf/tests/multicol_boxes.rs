@@ -288,6 +288,9 @@ fn check_shape(what: &str, pdf: &[u8], n_cols: usize, chrome: &Chrome, inset_pt:
 /// [`check_shape`] for a shape of `total` words. `top_inset_pt` is how far below the content box the first line of page 1
 /// column 1 starts (the card's border and padding, and a header above its text); `None` skips the check of where each
 /// column's first line is (a line that holds an inline box is taller than its neighbours: its text sits lower in it).
+/// `tol` is how far from Chrome the columns and `AFTER` may be: one line, or more where Parley's line box differs from
+/// Chrome's (F198h).
+#[allow(clippy::too_many_arguments)]
 fn check_shape_with(
     what: &str,
     pdf: &[u8],
@@ -897,7 +900,10 @@ fn assert_boxes_beside_their_words(
 
 /// The HTML of every shape of this section (`cargo test --test multicol_boxes -- --ignored dump_chrome_inputs` with
 /// `MCB_DUMP=<dir>` writes them as `<name>.html`, so Chrome can print the same documents the numbers below come from).
-const SHAPES: &[(&str, fn() -> String)] = &[
+/// A shape's name and the body of its document.
+type Shape = (&'static str, fn() -> String);
+
+const SHAPES: &[Shape] = &[
     ("overflow", shape_overflow),
     ("clipcard", shape_clip_card),
     ("imginline", shape_inline_images),

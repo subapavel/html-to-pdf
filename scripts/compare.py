@@ -212,6 +212,14 @@ THRESHOLDS = {
     #     On main's binary the card is one box placed whole in column 1: 338 of 936 words, its text runs 33 pt below the content box
     #     and column 2 is empty. Worst page + 1 point.
     "30-terms-card-columns": 0.107,
+    # 31: new in F198b (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border` card with a grey header
+    #     strip, taller than a page in one column, holding inline heroicon `<svg>`s and an inline `<img>` logo; it starts in
+    #     column 1 of page 1, goes on in column 2, then in both columns of page 2, with a signature below; 2 pages like Chrome's,
+    #     938 words like Chrome's). 9.6 / 6.6 %: the text drift every fixture has, over two pages of small text in columns (the
+    #     strip is clipped to the rounded corners of column 1 only, the frame is open at the breaks, the icons sit beside their
+    #     words). On main's binary the clip card is one box placed whole in column 1: 325 of 938 words, column 2 empty
+    #     (9.5 / 7.5 %, though most of the text was missing). Worst page + 1 point.
+    "31-terms-clip-card-columns": 0.107,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
