@@ -195,7 +195,8 @@ THRESHOLDS = {
     #     F30f-b fix 3.6 % (the text drift every fixture has, and the totals table that 01 has too). Worst page + 1 point.
     "28-notes-box-clip": 0.046,
     # 29: new in F30f-d (a Czech invoice whose terms are the direct text of a bordered `rounded-lg p-4` card that is not a clip
-    #     box, about 1.3 pages, across the page break; the shape of 16 without the clip and the inner paragraph). 9.9 / 12.6 %,
+    #     box, about 1.3 pages, across the page break; the shape of 16 without the clip and the inner paragraph). 9.9 / 12.6 %
+    #     (9.8 / 12.5 % once the border keeps the radius of the unbroken corners and the box shadow stops at the cut edges),
     #     2 pages like Chrome's (497 / 505 words, 43 / 40 lines per page like Chrome's). On main's binary the card moved whole to page 2
     #     (84 / 684 / 238 words, 3 pages), its last line was painted 5 pt below the content box and the frame closed above
     #     it. Now the card is sliced at the break (css-break-3 5.4): top border and radius on page 1, side borders to the
@@ -203,7 +204,7 @@ THRESHOLDS = {
     #     closes with the bottom border and radius above the payment block. The diff is dense text: our lines break one
     #     word differently from Chrome's a few lines into page 2 (sub-pixel advances), so most of page 2 is shifted by a word,
     #     and the drift every fixture has. Worst page + 1 point.
-    "29-card-direct-text": 0.136,
+    "29-card-direct-text": 0.135,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
