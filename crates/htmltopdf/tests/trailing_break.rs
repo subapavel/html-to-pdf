@@ -272,3 +272,162 @@ fn the_widows_rule_does_not_count_the_empty_line() {
     assert_eq!(a.page, 2);
     assert!((a.y_min - 92.6).abs() <= 1.0, "AFTER at {:.1}", a.y_min);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Validator round 1 (plan §7.1): break-* on inline-level boxes, and what keeps the line after a `<br>`.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Every printed word, in reading order, is `(page, text, Chrome's top)` within a point. Fails when a word is lost.
+fn assert_words(what: &str, body: &str, expected: &[(usize, &str, f32)]) {
+    let words = printed_words(&render_with(HEAD, body));
+    let got: Vec<String> = words
+        .iter()
+        .map(|w| format!("p{}:{}@{:.1}", w.page, w.text, w.y_min))
+        .collect();
+    assert_eq!(
+        words.len(),
+        expected.len(),
+        "{what}: expected {expected:?}, printed {got:?}"
+    );
+    for (w, (page, text, y)) in words.iter().zip(expected) {
+        assert!(
+            w.page == *page && w.text == *text && (w.y_min - y).abs() <= 1.0,
+            "{what}: expected p{page}:{text}@{y}, printed {got:?}"
+        );
+    }
+}
+
+#[test]
+fn a_forced_break_on_an_inline_box_is_ignored_and_loses_no_text() {
+    // css-break-3 §3.1: break-before / break-after apply to block-level boxes, flex and grid items, table rows and
+    // row groups. Chrome m141 prints one page for each of these (out/scratch/f66fv/{d,c,e,h}).
+    assert_words(
+        "d1: br with page-break-after in a line",
+        "<div>a<br style=\"page-break-after:always\"></div>b",
+        &[(1, "a", 43.8), (1, "b", 58.8)],
+    );
+    assert_words(
+        "c6: empty span with break-after after text",
+        "<div>a<span style=\"break-after:page\"></span></div>b",
+        &[(1, "a", 43.8), (1, "b", 58.8)],
+    );
+    assert_words(
+        "c7: br then an empty span with break-after, nothing after",
+        "<div>a<br><span style=\"break-after:page\"></span></div>",
+        &[(1, "a", 43.8)],
+    );
+    assert_words(
+        "d6: br, then an empty b with break-after",
+        "<div>a<br style=\"page-break-after:always\"><b style=\"break-after:page\"></b></div>b",
+        &[(1, "a", 43.8), (1, "b", 58.8)],
+    );
+    assert_words(
+        "inline-block with break-after",
+        "<div>a <span style=\"display:inline-block;break-after:page\">x</span></div>b",
+        &[(1, "a", 43.8), (1, "x", 43.8), (1, "b", 58.8)],
+    );
+}
+
+#[test]
+fn a_forced_break_on_a_br_between_paragraphs_does_not_overlap_or_reorder() {
+    // e2: a and b were drawn at the same y; d3 / d4 printed b before a.
+    assert_words(
+        "e2: br clear=all with page-break-before in a p",
+        "<p>a<br clear=all style='page-break-before:always'></p><p>b</p>",
+        &[(1, "a", 43.8), (1, "b", 58.8)],
+    );
+    // h7: a paragraph that holds only a br with break-after is one line, on one page.
+    assert_words(
+        "h7: p with only a br with break-after",
+        "<p>a</p><p><br style='break-after:page'></p><p>b</p>",
+        &[(1, "a", 43.8), (1, "b", 73.8)],
+    );
+}
+
+#[test]
+fn the_word_idiom_of_a_span_around_a_br_keeps_its_line() {
+    // g1 / h3 / h4: `<p><span><br clear=all style='page-break-before:always'></span></p>` is one line in Chrome.
+    assert_words(
+        "g1: Word page break idiom",
+        "<p>a</p><p class=MsoNormal><span><br clear=all style='page-break-before:always'></span></p><p>b</p>",
+        &[(1, "a", 43.8), (1, "b", 73.8)],
+    );
+    assert_words(
+        "h4: br with page-break-before in a p",
+        "<p>a</p><p><br style='page-break-before:always'></p><p>b</p>",
+        &[(1, "a", 43.8), (1, "b", 73.8)],
+    );
+}
+
+#[test]
+fn a_forced_break_on_a_block_level_box_still_breaks() {
+    // The reading stays for what the spec names: blocks, and an inline element made block-level.
+    assert_words(
+        "div with break-after",
+        "<div style=\"break-after:page\">a</div>b",
+        &[(1, "a", 43.8), (2, "b", 43.8)],
+    );
+    assert_words(
+        "span with display:block and break-before",
+        "<div>a<span style=\"display:block;break-before:page\">b</span></div>",
+        &[(1, "a", 43.8), (2, "b", 43.8)],
+    );
+    assert_words(
+        "flex item that is a span with break-after",
+        "<div style=\"display:flex;flex-direction:column\"><span style=\"break-after:page\">a</span><span>b</span></div>",
+        &[(1, "a", 43.8), (2, "b", 43.8)],
+    );
+}
+
+#[test]
+fn an_inline_box_with_padding_border_or_a_wbr_after_the_br_keeps_the_line() {
+    // CSS 2.1 §9.4.2: a line box with an inline element with non-zero margin, padding or border is not zero-height.
+    // a/br_empty_span_pad, br_empty_span_border, wbr: Chrome 73.8, the F66f takeback gave 58.6.
+    assert_after_at(
+        "empty span with horizontal padding",
+        "<div>a<br><span style=\"padding:0 4px\"></span></div><p>AFTER</p>",
+        73.8,
+    );
+    assert_after_at(
+        "empty span with a border",
+        "<div>a<br><span style=\"border-left:1px solid #000\"></span></div><p>AFTER</p>",
+        73.8,
+    );
+    assert_after_at(
+        "wbr after the br",
+        "<div>a<br><wbr></div><p>AFTER</p>",
+        73.8,
+    );
+    assert_after_at(
+        "empty span with horizontal margin",
+        "<div>a<br><span style=\"margin:0 4px\"></span></div><p>AFTER</p>",
+        73.8,
+    );
+    assert_after_at("two wbr", "<div>a<br><wbr><wbr></div><p>AFTER</p>", 73.8);
+    // Guards: nothing in the inline axis, or only the closing edge of a box, makes no line (Chrome k5-k15).
+    assert_after_at(
+        "empty span without box",
+        "<div>a<br><span></span></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "empty span with vertical padding",
+        "<div>a<br><span style=\"padding:4px 0\"></span></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "empty span with vertical margin",
+        "<div>a<br><span style=\"margin:4px 0\"></span></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "empty a with an id",
+        "<div>a<br><a id=x></a></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "padded span that ends in the br: its closing edge is no line",
+        "<div>a<br><span style=\"padding:0 4px\">x<br></span></div><p>AFTER</p>",
+        73.8,
+    );
+}
