@@ -238,9 +238,9 @@ fn frame(pdf: &[u8], page: usize) -> Frame {
         .max()
         .unwrap_or(h);
     let last_ink = (0..card_end)
+        .rev()
         .filter(|&y| (80..700).any(|x| at(x, y) < 110))
-        .filter(|&y| !(150..640).all(|x| at(x, y) < 235))
-        .next_back();
+        .find(|&y| !(150..640).all(|x| at(x, y) < 235));
     Frame {
         side_bottom: best.map(|b| b.1),
         side_top: best.map(|b| b.0),
@@ -473,7 +473,9 @@ fn a_card_that_starts_below_something_is_sliced_where_it_starts() {
 // ── Guards: shapes the fix must not touch (numbers are main's, pinned) ──────────────────────────────────────────────
 
 /// `(words per page, y_min of the first and y_max of the last word of each page, AFTER)`, rounded to 0.1 pt.
-fn shape(pdf: &[u8]) -> (Vec<usize>, Vec<(f32, f32)>, (usize, f32)) {
+type Shape = (Vec<usize>, Vec<(f32, f32)>, (usize, f32));
+
+fn shape(pdf: &[u8]) -> Shape {
     let w = printed_words(pdf);
     let pages = page_count(&w);
     let spans = (1..=pages)
