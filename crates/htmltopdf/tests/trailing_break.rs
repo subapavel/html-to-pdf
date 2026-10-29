@@ -441,3 +441,145 @@ fn an_inline_box_with_padding_border_or_a_wbr_after_the_br_keeps_the_line() {
         73.8,
     );
 }
+
+#[test]
+fn an_open_box_with_an_end_edge_keeps_the_line_when_a_box_starts_after_the_br() {
+    // Validator round 2 (p/e4 ...): `<span padding-right>a<br><span></span></span>`. The end edge of the open span lands on the
+    // line after the br, so Chrome keeps it (73.8); the first F66f fix took it back (58.6). Chrome m141 measurements,
+    // out/scratch/f66fv3/q: only the end side counts, and it follows the direction of the box itself.
+    let keep = [
+        ("padding-right", "padding:0 4px", "a<br><span></span>"),
+        (
+            "padding-right only",
+            "padding-right:4px",
+            "a<br><span></span>",
+        ),
+        ("margin-right", "margin-right:4px", "a<br><span></span>"),
+        (
+            "border-right",
+            "border-right:1px solid #000",
+            "a<br><span></span>",
+        ),
+        (
+            "negative margin-right",
+            "margin-right:-4px",
+            "a<br><span></span>",
+        ),
+        (
+            "percentage padding-right",
+            "padding-right:1%",
+            "a<br><span></span>",
+        ),
+        ("empty <i>", "padding-right:4px", "a<br><i></i>"),
+        (
+            "white space around the box",
+            "padding-right:4px",
+            "a<br> <span></span> ",
+        ),
+        (
+            "nested, the break in an inner span",
+            "padding-right:4px",
+            "<b>a<br><span></span></b>",
+        ),
+        (
+            "the inner span closed before the box",
+            "padding-right:4px",
+            "<b>a<br></b><span></span>",
+        ),
+        (
+            "padding on both sides",
+            "padding:4px 8px",
+            "a<br><span></span>",
+        ),
+        (
+            "rtl box, padding-left is its end",
+            "direction:rtl;padding-left:4px",
+            "a<br><span></span>",
+        ),
+    ];
+    for (what, style, inner) in keep {
+        assert_after_at(
+            what,
+            &format!("<div><span style=\"{style}\">{inner}</span></div><p>AFTER</p>"),
+            73.8,
+        );
+    }
+    assert_after_at(
+        "two brs and a box",
+        "<div><span style=\"padding-right:4px\">a<br><br><span></span></span></div><p>AFTER</p>",
+        88.8,
+    );
+    assert_after_at(
+        "preserved newline and a box",
+        "<div style=\"white-space:pre\"><span style=\"padding-right:4px\">a\n<span></span></span></div><p>AFTER</p>",
+        73.8,
+    );
+    assert_after_at(
+        "in the card",
+        &format!(
+            "<div style=\"{CARD}\"><span style=\"padding-right:4px\">a<br><span></span></span></div><p>AFTER</p>"
+        ),
+        73.8 + 15.0,
+    );
+    // Guards (Chrome 58.8): the start side, the vertical axis, nothing after the br, a box that is not one, and an end edge
+    // that closes before any box starts.
+    let none = [
+        ("no padding", "", "a<br><span></span>"),
+        (
+            "padding-left only",
+            "padding-left:4px",
+            "a<br><span></span>",
+        ),
+        ("margin-left only", "margin-left:4px", "a<br><span></span>"),
+        (
+            "border-left only",
+            "border-left:1px solid #000",
+            "a<br><span></span>",
+        ),
+        ("vertical padding", "padding:4px 0", "a<br><span></span>"),
+        (
+            "rtl box, padding-right is its start",
+            "direction:rtl;padding-right:4px",
+            "a<br><span></span>",
+        ),
+        ("nothing after the br", "padding-right:4px", "a<br>"),
+        ("white space after the br", "padding-right:4px", "a<br> "),
+        (
+            "display:none after the br",
+            "padding-right:4px",
+            "a<br><span style=\"display:none\"></span>",
+        ),
+        (
+            "display:contents after the br",
+            "padding-right:4px",
+            "a<br><span style=\"display:contents\"></span>",
+        ),
+        (
+            "hidden input after the br",
+            "padding-right:4px",
+            "a<br><input type=hidden>",
+        ),
+    ];
+    for (what, style, inner) in none {
+        assert_after_at(
+            what,
+            &format!("<div><span style=\"{style}\">{inner}</span></div><p>AFTER</p>"),
+            58.8,
+        );
+    }
+    assert_after_at(
+        "the padded span closes right after the br, a box follows",
+        "<div><span style=\"padding-right:4px\">a<br></span><span></span></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "inner padded span closes right after the br, plain outer",
+        "<div><span><span style=\"padding-right:4px\">a<br></span></span></div><p>AFTER</p>",
+        58.8,
+    );
+    assert_after_at(
+        "inner padded span closes right after the br, a box follows in a plain outer",
+        "<div><span><span style=\"padding-right:4px\">a<br></span><span></span></span></div><p>AFTER</p>",
+        58.8,
+    );
+}
