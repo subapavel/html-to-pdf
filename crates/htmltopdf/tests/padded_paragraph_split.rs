@@ -705,3 +705,105 @@ fn tailwind_cards_with_direct_text_have_chromes_lines_per_page() {
         assert_inside_content_box(what, &words);
     }
 }
+
+// ── The frame of a sliced box: radius and shadow (pdf-reviewer defects of F30f-d) ──────────────────────────────────
+
+/// A card with a radius of 24 px and a 2 px black border (the corners are clearly visible on a 96 dpi raster).
+const ROUND: &str = "padding:16px;border:2px solid #000;border-radius:24px";
+
+/// The first and last pixel row that belongs to a horizontal border of the card on `page`: `(top rule, bottom rule)`.
+fn rule_rows(pdf: &[u8], page: usize) -> (Option<usize>, Option<usize>) {
+    let f = frame(pdf, page);
+    (f.rules.iter().copied().min(), f.rules.iter().copied().max())
+}
+
+/// The grey value of the pixel at column `x`, row `y` of `page`.
+fn pixel(pdf: &[u8], page: usize, x: usize, y: usize) -> u8 {
+    let (w, _, px) = raster(pdf, page);
+    px[y * w + x]
+}
+
+#[test]
+fn a_sliced_card_keeps_the_radius_of_its_border_at_the_unbroken_corners() {
+    // css-backgrounds-3 §5.5 + css-break-3 §5.4: the corners that are not cut off keep their radius, border and background
+    // alike. The border was drawn as straight lines once a side was cut off: page 1 had square top corners, the last page
+    // square bottom corners, and with a background a white gap showed between the square border and the rounded fill.
+    // Page 1's top border is at the top of the card (row 56), 2 px thick; pixel (58, top + 1) is 31 px from the centre
+    // of the corner circle (radius 24) and so outside it: white. A square corner is black there.
+    for (what, extra) in [("plain", ""), ("background", "background:#eef;")] {
+        let pdf = render(&format!(
+            "<div style=\"{extra}{ROUND}\">{}</div><p>AFTER</p>",
+            words(1500)
+        ));
+        let (top, _) = rule_rows(&pdf, 1);
+        let top = top.unwrap_or_else(|| panic!("{what}: page 1 has no top border"));
+        assert!(
+            pixel(&pdf, 1, 58, top + 1) > 200,
+            "{what}: page 1's top-left corner is square (the border is drawn past the radius)"
+        );
+        assert!(
+            pixel(&pdf, 1, 735, top + 1) > 200,
+            "{what}: page 1's top-right corner is square"
+        );
+        assert!(
+            pixel(&pdf, 1, 300, top + 1) < 100,
+            "{what}: page 1's top border is missing in the middle"
+        );
+        let (_, bottom) = rule_rows(&pdf, 2);
+        let bottom = bottom.unwrap_or_else(|| panic!("{what}: page 2 has no bottom border"));
+        assert!(
+            pixel(&pdf, 2, 58, bottom - 1) > 200,
+            "{what}: page 2's bottom-left corner is square"
+        );
+        assert!(
+            pixel(&pdf, 2, 735, bottom - 1) > 200,
+            "{what}: page 2's bottom-right corner is square"
+        );
+        // No radius at a cut edge: the side border runs straight to the content box top on page 2 and bottom on page 1.
+        assert!(
+            pixel(&pdf, 2, 57, 58) < 150,
+            "{what}: page 2's side border does not reach the content box top"
+        );
+        assert!(
+            pixel(&pdf, 1, 57, 1060) < 150,
+            "{what}: page 1's side border does not reach the content box bottom"
+        );
+    }
+}
+
+#[test]
+fn a_sliced_card_has_no_shadow_beyond_its_cut_edges() {
+    // css-break-3 §5.4: the box is rendered without breaks and then sliced, so there is no shadow past a cut edge. The
+    // shadow (`0 4px 12px`) was drawn round each fragment as if it were the whole box: page 1 had it in the bottom margin
+    // (to 812 pt, the content box ends at 799.4), page 2 above the content box top (from 36.5 pt, it starts at 42.5).
+    // Chrome paints none there (m141, `cards/chrome/shadow.html`). The shadow beside the card stays up to the cut edge.
+    let pdf = render(&format!(
+        "<div style=\"box-shadow:0 4px 12px rgba(0,0,0,.5);{CARD}\">{}</div><p>AFTER</p>",
+        words(1500)
+    ));
+    let (w1, h1, p1) = raster(&pdf, 1);
+    for y in 1067..h1 {
+        assert!(
+            p1[y * w1..(y + 1) * w1].iter().all(|&p| p >= 252),
+            "page 1 row {y}: shadow below the content box bottom (1065.8 px)"
+        );
+    }
+    let (w2, _, p2) = raster(&pdf, 2);
+    for y in 0..56 {
+        assert!(
+            p2[y * w2..(y + 1) * w2].iter().all(|&p| p >= 252),
+            "page 2 row {y}: shadow above the content box top (56.7 px)"
+        );
+    }
+    // Beside the card (its left border is at 56.7 px) the shadow reaches 12 px out; 3 px from the border it is visible,
+    // and it is as strong 10 px above the cut edge as in the middle of the page.
+    let beside = |p: &[u8], w: usize, y: usize| p[y * w + 53];
+    assert!(
+        beside(&p2, w2, 300) < 250,
+        "no shadow beside the card on page 2"
+    );
+    assert!(
+        beside(&p1, w1, 1055).abs_diff(beside(&p1, w1, 600)) <= 6,
+        "the shadow beside the card fades out towards the cut edge on page 1"
+    );
+}
