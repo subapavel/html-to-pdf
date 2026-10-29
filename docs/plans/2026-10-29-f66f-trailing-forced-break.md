@@ -128,7 +128,7 @@ Chrome's do; the `<br>` followed by an inline-block keeps its second line.
 |---|---|
 | Blitz `cargo test -p blitz-dom --lib` | 144 passed (137 on the base); with `parallel-construct` 146 passed. Two `log`-capturing tests failed once in a run that shared the machine with another cargo job and never again (3 reruns green); not related to layout |
 | fulgur (forks patched in) `cargo test -p fulgur --lib` | 2420 passed |
-| fulgur integration binaries, one at a time | all 44 binaries ok (`render_smoke` 326 passed) |
+| fulgur integration binaries, one at a time | the lib and all 43 integration binaries ok (`render_smoke` 326 passed) |
 | fulgur-vrt | 35 of 64 differ on this host, as on the F30f-h base; the whole diff directory (70 files) is byte-identical to the base's: no golden moves, `basic/box-shadow` stays as recorded |
 | html-to-pdf `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings` | clean |
 | byte gate vs `htmltopdf-main-f30fh`, 1 and 4 threads | all 39 documents (fixtures 01-32, 7 bench corpus) byte-identical; 1 thread and 4 threads identical to each other |
