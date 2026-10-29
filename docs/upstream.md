@@ -71,3 +71,5 @@ branch (one source per crate in `[patch.crates-io]`), despite its name.
 
 All blitz-dom fixes go on the one branch `htmltopdf/blitz-dom-0.2.4` (one source per crate in
 `[patch.crates-io]`). `htmltopdf/svg-current-color-srgb` (F1 only) is superseded and can be deleted.
+
+**Fork VRT goldens to regenerate in the pinned font environment** (not on this host, whose fonts already differ from 35 of 64 goldens): `basic/box-shadow` — moved by F30f-h (a padded body-level box that fits its page ends at its border box; the golden pinned the overlap; Chrome confirms the new position).

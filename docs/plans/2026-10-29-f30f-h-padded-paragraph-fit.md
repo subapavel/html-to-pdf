@@ -110,3 +110,7 @@ Every shape of §3 is within 0.2 pt of Chrome (line box against glyph box), e.g.
 - Float, `display: inline-block` wrappers, table cells and flex / grid items are untouched; their shapes were measured only where listed in §3.
 - A paragraph with `height` smaller than its lines and `overflow: visible` (text spilling out) now ends at its box (`fit_top + child_h`) per CSS 2.1 §10.5; checked in no Chrome case beyond `x4` (a clip box) and the fork tests.
 - The Tailwind `h`, `i` shapes use the compiled sheet; fixture 32 is the committed proof for it.
+
+### Fork VRT golden `basic/box-shadow` (decision, 2026-10-29)
+
+The fix moves the seventh box of the fork's `basic/box-shadow` VRT fixture from 368.1 to 382.1 pt (the sixth box wraps to two lines; Chrome 382.14 pt): the golden pinned the F30f-h bug. It is **not** re-blessed in this PR: this host already differs from 35 of the 64 committed goldens (fonts), so a golden regenerated here would bake in this host's fonts. It must be regenerated in the pinned font environment (`FONTCONFIG_FILE=examples/.fontconfig/fonts.conf FULGUR_VRT_UPDATE=1 cargo test -p fulgur-vrt`) the next time the fork's VRT is run there; until then `basic/box-shadow` is an expected VRT difference (recorded in `docs/upstream.md`).
