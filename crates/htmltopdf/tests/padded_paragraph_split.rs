@@ -503,7 +503,9 @@ fn a_padded_paragraph_that_fits_its_page_is_laid_out_as_before() {
         words(300)
     ));
     let got = shape(&pdf);
-    assert_eq!(got, (vec![300], vec![(54.8, 345.1)], (1, 333.1)), "{got:?}");
+    // The lines are main's. `AFTER` is below the card (357.1 pt; Chrome 357.3): main had it at 333.1 pt, over the card's
+    // last line (345.1 pt), which this guard pinned until F30f-h fixed the cursor of a fitting card.
+    assert_eq!(got, (vec![300], vec![(54.8, 345.1)], (1, 357.1)), "{got:?}");
 }
 
 #[test]
