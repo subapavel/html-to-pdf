@@ -20,10 +20,11 @@ Exercises:
   paragraph was placed whole: its last lines (the warning says 307 px below the content box) were not printed, the payment block
   moved to a third page.** Compare numbers: main's binary 3 pages, 11.4 / 25.0 / 0.9 %; F30f 2 pages like Chrome's, 16.6 / 20.8 %.
 
-The remaining diff is dense text, not lost content: every word is on the same page as in Chrome. Ours closes the card's frame on
-every page (top border and 16 px of padding again on page 2, `box-decoration-break: slice` is not implemented, F96), so page 2's
-lines sit about 20 px lower than Chrome's; page 1 has the text drift every fixture has (rows about 3 px lower). The threshold
-(`scripts/compare.py`) is the worst page + 1 point and goes down with F96.
+The remaining diff is dense text, not lost content: every word is on the same page as in Chrome. Since F30f-d the paragraph in the
+card is sliced at its break (`box-decoration-break: slice`, css-break-3 §5.4): page 2's lines start at the content box top like
+Chrome's (worst page 20.8 -> 12.9 %). Ours still closes the `<section>` card's own frame on both pages (bottom border and radius at
+the foot of page 1, top border and radius at the head of page 2: the block fragmenter, F96), and page 1 has the text drift every
+fixture has (rows about 3 px lower). The threshold (`scripts/compare.py`) is the worst page + 1 point and goes down with F96.
 
 Every class is in the compiled `fixtures/tailwind/tailwind.css` (no inline styles besides the list style 06 uses, no rebuild).
 The tests that pin the shape without Tailwind are in `crates/htmltopdf/tests/wrapper_line_split.rs`.
