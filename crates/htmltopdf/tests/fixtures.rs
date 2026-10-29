@@ -584,3 +584,77 @@ fn terms_table_columns_invoice_prints_every_instalment() {
         "{name}: two pages like Chrome"
     );
 }
+
+/// F198: fixture 30's terms are one bordered card, taller than a page in a single column, in a two-column block. It is
+/// cut over both columns and both pages like Chrome's; every clause is printed once, in order, and the signature
+/// below the card comes after the last clause.
+#[test]
+fn terms_card_columns_invoice_prints_every_clause() {
+    let name = "30-terms-card-columns";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "30");
+    let chrome = pdf_text(
+        &std::fs::read(dir.join("reference/chrome.pdf")).unwrap(),
+        "30c",
+    );
+    let mut needles: Vec<String> = Vec::new();
+    for part in html.split("<h3").skip(1) {
+        let heading = part
+            .split_once('>')
+            .unwrap()
+            .1
+            .split_once("</h3>")
+            .unwrap()
+            .0;
+        needles.push(heading.to_string());
+        // The last two words of the clause's paragraph.
+        let para = part.split("<p").nth(1).unwrap().split_once('>').unwrap().1;
+        let para = para.split_once("</p>").unwrap().0;
+        let words: Vec<&str> = para.split_whitespace().collect();
+        let tail = words[words.len().saturating_sub(2)..].join(" ");
+        assert_eq!(
+            text.matches(&tail).count(),
+            chrome.matches(&tail).count(),
+            "{name}: the end of clause `{heading}` (`{tail}`) must be printed as often as Chrome prints it: {text}"
+        );
+        assert!(
+            text.contains(&tail),
+            "{name}: the end of clause `{heading}` (`{tail}`) is missing: {text}"
+        );
+    }
+    assert_eq!(needles.len(), 20, "{name}: 20 clauses");
+    needles.push("Fakturu vystavila Jana Nováková".into());
+    let mut at = 0;
+    for n in &needles {
+        let pos = text[at..]
+            .find(n.as_str())
+            .unwrap_or_else(|| panic!("{name}: `{n}` missing or out of order: {text}"));
+        at += pos + n.len();
+    }
+    assert_eq!(
+        text.split(' ').count(),
+        chrome.split(' ').count(),
+        "{name}: as many words as Chrome's reference"
+    );
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-30p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           2"),
+        "{name}: two pages like Chrome"
+    );
+}

@@ -205,6 +205,13 @@ THRESHOLDS = {
     #     word differently from Chrome's a few lines into page 2 (sub-pixel advances), so most of page 2 is shifted by a word,
     #     and the drift every fixture has. Worst page + 1 point.
     "29-card-direct-text": 0.135,
+    # 30: new in F198 (a Czech invoice whose terms are ONE bordered card, about 2300 px tall at the column width, in a `columns: 2` block:
+    #     it starts in column 1 of page 1, goes on in column 2, then in both columns of page 2 where they are balanced, with a
+    #     signature below; 2 pages like Chrome's, 936 words like Chrome's). 9.6 / 6.4 %: the text drift every fixture has, over two
+    #     pages of small text in columns (the frame, its open edges at the breaks and the balance are where Chrome puts them).
+    #     On main's binary the card is one box placed whole in column 1: 338 of 936 words, its text runs 33 pt below the content box
+    #     and column 2 is empty. Worst page + 1 point.
+    "30-terms-card-columns": 0.107,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
