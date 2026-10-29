@@ -111,4 +111,26 @@ Fixtures 01–29, the bench corpus (`slow-multicol` is a single `<p>`: no `Block
 
 ## 7. Evidence
 
-(Filled in when it lands: step 1 measurements, red/green tests, gates, sweeps, deviations.)
+### Step 1 (gate), 2026-10-29
+
+Chrome (Playwright, `chrome.mjs` of the F30d validator) and main `b60803b` (binary `htmltopdf-main-f30fd`), A4, 15 mm, Inter 14px/1.2, words `w0000…`; per page, words printed (column 1 / column 2 first words are in `out/scratch/f198/*.html`, `s1.py`, `s1g.py`).
+
+| Shape | Chrome pages / words per page | Main pages / words per page | Main stderr |
+|---|---|---|---|
+| A card of direct text, 2 columns | 4: 690 / 716 / 719 / 375 | 2: 361 / 0 | `a <div> 7140px tall inside a multi-column container … overflows the page` + `content extends 4540.6 pt past the bottom page edge` |
+| B the same `<div>` without padding, border, background | 4: 742 / 801 / 803 / 154 | 2: 395 / 0 | same warning, `<div>` 6485px |
+| C card of 10 `<p>` of 250 words | 4: 689 / 705 / 713 / 393 | 2: 361 / 0 | same, 7191px |
+| D A with `column-count: 3` | 5: 541 / 545 / 591 / 572 / 251 | 2: 190 / 0 | same, 13558px |
+| E A with `column-fill: auto` | 5: 690 / 716 / 719 / 375 / 0 (AFTER alone on page 5) | 2: 361 / 0 | same, 7140px |
+| F `<p>` with padding and border, direct child | 4: 690 / 716 / 719 / 375 | 4: 695 / 714 / 718 / 373, all 2500 words, no warning, but the text starts at 42.1 pt (Chrome 55.1): the padding is ignored | none |
+
+Guards on main: G1 three direct `<p>` of 800 words 4 pages 742 / 797 / 802 / 59 (Chrome 742 / 798 / 801 / 59); G2 bare text 4 pages 742 / 800 / 802 / 156 (Chrome 742 / 801 / 803 / 154); G3 a 300-word card that fits a page: 300 words in column 1 only (not balanced: F30d-c; Chrome 150 / 150); G4 the same card after a 600 px filler: moved whole to page 2, 0 / 300 (Chrome splits it 275 / 25); G5 `multicol_in_card` 710 / 739 / 733 / 318 like Chrome; G6 a card holding a 130-row table: 112 of 260 words, warned (F174c; Chrome 190 / 70).
+
+Gate checks:
+
+- Every lossy shape (A to E) is one `FlowItem::Block` taller than `fresh` and the warning names it. F is a `FlowItem::Lines`, not a Block: its words are all there, only the frame (padding, border, background) is missing, so it needs the box path through a second key (`boxes` for a `Lines` source with a frame), not through `column_flow`.
+- Layout dump of the tall card (scratch, removed): Blitz laid the children out at the column width. In C the card is 330 x 7191 px at (0, 0), its `<p>`s are at x 17 (= border 1 + padding 16), y 17 / 739 / 1495 / 2218 …, 296 px wide (330 - 34), `inline_root`; in A the card is the inline root itself, `layout_children` empty, and the text lays out at 296 px. Positions are whole px (rounded), taken from `final_layout`.
+- Fixtures 01 to 29 and the bench corpus (36 renders, 4 threads): no `multi-column` warning, so no `Block` atom of those documents is taller than a page and none is expanded. The F193 sweep (`c_mc*`, `C2mc*`, 48 files): no such warning either; its sums are the baseline of the byte-identity guard (`out/scratch/f198/sweep-main/sums.txt`).
+- `shape_multicol_source` shapes a non-`p` inline root (it reads `inline_layout_data` of any element: Case B), so A / B can use the card itself as the source.
+
+Decision: **full path** (plan §3), not the fallback. A and C can be described by `mc_box`.
