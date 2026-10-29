@@ -128,4 +128,45 @@ Fixtures 01–30, the bench corpus, the fork VRT goldens and examples stay byte-
 
 ## 7. Evidence
 
-(Filled in when it lands: step 1 measurements, red/green tests, gates, sweeps, deviations.)
+### Step 1 (gate), 2026-10-29
+
+Chrome (Playwright, `out/scratch/f30fd/chrome.mjs`, m141) and main `45be070` (`htmltopdf-main-f198`, byte-identical to the F198 branch binary), A4, 15 mm, Inter 14px/1.2, words `w0000…`. Repros: `out/scratch/f198v/`, `out/scratch/f198pdf/` and the new `out/scratch/f198b/` (git-ignored; generators were one-off scripts). Words per page, column 1 + column 2 (Chrome in the last column):
+
+| Shape | Main: pages / words | Chrome: pages / words per page | Refusal named by the scratch dump in `mc_box_at` |
+|---|---|---|---|
+| H `overflow.html` (`overflow:hidden` card, 2500 words) | 2 / 361 | 4: 346+344 / 353+363 / 360+359 / 192+183 (= shape A of F198) | `overflow(wrapped)` via `table_subtree_is_wrapped`; nothing else |
+| `clipcard` (Tailwind-like card: border, radius, `overflow:hidden`, blue header strip, 10 `<p>` with padding) | 2 / 358 | 4: 334+352 / 344+365 / 347+342 / 208+208; column 1 starts at 73.8 pt | the card: wrapped only; the `<p>` are plain boxes |
+| I `imginline` (14 inline `<img>` in the text of the card, 2100 words) | 2 / 360 | 4: 337+336 / 346+354 / 352+352 / 12+11; `AFTER` 84.3 pt | `mc_line_advances` (glyph runs only) |
+| I2 `imgp` (a `<p>` with an image, direct child, 3 columns, 1200 words) | 2 / 248 | 2: 236+236+235 / 164+164+165; `AFTER` 556.2 pt | same |
+| I2 `imgcard` (the same `<p>` in a card) | 2 / 185 | 3: 177+177+177 / 179+180+183 / 39+48+40; `AFTER` 190.9 pt | the `<p>` inside the card: same |
+| J `inlineblock` (60 `inline-block`, 1920 words) | 2 / 337 | 3: 314+313 / 320+331 / 324+318; `AFTER` 772.1 pt | `mc_line_advances` |
+| J2 `badge` (50 `inline-flex` badges, 2500 words) | 2 / 349 | 4: 330+329 / 334+343 / 341+341 / 246+236; `AFTER` 586.8 pt | same |
+| K `svgdiv` (50 inline `<svg>` in the text of the card) | 2 / 358 | 4: 343+340 / 344+362 / 360+357 / 202+192; `AFTER` 470.6 pt | same |
+| K `svgp` (the same in one `<p>` of the card) | 2 / 358 | the same numbers | the `<p>`: same |
+
+The plan's K repro `f198v/svg.html` is not a lost shape on main: its `<svg>` are siblings of the `<p>`, so each `<p>` of 300 words is a `Leaf` that fits a page and all 1200 words print (placed whole, as every `Leaf`). The lost shape is an `<svg>` inside the paragraph or the text of a card taller than a page: `svgdiv` / `svgp`.
+
+Filed shapes, main against Chrome (all of them warn on main; none is touched here):
+
+| Shape | Main | Chrome | Refusal |
+|---|---|---|---|
+| F198e `abspos` (badge child in the card) | 2 / 361 | 4 / 2500 | `float/abspos child` |
+| F198f `float` | 2 / 344 | 4 / 2500 | the same |
+| F198g `height` (card `height:2000px`, no clip) | 2 / 361 | 4 / 2500 (346+344 / 353+363 / 360+359 / 192+183, 2 pages of ink in 2000 px) | `block_size_constrained` |
+| F198g `clipheight` (`height:2000px; overflow:hidden`) | 2 / 361 | 2 / 696 words printed: the box hides the rest, ADR-0009 | `overflow(wrapped)`, `block_size_constrained` |
+| F198g `opacity`, `transform` | 2 / 361 | 4 / 2500 | `opacity` / `transform(wrapped)` |
+| F198g `pctpad` (`padding:5%`) | 2 / 378 | 4 / 2500 | `pct-padding` |
+| F198g `imgtall` (image 1500 px tall) | 2 / 300 | 2 / 600 | child taller than a page, not describable |
+| F198g `deep20` (20 nested divs) | 2 / 240 | 5 / 2000 | depth 16 |
+| F198g `clipanc` (`overflow:hidden` around the multicol container) | 2 / 361 | 4 / 2500 | wrapped ancestor: stays refused |
+| F173(f) `spanbefore` / `spanafter` / `spanmid` | 3 / 361, 2 / 361 (2600 expected), 4 / 733 | 4 / 2500, 4 / 2600, 4 / 2400 | the spanner path warns "a paragraph of 423 lines" |
+| F174c `table` (130-row table in the card) | 2 / 112 | 2 / 260 | child taller than a page |
+
+Gate checks:
+
+- A's sole refusal is the wrapped check (H, `clipcard`); B's sole refusal is the glyph-run-only check (I, I2, J, J2, K): nothing else fails for these shapes.
+- With the refusal lifted (scratch, env var), `out.paragraphs[source].lines.len()` equals the Parley line count for every source (358 / 332 / 427 / 432 / 300 / 391 lines for `imginline` / `inlineblock` / `svgdiv` / `badge` / `imgp` / `imgcard`), equals the shaped line count of `shape_multicol_source`, and none of the 14 / 60 / 50 / 50 / 1 / 1 `InlineBox` items has `node_id: None` (`extract_paragraph` only skips absolutely positioned pseudo-elements, before it makes the item).
+- Baselines (main, `out/scratch/f198b/base-main/`): fixtures 01 to 30 + the bench corpus at 1 and 4 threads, the F193 sweep (48 files), every `f198v` and `f198pdf` repro (PDF + stderr).
+
+Decision: **both shapes proceed** (plan §5 step 1).
+
