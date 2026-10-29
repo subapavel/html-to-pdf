@@ -134,3 +134,34 @@ Gate checks:
 - `shape_multicol_source` shapes a non-`p` inline root (it reads `inline_layout_data` of any element: Case B), so A / B can use the card itself as the source.
 
 Decision: **full path** (plan §3), not the fallback. A and C can be described by `mc_box`.
+
+### Implementation, 2026-10-29 (full path; steps 2 to 6)
+
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `4668e60f` (the change), `26137aa7` (the paint-order fix, below); `5af2fb98` is the same code as a WIP commit on `htmltopdf/wip-f198`. Ours: red tests and fixture 30 first (`8f12ddd`), then the rest. What was built, and where it differs from §3:
+
+- `mc_box` / `McBox` / `McBoxItem` as planned (`Lines`, `Leaf`, `Box`), offsets from `final_layout`. A box is described when it is eligible (`mc_box_eligible`: block-level normal flow, not a table, flex, grid, multicol, float, abspos or list item, not clipped / transformed / translucent nor inside such a box, no block size of its own, not `break-inside: avoid` while it fits a page, no percentage vertical padding) and every child is a `Lines` item (inline root of glyph runs only; a box of its own when it has border or padding), a nested `Box`, or a `Leaf` that fits a page. A table taller than a page, a float, an abspos child or bare text next to boxes makes the whole box `None` (the warning stays).
+- **Deviation 1: `boxes` is keyed by `FlowItem::Lines` sources too.** Shape F (a padded `<p>`) is a `FlowItem::Lines`, not a `Block`: main printed all its words 13 pt too high and 17 px too far left. `multicol_container` builds a box for a `Lines` source taller than a page that has a frame (`mc_has_frame`), so the plan's F row is green without touching `multicol_layout.rs`. The only change there is `parley_layout_is_glyph_run_only` going from private to `pub(crate)`.
+- **Deviation 2: `McPiece::Leaf { node, x, y }`** is a new variant instead of an `x` on `McPiece::Block`, so every existing `Block` plan stays byte-for-byte what it was.
+- Planner: `McFlat::push_box` flattens a box into atoms with an `AtomCtx` (frame chain, the depth from which boxes open at the atom, the depth from which they close, the gap above, the x). `fill_multicol_columns` counts the frame tops of the boxes an atom opens and the bottoms of those it closes in its fit, and drops the margin above the outermost box that opens (or above the atom) at the top of a column; the inner gaps are inside the padding and stay. Every box with atoms in a column gets a `McPiece::Frame` there (open at the top when it began earlier, at the bottom when it goes on). `McAtom` outside a box has `AtomCtx::PLAIN`: plans without `boxes` are the plans of before (unit test, and fixtures 12 / 24 / 25 and the corpus are byte-identical).
+- Render: `PaginationGeometry::piece_edges` (parallel to `fragments`, used by `frame_fragment` when the lengths agree). **Deviation 3: the slices of a paragraph that is a box are painted with its *last* fragment on a page, not the first.** With the first (the plan's text) the background of column 2's frame, drawn by the later fragment, covered the text of both columns: the first build printed every word (pdftotext) and showed an empty second column. `multicol_boxes.rs::the_text_of_every_column_is_painted_above_the_frames` counts dark pixels per column (0 with the first-fragment build, 28 331 now); fork `26137aa7`.
+- Tagged PDFs: the paragraphs of a card of `<p>` are marked content (`render_smoke`), the text of a `<div>` source is not tagged, multicol or not (F200: a plain `<div>hello</div>` has one text-show operator outside any BDC on this fork too), so the smoke test asserts that for paragraphs only.
+- Not done on purpose (as §6): boxes shorter than a page are not entered; table inside the card (F174c); spanners (F173(f)); `orphans` / `widows`.
+
+### Results
+
+Step-1 numbers against the fork `26137aa7` (binary `htmltopdf-f198-t2`), words per page, Chrome in brackets:
+
+| Shape | Pages | Words per page |
+|---|---|---|
+| A card of text | 4 (4) | 689 / 714 / 718 / 379 (690 / 716 / 719 / 375); AFTER 458.2 pt (445.8) |
+| B plain div | 4 (4) | 742 / 800 / 802 / 156 (742 / 801 / 803 / 154), AFTER 205.9 (205.8) |
+| C card of `<p>` | 4 (4) | 684 / 704 / 713 / 399 (689 / 705 / 713 / 393), AFTER 470.6 (470.6) |
+| D three columns | 5 (5) | 541 / 544 / 585 / 572 / 258 (541 / 545 / 591 / 572 / 251), AFTER 407.6 (407.6) |
+| E `column-fill: auto` | 5 (5) | 689 / 714 / 718 / 379 / 0 (690 / 716 / 719 / 375 / 0); page 4 columns 357 / 22 (359 / 16) |
+| F padded `<p>` | 4 (4) | 689 / 714 / 718 / 379, text at y 54.8 pt (55.1) |
+
+The column breaks are within one line of Chrome's everywhere; A's last page puts one more line in column 1 than Chrome (the balance of 25 + 23 lines against 24 + 24 differs by 0.2 px: 420.0 against 420.2 px), so `AFTER` is one line (12.4 pt) lower. G guards: unchanged numbers (G1 to G5 identical to main's, G6 112 words, the same).
+
+Fixture 30: 2 pages (Chrome 2), 936 of 936 words (main 338, its last line 33 pt below the content box, column 2 empty), compare 9.6 / 6.4 %, threshold 10.7 % (`0.107`). The side-by-side PNGs show the card's top border and radius in column 1 of page 1 only, side borders and background down to the page bottom in both columns of page 1, no border or padding at the top of column 2 and of page 2, the bottom border and radius at the end of column 2 of page 2, the signature below it; the clauses break where Chrome's do (diff: the text drift every fixture has).
+
+Gates: see the report; byte identity of fixtures 01 to 29 and the corpus at 1 and 4 threads, the F193 sweep (48 files), fork VRT (35 of 64 differ, the same 35 with identical diff images as before), `bench.py --check` ok (slow-multicol 2195 ms against 2159 ms on main, a single `<p>`: no box path), `b200-items` 1294 ms is over the accepted 1250 ms on this machine as before.
