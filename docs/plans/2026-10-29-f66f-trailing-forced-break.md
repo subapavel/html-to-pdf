@@ -321,4 +321,21 @@ anything. Tests: Blitz `trailing_forced_break_tests` (three new, seven edge styl
 
 ### Gates
 
-Filled in at the end of the run, see the commit message and the PR body.
+| gate | result |
+|---|---|
+| Blitz `cargo test -p blitz-dom --lib` (from the fulgur workspace, forks patched in by `--config`) | 151 passed (147 + 4 new); one run showed `svg_log_tests::a_rejected_inline_svg_is_a_warning` failing on captured debug log lines (the known `log` flake of §7), reruns at 1 and many threads green |
+| Blitz `clippy --all-targets -D warnings`, `cargo fmt --check` | clean |
+| fulgur `cargo test -p fulgur --lib` | 2421 passed |
+| fulgur integration binaries (43), one at a time, executable deleted after each (disk) | all ok |
+| html-to-pdf `cargo test --release --locked` (77 test binaries) | 886 passed, 0 failed |
+| html-to-pdf `cargo fmt --check`, `cargo clippy --release --locked --workspace --all-targets -- -D warnings` | clean |
+| `Cargo.lock` | the two Blitz lines only (`3dadc1b1` -> `67e6be6f`) |
+| byte gate, fixtures 01-33 + 7 corpus (40 files), 1 and 4 threads, `out/scratch/f66fv2/gate.sh` | 1 and 4 threads identical; against main only fixture 33 differs (as in round 1); identical to the round-1 build, so fixtures 01-32 and the corpus are byte-identical to main |
+| `render-fixtures.sh` + `compare.py` | all 33 ok; fixture 33 3.8 % (threshold 5 % as printed, 4.8 % in the file), every other number equal to main's; side-by-side looked at |
+| fulgur-vrt | not rerun (35 of 64 differ on this host as on the base, §7; the change is in Blitz text layout only and moves no fixture or corpus byte) |
+
+### Not verified
+
+- `parallel-construct` feature of Blitz not rerun for this change; the new op is read in the serial part of `build_inline_layout_into`.
+- `dir="rtl"` attribute (Blitz ignores it), vertical writing modes, float / abspos after the break (above).
+- Chrome only at A4 / Inter 14 px / 20 px line height; no measurement in a multi-column box or a table cell for the new shapes (the takeback is the same function there).
