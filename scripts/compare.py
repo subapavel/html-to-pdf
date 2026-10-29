@@ -222,8 +222,8 @@ THRESHOLDS = {
     "31-terms-clip-card-columns": 0.107,
     # 32: new in F30f-h (a one-page Czech invoice whose note is the direct text of a bordered, padded, `bg-gray-50 rounded-lg p-4
     #     mb-6` card, nine lines, followed by the payment block; 1 page like Chrome's). 3.8 %: the text drift every fixture has
-    #     (the card and the block below it are at Chrome's y: heading at 608 px both). On main's binary the block started at the
-    #     end of the card's lines, over its bottom border and last line, 5.0 %. Worst page + 1 point.
+    #     (the card and the block below it are at Chrome's y: heading at 526.6 pt, Chrome 526.8). On main's binary the block started at the
+    #     end of the card's lines, over its bottom border and last line (501.1 pt), 5.0 %. Worst page + 1 point.
     "32-note-card": 0.048,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the

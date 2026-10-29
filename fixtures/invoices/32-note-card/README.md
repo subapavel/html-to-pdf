@@ -13,12 +13,12 @@ break): an ERP template that pours a note into a bordered `<div>` (F30f-h).
 
 Exercises:
 - CSS 2.1 §10.6.3 / §8.1: the card's box is as tall as its lines **plus the padding and border below them**, so "Platební údaje"
-  starts below the card's bottom border, with the card's `mb-6` between (Chrome: heading at 608 px).
+  starts below the card's bottom border, with the card's `mb-6` between (Chrome: heading at 526.8 pt).
 - 1 page like Chrome's.
 
-**On main's binary:** the line path placed what follows at the end of the card's lines, 32 px (padding 16 + border 1, doubled
-by the top and bottom insets) too high: the heading "PLATEBNÍ ÚDAJE" was printed over the card's bottom border and its last line,
-and the bullets followed 28 px too high (5.0 % against 3.8 % now; the rest is the text drift every fixture has).
+**On main's binary:** the line path placed what follows at the end of the card's lines, 34 px (25.5 pt: border 1 + padding 16, top and
+bottom) too high: the heading "PLATEBNÍ ÚDAJE" was at 501.1 pt, printed over the card's bottom border and last line (Chrome 526.8 pt,
+now 526.6 pt), and the bullets followed as much too high. 5.0 % on main against 3.8 % now; the rest is the text drift every fixture has.
 
 The tests are in `crates/htmltopdf/tests/padded_paragraph_fit.rs`. Every class is in the compiled `fixtures/tailwind/tailwind.css`.
 Plan: `docs/plans/2026-10-29-f30f-h-padded-paragraph-fit.md`.
