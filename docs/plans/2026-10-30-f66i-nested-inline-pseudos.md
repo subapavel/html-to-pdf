@@ -130,4 +130,54 @@ Check the glyphs: `strict_fonts` fails on a glyph Inter lacks; replace that glyp
 
 ## 8. Evidence
 
-(Filled in by the implementer: Chrome measurements, results table, gates.)
+### What was built
+
+- Blitz fork `htmltopdf/blitz-dom-0.2.4`: red tests `9287c156` (`nested_inline_pseudo_tests` in `layout/construct.rs`, three red), fix `3cea708f` (head). `inline_walk_descends(node)` (an inline-level `flow` element that is not an atomic
+  inline and not `<br>`, or `display: contents`) replaces the parent-display test in `flush_inline_pseudos_recursive`; `is_atomic_inline_tag` replaces the two copies of the tag list in the walks. The walks' behaviour is unchanged. No
+  fallback to the old parent clause was needed: the byte gate did not move.
+- html-to-pdf: red tests and fixture 35 with its Chrome reference `b52ac21`; `Cargo.lock` (the two Blitz lines, `ba908646` -> `3cea708f`), tests green, `compare.py` threshold for 35 in the next commit.
+- Deviations from §5 found by the Chrome measurements (step 1): (1) padding and borders of inline elements (and of pseudo-elements) move no text in ours at depth 1 either (F208), so the padding / border variants of test 5 assert the text and
+  oracle (b) only, and use pseudo-elements with text (`content:'p'`); the empty padded pseudo-element makes no box in Blitz at any depth (F66l). (2) An inline-block root sits 3.5 pt low in ours at depth 1 (`t3_ib_d1`), so test 3 asserts oracle (b) and Chrome's x for it.
+  (3) `counter()` as the only item of `content` prints at depth 1 (`g_cn_d1` equals Chrome), so test 9's counter case is red before the fix, not green; `attr()` and `<q>` are empty at every depth (F204). (4) F66j's ninth shape, `p2_Apl_tp`, stays open (below).
+  (5) The fixture leaves `tabular-nums` out of the amount cells: ours ignores `font-variant-numeric` (F207), which put every "Kč" 1.2 pt off for a reason outside this finding. The Kč x is checked within 2 pt, and its distance to its number within 1 pt.
+
+### Chrome m141 against ours (A4, 15 mm, Inter 14 px / 20 px, `out/scratch/f66i/{gen.py,run1.py,cmpr.py}`, 151 shapes, x of each word, within 1 pt; the 0.2 pt offset every Chrome number has is inside it)
+
+| shape (words and x in pt) | Chrome | main (`ba908646`) | now |
+|---|---|---|---|
+| `<div><span>a <span class=t></span> w</span></div>`, `::before "tx"` | `a` 42.7, `tx` 51.6, `w` 63.7 | `a` `w` (w at 51.4) | `a` 42.5, `tx` 51.4, `w` 63.5 |
+| `::before` / `::after` / both, empty host or host `h`, depth 2-4 | `B1` 51.6 / `A1` 51.6 / `B1A1` 51.6 (`w` 65.7 / 65.7 / 76.9); with `h`: `B1h` (`w` 71.9), `hA1` (71.9), `B1hA1` (83.1) | pseudo lost, `w` 51.4 / 60.5 | all equal Chrome and depth 1 within 0.01 pt (36 of 36) |
+| roots `div`, `p`, `td`, `li`, flex item, grid item, inside an `inline-block`, depth 2-3 | as above | lost | equal (the inline-block root only against its own depth 1: y 47.3, Chrome 43.8, F183b) |
+| `a`, `label`, `span` around the host; `b`, `strong`, `em` (no bold / italic face in the test: equal to depth 1); hosts that are `a b strong em label i` | `B1hA1` 51.6, `w` 83.1 | lost | equal |
+| `label span::after{content:'*'}`; `label > span.req > span::after` | `Jméno` 42.7, `*` 79.5, `w` 87.7; `Jméno*` 42.7, `next` 84.8 | `*` lost | equal |
+| `td > span > span.amount::after{content:' Kč'}`, depth 1-3 | `1` 209.9, `250,00` 217.2, `Kč` 255.1 | depth 2-3: `Kč` lost, number 15 pt too far right | equal at all depths |
+| `content:''; display:inline-block; width:6px` at depth 2-3 | `w` 59.1 | `w` 51.4 | 59.1 |
+| `content:"Pred "` at depth 2-3 | `Pred` 51.6, `x` 77.6, `w` 86.3 | `x` 51.4, `Pred` lost | equal |
+| F66j `ps_before_after_br`, `ps_after_after_br`, `ps_before_border_after_br`, `p2_Apl_{t,t2,tb,te,tl}`: AFTER | 73.8 | 58.6 | 73.6 (and `tx` / `ty` at 58.6, Chrome 58.8) |
+| F66j `p2_Apl_tp`: AFTER | 73.8 | 58.6 | 58.6 (stays open) |
+| fixture 35: `Uhrazeno`, `2026*`, `„převodem`, `dnů“`, `→`, five `Kč` | 78.9, 214.0, 123.8, 277.1, 207.2, 540.9 (536.4 for the total) | none of the generated text; `Uhrazeno` 70.4 | 78.6, 213.8, 123.6, 276.9, 207.0, 539.6 (535.4): each 0.2 pt (the Chrome offset) except `Kč` 1.2 (table columns, below) |
+
+Equal at depth 1 and depth 2, so not caused by nesting (filed): `attr()` and `<q>` empty (F204), abspos pseudo not printed (Chrome `ab`), `display: block` and float pseudo not split around (F206), padded pseudo-element moves no text (F208).
+
+### Gates
+
+| gate | result |
+|---|---|
+| Blitz `cargo test -p blitz-dom --lib` (fulgur workspace, `--config` patches, local path for blitz) | 161 passed with `--test-threads=1` (156 + 5 new); at default threads `svg_log_tests::a_rejected_inline_svg_is_a_warning` fails on captured log lines (the known `log` flake of F66f §7) |
+| Blitz `clippy --all-targets -D warnings`, `cargo fmt --check` | clean |
+| byte gate, fixtures 01-34 and the 7 corpus documents (41 files), 1 and 4 rayon threads (`out/scratch/f30fl/gate.sh`) | main (`htmltopdf-main-f30fl`) and this build identical for all 41; 35 differs (new); 1 and 4 threads identical for both builds |
+| F66f / F66i batches against Chrome (`out/scratch/f66i/batch6.py`: the `f66fv2` n, p, r1/*, `f66fv4` c, c2, c3, c4, c7, c8, `f66fv5` s, s2) | 1531 documents: 1516 byte-identical, 15 changed, 11 closer to Chrome (3 `ps_*`, `p2_A_t`, `p2_A_t2`, `p2_Apl_{t,t2,tb,te,tl}`, `nobr_nested`), 4 further: `p2_A_{ta,td,tn,tp}`, all F66j's remainder and F206 (above) |
+| fulgur `cargo test -p fulgur --lib`, `--test render_smoke` (fulgur not changed; Blitz head via `--config` git patches; `Cargo.lock` of fulgur restored) | 2427 passed; 328 passed |
+| fork `fulgur-vrt` (not re-blessed): `.actual.pdf` of the 35 fixtures that differ from their goldens on this host (host fonts, as on the base), Blitz `ba908646` against `3cea708f` | 35 and 35 files, byte-identical (`diff -rq`) |
+| html-to-pdf `cargo fmt --check`, `cargo clippy --release --locked --workspace --all-targets -- -D warnings` | clean (clippy `type_complexity` in the new test file fixed with two type aliases) |
+| html-to-pdf `cargo test --release --locked` | 79 binaries, 907 passed, 0 failed (`nested_pseudos` 10, `fixtures` 15) |
+| `Cargo.lock` | the two Blitz lines only (`ba908646` -> `3cea708f`) |
+| `render-fixtures.sh` + `compare.py` | all 35 ok; 01-34 unchanged (byte-identical files); 35 2.7 % (main's binary 2.9 %: the generated content is a few words), threshold 3.7 % in `compare.py`; side-by-side looked at: dot, "Kč" in the right-aligned column, `*`, quotes and arrow as in Chrome |
+| `bench.py --check` | ok; b200-text 792 ms, b200-mixed 906 ms; b200-items 1381 ms (the host's figure for main too, accepted-exception line "NOT met on this machine"); output byte-identical to main, so the extra tree walk is the only cost and not visible |
+
+### Not verified
+
+- `vrt-validator` was not run by this implementer (no subagent tool in this session): the coordinator should run it on the branch before merging (merge policy item 2).
+- `parallel-construct` feature of Blitz not run; the new predicate reads only `display` and the tag, immutable during construction, and the flush stays serial.
+- Chrome at other fonts or line heights, `dir=rtl`, vertical writing modes, multi-column and fixed-layout table contexts for the new shapes; the tagged-PDF test checks `qpdf --check` and the text layer, not the structure tree of the new text.
+- `content: url()` on a nested inline (F205), `attr()` and quotes (F204) beyond what is stated above.

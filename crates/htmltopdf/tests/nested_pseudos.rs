@@ -191,6 +191,12 @@ fn assert_same_layout(what: &str, got: &[Word], reference: &[Word]) {
     }
 }
 
+/// A case of `before_and_after_at_depth_two_to_four`: class, host text, Chrome's three words with their x.
+type DepthCase = (&'static str, &'static str, [(&'static str, f32); 3]);
+
+/// A root of a line layout: name, wrapper, whether our depth 1 is Chrome's.
+type Root = (&'static str, fn(&str) -> String, bool);
+
 const AFTER: Expect = ("AFTER", Some(42.7), 58.8);
 const AFTER_P: &str = "<p>AFTER</p>";
 
@@ -228,7 +234,7 @@ fn the_pseudo_of_a_nested_span_is_printed() {
 #[test]
 fn before_and_after_at_depth_two_to_four() {
     // (class, host text, Chrome words)
-    let cases: [(&str, &str, [(&str, f32); 3]); 6] = [
+    let cases: [DepthCase; 6] = [
         ("b", "", [("a", 42.7), ("B1", 51.6), ("w", 65.7)]),
         ("a", "", [("a", 42.7), ("A1", 51.6), ("w", 65.7)]),
         ("ab", "", [("a", 42.7), ("B1A1", 51.6), ("w", 76.9)]),
@@ -250,7 +256,7 @@ fn before_and_after_at_depth_two_to_four() {
 }
 
 /// The roots of a line layout: each wraps `inner`.
-fn roots() -> Vec<(&'static str, fn(&str) -> String, bool)> {
+fn roots() -> Vec<Root> {
     fn div(s: &str) -> String {
         format!("<div>{s}</div>")
     }
