@@ -583,3 +583,206 @@ fn an_open_box_with_an_end_edge_keeps_the_line_when_a_box_starts_after_the_br() 
         58.8,
     );
 }
+
+#[test]
+fn a_box_with_a_block_or_a_float_in_it_and_an_end_edge_keeps_its_line() {
+    // Validator round 3 (out/scratch/f66fv4/c4, c, out/scratch/f66fv5/s, s2): Chrome splits an inline box around a block, and
+    // the part after the block has the end edge, so it is a line of its own: `<span pr>a<br><div>blk</div></span>` is a, blk
+    // and that line (88.8). A float stays in the line after the break, which the end edge makes non-empty (73.8). Blitz lays
+    // such a span out as a block, so the takeback removed the line (main kept it by accident, 15 pt more than the takeback).
+    const PR: &str = "padding-right:4px";
+    const PL: &str = "padding-left:4px";
+    const FL: &str = "<span style=\"float:left\"></span>";
+    let cases: Vec<(&str, String, f32)> = vec![
+        (
+            "block",
+            format!("<span style=\"{PR}\">a<br><div>blk</div></span>"),
+            88.8,
+        ),
+        (
+            "empty block",
+            format!("<span style=\"{PR}\">a<br><div></div></span>"),
+            73.8,
+        ),
+        (
+            "heading",
+            format!(
+                "<span style=\"{PR}\">a<br><h2 style=\"margin:0;font-size:14px\">blk</h2></span>"
+            ),
+            88.8,
+        ),
+        (
+            "list",
+            format!("<span style=\"{PR}\">a<br><ul><li>blk</li></ul></span>"),
+            88.8,
+        ),
+        (
+            "flex",
+            format!(
+                "<span style=\"{PR}\">a<br><div style=\"display:flex\"><div>blk</div></div></span>"
+            ),
+            88.8,
+        ),
+        (
+            "display:block span",
+            format!("<span style=\"{PR}\">a<br><span style=\"display:block\">blk</span></span>"),
+            88.8,
+        ),
+        (
+            "two blocks",
+            format!("<span style=\"{PR}\">a<br><div>blk</div><div>b2</div></span>"),
+            103.8,
+        ),
+        (
+            "white space and a comment after the block",
+            format!("<span style=\"{PR}\">a<br><div>blk</div> <!-- c --> </span>"),
+            88.8,
+        ),
+        (
+            "text after the block carries the edge",
+            format!("<span style=\"{PR}\">a<br><div>blk</div>w1</span>"),
+            88.8,
+        ),
+        (
+            "inner box without an edge",
+            format!("<span style=\"{PR}\"><span>a<br><div>blk</div></span></span>"),
+            88.8,
+        ),
+        (
+            "rtl, the edge is on the left",
+            "<span style=\"direction:rtl;padding-left:4px\">a<br><div>blk</div></span>".to_string(),
+            88.8,
+        ),
+        (
+            "break in the part after the block, a box after it",
+            format!("<span style=\"{PR}\"><div>blk</div>a<br><span></span></span>"),
+            88.8,
+        ),
+        (
+            "the start edge opens a line before the block",
+            format!("<span style=\"{PL}\"><div>blk</div>a<br></span>"),
+            88.8,
+        ),
+        (
+            "float",
+            format!("<span style=\"{PR}\">a<br>{FL}</span>"),
+            73.8,
+        ),
+        (
+            "float with a border-right",
+            format!("<span style=\"border-right:1px solid\">a<br>{FL}</span>"),
+            73.8,
+        ),
+        (
+            "float div",
+            format!("<span style=\"{PR}\">a<br><div style=\"float:left\"></div></span>"),
+            73.8,
+        ),
+        (
+            "float after a block",
+            format!("<span style=\"{PR}\">a<br><div>blk</div>{FL}</span>"),
+            88.8,
+        ),
+        (
+            "float after the inner box that holds the break",
+            format!("<span style=\"{PR}\"><span>a<br></span>{FL}</span>"),
+            73.8,
+        ),
+        // Guards, Chrome 58.8 / 73.8 / 88.8 and right before the change: no end edge, or nothing that makes a line of it.
+        (
+            "no edge, block",
+            "<span>a<br><div>blk</div></span>".to_string(),
+            73.8,
+        ),
+        (
+            "start edge only, block",
+            format!("<span style=\"{PL}\">a<br><div>blk</div></span>"),
+            73.8,
+        ),
+        (
+            "block first, end edge, the break ends the line",
+            format!("<span style=\"{PR}\"><div>blk</div>a<br></span>"),
+            73.8,
+        ),
+        ("no edge, float", format!("<span>a<br>{FL}</span>"), 58.8),
+        (
+            "start edge only, float",
+            format!("<span style=\"{PL}\">a<br>{FL}</span>"),
+            58.8,
+        ),
+        (
+            "float before the text, start edge",
+            format!("<span style=\"{PL}\">{FL}a<br></span>"),
+            58.8,
+        ),
+        (
+            "float after the closed box",
+            format!("<span style=\"{PR}\">a<br></span>{FL}"),
+            58.8,
+        ),
+        ("no span, float", format!("a<br>{FL}"), 58.8),
+    ];
+    for (what, inner, chrome_y) in cases {
+        assert_after_at(what, &format!("<div>{inner}</div><p>AFTER</p>"), chrome_y);
+    }
+}
+
+#[test]
+fn a_form_control_or_a_box_with_a_height_of_its_own_after_the_br_keeps_the_line() {
+    // Chrome: `<select>`, `<meter>` and `<progress>` are atomic inlines, an empty `<details>` shows its default summary and
+    // an empty `display:list-item` with a marker has a line for it, so the line after the br is not empty (73.8). Blitz
+    // lays none of them out with a height. Guards: no marker, content of its own, a plain block (58.8 / 73.8).
+    let cases: Vec<(&str, &str, f32)> = vec![
+        ("select", "a<br><select></select>", 73.8),
+        ("meter", "a<br><meter></meter>", 73.8),
+        ("progress", "a<br><progress></progress>", 73.8),
+        (
+            "select in a padded span",
+            "<span style=\"padding-left:4px\">a<br><select></select></span>",
+            73.8,
+        ),
+        (
+            "select after the closed span",
+            "<span style=\"padding-right:4px\">a<br></span><select></select>",
+            73.8,
+        ),
+        ("details", "a<br><details></details>", 73.8),
+        (
+            "details in a padded span",
+            "<span style=\"padding-left:4px\">a<br><details></details></span>",
+            73.8,
+        ),
+        (
+            "details with a summary",
+            "a<br><details><summary>s</summary></details>",
+            73.8,
+        ),
+        (
+            "list item",
+            "a<br><span style=\"display:list-item\"></span>",
+            73.8,
+        ),
+        ("li", "a<br><li></li>", 73.8),
+        (
+            "list item with text",
+            "a<br><span style=\"display:list-item\">t</span>",
+            73.8,
+        ),
+        (
+            "list item without a marker",
+            "a<br><span style=\"display:list-item;list-style:none\"></span>",
+            58.8,
+        ),
+        ("empty block", "a<br><div></div>", 58.8),
+        ("details before the text", "<details></details>a<br>", 73.8),
+        (
+            "details after a block",
+            "a<br><div>blk</div><details></details>",
+            88.8,
+        ),
+        ("select and text after", "a<br><select></select>w1", 73.8),
+    ];
+    for (what, inner, chrome_y) in cases {
+        assert_after_at(what, &format!("<div>{inner}</div><p>AFTER</p>"), chrome_y);
+    }
+}
