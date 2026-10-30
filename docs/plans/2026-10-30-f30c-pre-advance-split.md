@@ -175,4 +175,48 @@ Czech invoice. Page 1: header, party grid and an items table as in 32, sized so 
 
 ## 8. Evidence
 
-(filled in at implementation)
+### 8.1 Chrome measurements (step 1, 2026-10-30)
+
+Chrome m141, `out/scratch/f30c/{gen,sum}.py` (52 cases in `out/scratch/f30c/c/`, Chrome numbers in `chrome.txt`, ours at `5ec1ac67` in
+`main.txt`). Lines per page, `AFTER` page and y; A4, 15 mm, `14px/21px`, `p{margin:0}`.
+
+| case | Chrome | ours at `5ec1ac67` |
+|---|---|---|
+| `two_49_47` ... `two_50_60` (10 cases) | the table of §1, every number confirmed | as §1 |
+| 30-line `<p>` after H = 650 | 17 / 13, AFTER p2 249.3 | 0 / 30, 516.8 |
+| ... H = 966 / 967 / 968 | 2 / 28, 485.6 (all three) | 0 / 30 |
+| ... H = 969 / 970 / 975 / 980 | 0 / 30, 517.1 | 0 / 30 |
+| 4-line after H = 945 (3 lines of room) | 2 / 2, AFTER p2 76.1 | 0 / 4 |
+| 30-line after H = 945 | 3 / 27, 469.8 | 0 / 30 |
+| 60-line `auto` after H = 300 | 33 / 27, 469.8 | 0 / 48 / 12 |
+| 60-line `avoid` after H = 300 | 0 / 48 / 12, 233.6 | 0 / 48 / 12 |
+| default `h1` + 46-line `<p>` | 44 / 2 (Title p1 51.7), 76.1 | Title alone, 0 / 46 |
+| default `h1` + 48-line `<p>` | 45 / 3, 91.8 | Title alone, 0 / 48 / 0 |
+| 600 words after H = 650 | 232 / 368 words, 501.3 | 0 / 600 |
+| 100 words after H = 960, `auto` | 27 / 73 words (two lines) | 0 / 100 |
+| same, `avoid` | 0 / 100 | 0 / 100 |
+| padded `<p>` (8 px + border) 30 lines after H = 650 | 16 / 14, 271.8 | 16 / 14, 271.6 (F30f-d path, already right) |
+| floated `<p>` 30 lines after H = 650 | 17 / 13, 249.3 | 0 / 30 |
+| 1500 words in a `<div>` after a 700 px grey block (`14px/1.2`) | 245 / 797 / 458 words, AFTER p3 445.8 | 0 / 801 / 699, 672.8 |
+| 3-line `<p>` after H = 950 / 966 (two lines of room) | **2 / 1**, AFTER p2 60.3 | 0 / 3 |
+
+Heading probe (`h2` `18px/27px`, `margin:0`, then a 30-line `<p>`, room below the heading for 0 / 1 / 2 / 3 lines): Chrome leaves
+the heading alone at the bottom of page 1 when 0 or 1 line fits (`0 / 30`), and starts the paragraph below it when 2 or 3 fit
+(2 / 28, 3 / 27). **Chrome does not keep a heading with its lines** (no `break-after: avoid` in its UA sheet for `h1`-`h6`
+in print); nothing to file for headings, and "an `h1` followed by a 420-word `<p>` leaves page 1 with only the heading" is only the
+pre-advance.
+
+Contradictions with the plan, and what was done:
+- **A 3-line paragraph with two lines of room splits 2 / 1 in Chrome** (§2 says it has no allowed break and moves whole). Chrome
+  keeps `orphans` as a hard rule and gives up `widows` when the paragraph is too short for both. Matching it needs a relaxation in
+  `fragment_inline_root` (take the natural break at `i` when `widow_safe_break` finds none and `first_size >= ORPHANS`), which also
+  changes later strips and is not what this plan scopes. The guard test pins ours (0 / 3, moves whole) with Chrome's number in the
+  comment; filed as **F30c-w**.
+- **A floated `<p>` splits in Chrome (17 / 13)**; ours moves it whole and stays so (`start_here` excludes floats). Pinned; filed
+  as **F30c-f**.
+- Test 2's "H = 975 gives 0 / 30" and "H = 966 gives 2 / 28" hold. At H = 969 ... 980 Chrome also moves whole.
+- The 420-word `h1` case fits one page in this font setup (`h1_420w`: 420 words on page 1), so test 3 uses a 46-line paragraph.
+- Test 4 is 232 / 368 here (the finding's 245 / 355 came from another font size); the test allows one line (14 words).
+- Test 5: Chrome's `auto` puts 27 words (two lines) on page 1; `avoid` 0.
+- The `unpadded_700` case becomes 245 / 797 / 458 words and `AFTER` on page 3 at 445.8 pt.
+
