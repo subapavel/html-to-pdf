@@ -7,11 +7,12 @@
 //! (cascade layers: a later layer beats an earlier one, unlayered styles beat every layer, `@layer a { @layer b }` ranks
 //! `b` below the rest of `a`). Media Queries 4 §2.2 and Conditional 3 §5 for `@media print`.
 //!
-//! Which element shows `break-inside: avoid`: a body-level `<p>` does not. A body-level paragraph that does not fit
-//! below the cursor moves to the next page whether or not it is `avoid` (the pre-advance in the fork's line path, F30c),
-//! so the property cannot be seen on it. A multi-column container taller than the room under it is the box where the
-//! two differ (F30d): `auto` splits it over the pages, `avoid` moves it whole to the next page, and Chrome does the same
-//! (probes in the F87 plan §7).
+//! Which element shows `break-inside: avoid`: a body-level `<p>` since F30c (before it, a body-level paragraph that did
+//! not fit below the cursor moved to the next page whether or not it was `avoid`, so the property could not be seen on it;
+//! `pre_advance_split.rs` has the paragraph case: `auto` starts on page 1, `avoid` and `class="break-inside-avoid"` do
+//! not). A multi-column container taller than the room under it is the other box where the two differ (F30d): `auto`
+//! splits it over the pages, `avoid` moves it whole to the next page, and Chrome does the same (probes in the F87 plan §7);
+//! the tests below use it.
 //!
 //! `TAILWIND_EXTRA` is Tailwind v4's own shape for utilities the committed `fixtures/tailwind/tailwind.css` does not
 //! contain (`break-before-page`, `break-after-page`, `break-inside-auto`, `print:break-before-page`, and the `!` modifier `break-inside-auto!`). It is written inline
@@ -133,6 +134,33 @@ fn control_a_two_column_box_splits_without_avoid_and_moves_whole_with_it() {
     assert_eq!(page_of(&inline, "word00099"), 2);
     let sheet = render(".k{break-inside:avoid}", &box_after_spacer("k", ""));
     assert_eq!(page_of(&sheet, "word00000"), 2, "unlayered rule: whole");
+}
+
+/// F30c: the same on a body-level `<p>` (100 words after the spacer, `margin:0`, two lines of 20 px of room). Chrome: `auto`
+/// puts 14 words on page 1 (the first line, the second starts at the 14th word), `avoid` and `class="break-inside-avoid"`
+/// move the paragraph whole (0 / 100). Before F30c both moved whole, so the property made no difference.
+#[test]
+fn a_body_level_paragraph_shows_break_inside_avoid() {
+    let case = |attrs: &str| {
+        render(
+            "",
+            &format!(r#"{SPACER}<p {attrs} style="margin:0">{}</p>"#, words(100)),
+        )
+    };
+    let auto = case("");
+    assert_eq!(page_of(&auto, "word00000"), 1, "auto: starts on page 1");
+    assert_eq!(page_of(&auto, "word00099"), 2);
+    let inline = render(
+        "",
+        &format!(
+            r#"{SPACER}<p style="margin:0;break-inside:avoid">{}</p>"#,
+            words(100)
+        ),
+    );
+    assert_eq!(page_of(&inline, "word00000"), 2, "inline avoid: whole");
+    let class = case(r#"class="break-inside-avoid""#);
+    assert_eq!(page_of(&class, "word00000"), 2, "class: whole");
+    assert_eq!(page_of(&class, "word00099"), 2);
 }
 
 // -- the finding --------------------------------------------------------------------------------

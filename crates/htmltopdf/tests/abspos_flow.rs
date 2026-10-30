@@ -321,7 +321,8 @@ fn an_abspos_wrapper_in_a_static_div_or_in_a_relative_div_keeps_every_word() {
 #[test]
 fn an_abspos_wrapper_of_ten_paragraphs_is_fragmented_from_its_start() {
     // Ten paragraphs of 300 words with a 20 px gap. 1821 of 3000 words printed; Chrome: 9 pages. Short paragraphs
-    // that fit a page move whole in the normal flow (F30c), so the page count may be a little higher.
+    // that fit a page move whole inside the wrapper (the nested half of F30c, F30c-n; the body-level half was fixed by
+    // F30c and does not change this case: 10 pages before and after), so the page count may be a little higher.
     let paragraphs: String = (0..10)
         .map(|i| {
             format!(
@@ -337,7 +338,7 @@ fn an_abspos_wrapper_of_ten_paragraphs_is_fragmented_from_its_start() {
     let pages = page_count(&pdf);
     assert!(
         (9..=11).contains(&pages),
-        "{pages} pages, Chrome 9 (+2 for F30c)"
+        "{pages} pages, Chrome 9 (+2 for F30c-n)"
     );
 }
 

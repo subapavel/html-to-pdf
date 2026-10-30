@@ -216,10 +216,15 @@ fn a_paragraph_taller_than_a_page_after_content_starts_on_the_next_page() {
     );
     let pdf = render(&avoid);
     assert_eq!(page_of(&pdf, "word00000"), 2, "starts on page 2");
+    // F30c: an `auto` paragraph after `before` starts below it on page 1 (Chrome 6 pages, ours 7), so the relaxed `avoid`
+    // one no longer pages like it. It pages like the same paragraph on a fresh page (Chrome 7 pages for both, ours 8).
     assert_pages_like_auto(
         "p + p{avoid}, 2500 words",
         &avoid,
-        &format!("<p>before</p><p>{}</p>", words(0, 2500)),
+        &format!(
+            "<p>before</p><p style=\"break-before:page\">{}</p>",
+            words(0, 2500)
+        ),
         2500,
     );
 }

@@ -522,22 +522,33 @@ fn a_padded_paragraph_with_break_inside_avoid_is_laid_out_as_before() {
     );
 }
 
+/// F30c: an unpadded body-level paragraph that starts mid-page and does not fit starts where its first lines fit. Chrome
+/// (m141, `out/scratch/f30c/c/unpadded_700.html`): 245 / 797 / 458 words, `AFTER` on page 3 at 445.8 pt. It used to move
+/// whole to page 2 (0 / 801 / 699, `AFTER` at 672.8 pt). Page 2 holds 783 words, one line less than Chrome: the line boxes
+/// the fragmenter measures are the glyph boxes (18 px for 16.8 px lines, `l77.bottom - l18.top` = 1010 px), so 60 lines do
+/// not fit a fragment that starts at line 18 (F30f-j; a paragraph that starts a page fits them).
 #[test]
-fn an_unpadded_paragraph_keeps_its_page_break_rule() {
-    // F30c: an unpadded body-level paragraph that starts mid-page and does not fit is not routed through the new path.
+fn an_unpadded_paragraph_starts_where_its_first_lines_fit() {
     let pdf = render(&format!(
         "<div style=\"height:700px;background:#eee\"></div><div>{}</div><p>AFTER</p>",
         words(1500)
     ));
     let got = shape(&pdf);
-    assert_eq!(
-        got,
-        (
-            vec![0, 801, 699],
-            vec![(0.0, 0.0), (42.1, 798.1), (42.1, 672.1)],
-            (3, 672.8)
-        ),
-        "{got:?}"
+    assert_eq!(got.0[0], 245, "page 1 holds 245 words like Chrome: {got:?}");
+    assert_eq!(got.0.iter().sum::<usize>(), 1500, "{got:?}");
+    assert_eq!(got.0.len(), 3, "{got:?}");
+    assert!(
+        got.0[1].abs_diff(797) <= 14,
+        "page 2: {} words, Chrome 797 (one line is 13 to 14 words)",
+        got.0[1]
+    );
+    // The first fragment is below the grey block; the last page holds the rest and `AFTER`, below 458 pt.
+    assert!(got.1[0].0 > 540.0 && got.1[0].1 <= 799.4, "{got:?}");
+    assert_eq!((got.2).0, 3, "{got:?}");
+    assert!(
+        (got.2.1 - 445.8).abs() <= 14.0,
+        "AFTER at {} pt, Chrome 445.8",
+        got.2.1
     );
 }
 
