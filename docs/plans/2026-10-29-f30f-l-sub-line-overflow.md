@@ -123,4 +123,27 @@ Czech invoice. Page 1: header, party grid, items table and payment block as in 3
 
 ## 8. Evidence
 
-(Filled in by the implementer.)
+Implemented 2026-10-30. Fork commit `5ec1ac67` on `subapavel/fulgur` `htmltopdf/srgb-colours` (on top of `aba83f75`), `Cargo.lock` bumped to it. The line numbers of §3 were re-read at `aba83f75`: `fragment_inline_root` is at 8117, the `continue` at 8152, the module constants `ORPHANS` / `WIDOWS` at 6774-6777 (`plan_line_breaks`), so the fix reuses them instead of the function's local `ORPHANS_MIN` / `WIDOWS_MIN` (now aliases).
+
+### 8.1 Step 1: Chrome measurements (m141, `out/scratch/f30fl/{gen,sum}.py`)
+
+All three planned splits are n-2 / 2, so no test was dropped or changed: 49 lines 47 / 2 (`div` and `p`, `AFTER` at 76.1 pt on page 2); 97 lines 48 / 47 / 2 (`AFTER` on page 3 at 76.1 pt); `@page{margin:0}` with 54 lines 52 / 2 (`AFTER` at 33.3 pt; 53 lines of 21 px fit a page, 55 lines are 53 / 2). The 48-line block stays whole (`AFTER` on page 2 at 44.6 pt), 50 and 51 lines split 48 / 2 and 48 / 3, 98 and 99 lines 48 / 48 / 2 and 48 / 48 / 3. A 49-line `div` nested in a `<section>` is 47 / 2 in Chrome and, already on main, in ours (the nested path pulls back), so the guard is green on main. Fixture 34: Chrome page 2 holds 49 lines (title and clauses 1-48, last line 764.5 pt), page 3 clauses 49-50 and the signature (44.5, 59.5, 91.8 pt).
+
+### 8.2 Results
+
+| case | Chrome | main (F66f binary) | now |
+|---|---|---|---|
+| 49 lines, `div` or `p`, then `AFTER` | 47 / 2, `AFTER` 76.1 pt p2 | 49 / 0, `w0048` ends at 813.1 pt (content bottom 799.4), `AFTER` 44.3 pt | 47 / 2, `AFTER` 75.8 pt |
+| 97 lines | 48 / 47 / 2, `AFTER` p3 76.1 | 48 / 49 / 0, `AFTER` p3 44.3 | 48 / 47 / 2, `AFTER` p3 75.8 |
+| margin 0, 54 lines (+ `AFTER`) | 52 / 2 (`AFTER` 33.3) | 53 / 0, `w0053` not in the PDF, `AFTER` 1.8 pt | 52 / 2 (`AFTER` 33.3) |
+| fixture 34, page 2 / 3 | 49 lines / clauses 49-50 + signature | 51 lines (last ends at 805.2 pt) / signature only | 49 / 2 clauses + signature |
+| `b/bigpre_nl2` (150-line `pre` ending in a blank line, F66f round 1) | `AFTER` 73.8 pt, p4 | 73.6 pt before F66f's trailing-break fix, 43.6 pt after | 73.6 pt: **closed by this fix** |
+
+Fixture 34 compare: 3 / 3 pages, 2.4 / 5.2 / 0.3 % (main's binary 2.4 / 5.5 / 0.7 %: almost the same, since the lines are the same text and the drift every fixture has dominates; the split is what `fixtures.rs` checks). Threshold 6.2 % (worst + 1 point). The side-by-side of page 2 and page 3 was looked at: 49 lines on page 2 ending at 764 pt, two clauses and the signature at the top of page 3, like Chrome's; the red diff is the sub-pixel text drift only.
+
+### 8.3 Gates
+
+- Fixtures 01-33: byte-identical to the F66f binary, at 1 and 4 rayon threads. Fixture 34 differs (new). The new binary's PDFs at 1 and 4 threads are identical to each other for every document.
+- Corpus (7 documents): `b200-items`, `b200-mixed`, `slow-avoid`, `slow-breaks`, `slow-multicol`, `slow-paragraph` byte-identical. **`b200-text` moves** (200 pages before and after): 48 of its pages differ, the first at page 16, where the last line of the page stood in the bottom margin (yMin 798.8 pt) and now two lines go to page 17 (62 lines on page 16 instead of 64, 774.8 pt); the shift cascades over the following pages of the same paragraph. Against Chrome's own render of the same document (Chrome prints 200 pages) the summed difference of the lines per page falls from 141 to 21: pages 14-20 are 63 / 47 / 62 / 56 / 61 / 55 / 63 lines in Chrome and now, 63 / 47 / 64 / 62 / 61 / 47 / 63 on main. This is the "may move" case of §5; no speed effect measured (same code path, one extra comparison per widow).
+- Sweep (`out/scratch/f30fl/sweep.py`, 3588 cases: the 3381 of the F66f sweep plus the F66f `w`, `a`, `n`, `v` directories and the new F30f-l cases): 10 changed, none further from Chrome (lines per page closer to Chrome's in all 10; `AFTER` within 1 pt of Chrome in 8 of 8 that have one; page count equal to Chrome's 9 -> 10). Of the original 3381 only three moved, `un_n49`, `un49_nobr`, `un_n49.nobr` (the same 49-line case), 49 / 0 -> 47 / 2 = Chrome's. The rest are the new cases of §5 and `b200-text`.
+- Fork: lib tests 2427 passed (seven new: `fragment_inline_root_pulls_a_line_back_for_a_widow`, `..._on_a_later_page`, `..._below_other_content`, `..._keeps_the_natural_break_when_it_leaves_two_lines`, `..._does_not_pull_below_the_orphans_minimum`, `widow_safe_break_pulls_back_to_leave_the_widows`; four were red with `widow_safe_break` stubbed to `None`, the three guards green), `render_smoke` 328 passed (new `render_smoke_block_one_line_taller_than_its_page_leaves_two_lines_for_the_next`), clippy `--all-targets -D warnings` and `cargo fmt --check` clean.
