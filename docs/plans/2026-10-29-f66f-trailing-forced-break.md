@@ -376,7 +376,7 @@ The kept line is where the break is, not where Chrome has it (after the last blo
 lower than Chrome's, as on main. Making the line after the block needs a line for an empty padded inline, which Blitz does not make anywhere (`<div><span style="padding-right:4px"></span></div>`
 is 0 lines, Chrome 1: F66l), so it is not done here.
 
-Tests first: Blitz `trailing_forced_break_tests` (five new, 156 in all), `crates/htmltopdf/tests/trailing_break.rs` (two new: 28 + 16 Chrome positions, both red before). The refinements after the first
+Tests first: Blitz `trailing_forced_break_tests` (five new, 156 in all), `crates/htmltopdf/tests/trailing_break.rs` (two new tests of Chrome AFTER positions (about 45 shapes), both red before). The refinements after the first
 fix (a float, `details` or `select` with content of its own, and a block that is not anonymous) were found by `out/scratch/f66fv5/s`; their Blitz tests were red before them.
 
 ### Evidence
