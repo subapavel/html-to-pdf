@@ -238,6 +238,12 @@ THRESHOLDS = {
     #     799.4 pt): 2.4 / 5.5 / 0.7 %, which is almost the same number because the lines are the same text; the split, not the
     #     percentage, is what `fixtures.rs` checks. Worst page + 1 point.
     "34-terms-page-widow": 0.062,
+    # 35: new in F66i (a one-page Czech invoice with generated content in inline elements nested in other inline elements: " Kč"
+    #     after five amounts (`td > span.price > span.amount`), a 6 px inline-block dot, `*`, Czech quotes and " →"; 1 page like
+    #     Chrome's). 2.7 %: the text drift every fixture has (the items table's columns are 1.2 pt to 8 pt off Chrome's). On main's
+    #     binary none of the generated content was printed ("Uhrazeno" 8.5 pt too far left, no currency), 2.9 %: the content is a few
+    #     words, so the number barely moves; `fixtures.rs` and `nested_pseudos.rs` check the words. Worst page + 1 point.
+    "35-nested-generated-content": 0.037,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

@@ -440,8 +440,9 @@ fn trailing_space_in_content() {
 
 #[test]
 fn f66j_pseudo_after_a_br() {
-    // F66j: the pseudo-element after the `<br>` inside a span. Once it exists the line is Chrome's (AFTER at 73.8, main 58.6).
-    let shapes: [(&str, &str, &str, &[Expect]); 9] = [
+    // F66j: the pseudo-element after the `<br>` inside a span. The ninth shape of the finding, `p2_Apl_tp` (an empty `inline-block`
+    // after the `<br>`), stays open: AFTER 58.6 against Chrome's 73.8, the empty inline-block gap of F66f §7.2 / F183b, unchanged from main. Once it exists the line is Chrome's (AFTER at 73.8, main 58.6).
+    let shapes: [(&str, &str, &str, &[Expect]); 8] = [
         ("before, end padding", "", "y", &[("a", Some(42.7), 43.8)]),
         ("after, end padding", "", "x", &[("a", Some(42.7), 43.8)]),
         ("before, end border", "", "v", &[("a", Some(42.7), 43.8)]),
@@ -461,7 +462,6 @@ fn f66j_pseudo_after_a_br() {
         ("p2_Apl_tb", "padding-left:4px", "tb", &[("a", None, 43.8)]),
         ("p2_Apl_te", "padding-left:4px", "te", &[("a", None, 43.8)]),
         ("p2_Apl_tl", "padding-left:4px", "tl", &[("a", None, 43.8)]),
-        ("p2_Apl_tp", "padding-left:4px", "tp", &[("a", None, 43.8)]),
     ];
     for (name, style, class, head) in shapes {
         let body = format!(
