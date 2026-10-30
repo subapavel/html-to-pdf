@@ -244,6 +244,12 @@ THRESHOLDS = {
     #     binary none of the generated content was printed ("Uhrazeno" 8.5 pt too far left, no currency), 2.9 %: the content is a few
     #     words, so the number barely moves; `fixtures.rs` and `nested_pseudos.rs` check the words. Worst page + 1 point.
     "35-nested-generated-content": 0.037,
+    # 36: new in F30c (a two-page Czech invoice: twelve items, then `<h2>` and ONE body-level `<p>` of fifty clauses as running text,
+    #     32 lines, that does not fit the 213 pt left on page 1; Chrome starts it below the heading, ten lines on page 1, the rest and
+    #     the signature on page 2; "50." at 278.5 pt, ours the same line). 5.5 / 4.3 %: the text drift every fixture has over two pages of
+    #     small text. On main's binary the heading stood alone at the bottom of page 1 and the whole paragraph moved to page 2
+    #     ("50." at 468.8 pt): 6.8 / 10.1 %, the page-2 number being the text that was a third of a page too low. Worst page + 1 point.
+    "36-terms-after-items": 0.065,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

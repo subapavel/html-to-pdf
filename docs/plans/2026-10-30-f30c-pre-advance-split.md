@@ -220,3 +220,49 @@ Contradictions with the plan, and what was done:
 - Test 5: Chrome's `auto` puts 27 words (two lines) on page 1; `avoid` 0.
 - The `unpadded_700` case becomes 245 / 797 / 458 words and `AFTER` on page 3 at 445.8 pt.
 
+
+### 8.2 Implementation (fulgur `d26eeec2`, ours `e1bff62` and the commit after it)
+
+- **Fix** (`crates/fulgur/src/pagination_layout.rs`, `fragment_pagination_root`, fitting branch of the body-level line path): the
+  pre-advance `if cursor_y > 0.0 && cursor_y + para_total_h > bottom + clip_end_slack` gets `&& !start_here`, with `start_here`
+  exactly as §4 and a new pure helper `starts_in_place(lines, top, bottom)` next to `widow_safe_break`. One deviation from the
+  sketch: the helper takes the paragraph top and the strip bottom instead of `room`, and computes `top + (lines[1].bottom -
+  lines[0].top) <= bottom`, the same operands in the same order as `fragment_inline_root`'s test at its first line that does not
+  fit, so the two cannot disagree by a rounding. Comments updated (the pre-advance, `nested_line_split`, the F30c notes at the old
+  3469 / 7155 / 7687 / 17232; the nested ones now name F30c-n).
+- **Fork tests**: `starts_in_place` unit test (fewer than 4 lines, exact fit, one line, negative room, shifted line origin);
+  through `fragment_pagination_root`: 10 lines after a 100 px spacer 0..5 at y 100 / 5..10; inline images on lines 2 and 7 follow
+  their lines; 20 lines after a 60 px spacer 7 / 10 / 3 (taller than a page); 3-line paragraph and one with a single line of room
+  move whole, 4 lines with room for two split 2 / 2; relaxed `avoid` starts page 1; float moves whole; the F29 test rewritten
+  (125 px spacer: `margin:40px` moves whole, `margin:0` 3 / 2). Red first with the helper stubbed to `false` (6 failed, 3 guards
+  green), then green. One `render_smoke` case. Fork: lib 2434 passed, `render_smoke` 329 passed, clippy `-D warnings` clean, fmt
+  clean.
+- **Ours, red then green**: `pre_advance_split.rs` 8 of 12 red at `5ec1ac67`, 12 / 12 at `d26eeec2`; fixture 36 test red then
+  green; `padded_paragraph_split`, `tailwind_breaks` (plus `a_body_level_paragraph_shows_break_inside_avoid`: Chrome 14 words on
+  page 1 for `auto`, whole for `avoid` and `class="break-inside-avoid"`), `abspos_flow` (comment only: that case is the nested
+  half, 10 pages before and after, Chrome 9) updated.
+- **Byte gate** (`out/scratch/f30c/gate/`, fixtures 01-36 and the 7 corpus documents, 1 and 4 rayon threads, main's binary against
+  ours): fixtures 01-35 and `b200-*`, `slow-multicol`, `slow-breaks`, `slow-avoid` byte-identical; two files differ at both
+  thread counts: fixture 36 (new) and `slow-paragraph`. 1 and 4 threads give the same bytes.
+- **`slow-paragraph`** against a Chrome render (`out/scratch/f30c/slow/`, the stylesheet linked): Chrome 58 pages, lines per page
+  48 on page 1 (595 words, the same as ours), 50 on pages 2-57, 28 on page 58. Ours 58 pages, 48 / 50 x 56 / 31; main 59 pages,
+  8 on page 1 (the header alone) and 21 on the last. The last page has three lines more than Chrome's: the whole document wraps to
+  2879 lines in ours (main too) against Chrome's 2876, a line-width difference, not pagination.
+- **Sweep** (`out/scratch/f30c/sweep.py`: the 3588 cases of the F30f-l sweep, `f30flv/c_*` and the 54 of this plan, 4616 cases, 0
+  failures): 4519 byte-identical, 97 changed; of those, lines per page equal Chrome's in 90 (0 on main), page count equal to
+  Chrome's in 91 (47 on main), none further from Chrome by lines or page count. The seven that still differ: `unpadded_700`
+  (F30f-j: 59 against 60 lines on page 2), `direct_aspect.s700/s880/s960` (an `overflow:hidden` box whose height comes from
+  `aspect-ratio`, F30f-e: Chrome clips at 200 px, ours prints the text in full before and after, now starting on page 1; lines per
+  page closer to Chrome's, 100 -> 78 for `s700`) and `html_body_h.s700/s880/s960` (`body{height:300px;overflow:hidden}`, F122: Chrome
+  prints no text, ours all of it before and after; equal distance).
+- **Links and inline boxes** (`out/scratch/f30c/lk/`): a 30-line paragraph after a 650 px and a 966 px spacer with `<a href>` on
+  lines 5 and 25 and an inline `<svg>` on lines 3 and 21: link rects on the page and line of Chrome's (within 1.8 pt), the red
+  square at the same pixels (y 755-764) on page 1.
+- **Fork `fulgur-vrt`**: 35 of 64 goldens differ on this host (fonts) at `5ec1ac67` and at `d26eeec2`; the 35 `.actual.pdf` are
+  byte-identical between the two. Nothing re-blessed.
+- **Fixture 36**: Chrome and ours break page 1 after "Aktualizace programu jsou součástí roční" and start page 2 at "údržby";
+  `compare.py` 5.5 / 4.3 % (main's binary 6.8 / 10.1 %), threshold 6.5 % (worst + 1 point). Other fixtures' numbers unchanged.
+- **Speed**: `bench.py --check` ok; `b200-items` 1396 ms (main 1366 ms, byte-identical output; the accepted 1250 ms is not met on
+  this host for main either), `b200-text` 888 / 844 ms, `b200-mixed` 956 / 918 ms.
+- **Not done**: `vrt-validator` (the agent has no way to start another agent); the nested half (F30c-n); `orphans` / `widows`
+  properties; Chrome 3-line split (F30c-w); float (F30c-f).
