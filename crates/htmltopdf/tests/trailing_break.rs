@@ -613,7 +613,9 @@ fn a_box_with_a_block_or_a_float_in_it_and_an_end_edge_keeps_its_line() {
         ),
         (
             "list",
-            format!("<span style=\"{PR}\">a<br><ul><li>blk</li></ul></span>"),
+            format!(
+                "<span style=\"{PR}\">a<br><ul style=\"margin:0;padding:0\"><li>blk</li></ul></span>"
+            ),
             88.8,
         ),
         (
