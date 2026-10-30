@@ -231,6 +231,13 @@ THRESHOLDS = {
     #     526.8). On main's binary every block ending in a forced break had an empty line after it: the items table was 15 pt and the
     #     payment block 30 pt too low (556.6 pt), 7.8 %. Worst page + 1 point.
     "33-address-trailing-break": 0.048,
+    # 34: new in F30f-l (a three-page Czech invoice: page 2 is a plain `<div>` of 51 one-line terms, 20 px each, 1020 px, `break-before:
+    #     page`, on a 1009 px content box; Chrome keeps 49 lines on page 2 and puts clauses 49-50 and the signature on page 3). 2.4 /
+    #     5.2 / 0.3 %: the text drift every fixture has over a page of small text (the same 49 / 2 split as Chrome's, "49." at 44.5 pt,
+    #     signature 91.8 pt). On main's binary page 2 held all 51 lines, the last in the bottom margin (805 pt, the content box ends at
+    #     799.4 pt): 2.4 / 5.5 / 0.7 %, which is almost the same number because the lines are the same text; the split, not the
+    #     percentage, is what `fixtures.rs` checks. Worst page + 1 point.
+    "34-terms-page-widow": 0.062,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
