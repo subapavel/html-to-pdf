@@ -885,3 +885,94 @@ fn terms_page_widow_invoice_leaves_two_clauses_for_the_next_page() {
         );
     }
 }
+
+/// F66i: fixture 35 has generated content in inline elements nested in other inline elements: " Kč" after each amount
+/// (`td > span.price > span.amount`), a status dot (`span.badge > span.dot::before`, a 6 px inline-block), `*` after a date in
+/// `<strong>`, Czech quotes around a note in a plain `<span>`, " →" after a link text in `<a>`. On main's binary none of them
+/// was printed and "Uhrazeno" stood 8.5 pt too far left (the dot and its margin). Chrome's x and y (m141, `reference/chrome.pdf`), within a point.
+#[test]
+fn nested_generated_content_invoice_prints_every_generated_string() {
+    let name = "35-nested-generated-content";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-35.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(xml.matches("<page ").count(), 1, "one page like Chrome");
+    // (word, xMin, yMin) in reading order.
+    let attr = |attrs: &str, name: &str| -> f32 {
+        let start = attrs.find(name).unwrap() + name.len();
+        attrs[start..start + attrs[start..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    let mut words: Vec<(String, f32, f32)> = Vec::new();
+    for line in xml.lines() {
+        if let Some(rest) = line.trim().strip_prefix("<word ")
+            && let Some((attrs, word)) = rest.split_once('>')
+            && let Some(word) = word.strip_suffix("</word>")
+        {
+            words.push((
+                word.to_string(),
+                attr(attrs, "xMin=\""),
+                attr(attrs, "yMin=\""),
+            ));
+        }
+    }
+    let nth = |word: &str, n: usize| -> (f32, f32) {
+        let hit = words
+            .iter()
+            .filter(|w| w.0 == word)
+            .nth(n)
+            .unwrap_or_else(|| panic!("`{word}` #{n} not found in the PDF text"));
+        (hit.1, hit.2)
+    };
+    let expected: [(&str, usize, f32, f32); 10] = [
+        ("Uhrazeno", 0, 78.9, 189.3),
+        ("2026*", 0, 214.0, 207.3),
+        ("„převodem", 0, 123.8, 225.3),
+        ("dnů“", 0, 277.1, 225.3),
+        ("→", 0, 207.2, 243.3),
+        ("Kč", 0, 540.9, 307.1),
+        ("Kč", 1, 540.9, 334.8),
+        ("Kč", 2, 540.9, 362.6),
+        ("Kč", 3, 540.9, 390.3),
+        ("Kč", 4, 536.4, 412.9),
+    ];
+    for (word, n, x, y) in expected {
+        let (gx, gy) = nth(word, n);
+        // The amounts sit in the right-aligned column of an auto-layout table, whose columns are 1.2 pt (CELKEM) to 8 pt
+        // (MNOŽSTVÍ) off Chrome's on main too: the currency is checked against its number below, its x within 2 pt.
+        let tol_x = if word == "Kč" { 2.0 } else { 1.0 };
+        assert!(
+            (gx - x).abs() <= tol_x && (gy - y).abs() <= 1.0,
+            "`{word}` #{n} at ({gx:.1}, {gy:.1}), Chrome puts it at ({x}, {y})"
+        );
+    }
+    assert_eq!(
+        words.iter().filter(|w| w.0 == "Kč").count(),
+        5,
+        "five amounts"
+    );
+}

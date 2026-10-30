@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0035</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  /* Generated content in inline elements nested in other inline elements (F66i): a template engine wraps an amount in two spans,
+     a status in a badge, a date in <strong>, a note in a plain span, a link text in <a>. */
+  .amount::after { content: " Kč"; }
+  .dot::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: #16a34a; margin-right: 5px; }
+  .badge { color: #15803d; font-weight: 600; }
+  .req::after { content: "*"; color: #b91c1c; }
+  .q::before { content: "„"; }
+  .q::after { content: "“"; }
+  .ext::after { content: " →"; }
+  .legend { font-size: 11px; color: #6b7280; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0035</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 20. 10. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 3. 11. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p>
+    <p>Dlouhá třída 1234/5, 110 00 Praha 1</p>
+    <p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<section class="text-sm mb-6">
+  <p class="mb-1">Stav: <span class="badge"><span class="dot"></span>Uhrazeno</span></p>
+  <p class="mb-1">Datum zdanitelného plnění: <strong><span class="req">15. 10. 2026</span></strong></p>
+  <p class="mb-1">Způsob úhrady: <span><span class="q">převodem na účet do čtrnácti dnů</span></span></p>
+  <p>Online platba: <a href="https://platba.example.cz" class="text-blue-700"><span class="ext">platba.example.cz</span></a></p>
+</section>
+
+<table class="w-full text-sm mb-4">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Licence k programovému vybavení pro 5 pracovišť</td>
+      <td class="py-2 px-2 text-right">5 ks</td>
+      <td class="py-2 pl-2 text-right"><span class="price"><span class="amount">45 000,00</span></span></td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Nasazení a zaškolení obsluhy v sídle odběratele</td>
+      <td class="py-2 px-2 text-right">16 h</td>
+      <td class="py-2 pl-2 text-right"><span class="price"><span class="amount">38 400,00</span></span></td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Roční údržba a technická podpora</td>
+      <td class="py-2 px-2 text-right">12 měs.</td>
+      <td class="py-2 pl-2 text-right"><span class="price"><span class="amount">21 600,00</span></span></td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Doprava a ubytování technika (2 dny)</td>
+      <td class="py-2 px-2 text-right">2 dny</td>
+      <td class="py-2 pl-2 text-right"><span class="price"><span class="amount">6 200,00</span></span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold mb-2">Celkem k úhradě <span class="ml-1"><span class="amount">111 200,00</span></span></p>
+<p class="legend text-right mb-6">* údaj podle § 29 zákona o DPH</p>
+
+<section class="text-sm">
+  <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Platební údaje</h2>
+  <ul class="pl-4" style="list-style: disc">
+    <li>Číslo účtu: 123456789/0300, variabilní symbol 20260035.</li>
+    <li>IBAN: CZ65 0300 0000 0001 2345 6789, SWIFT/BIC: CEKOCZPP.</li>
+  </ul>
+  <p class="mt-8 pt-2 border-t border-gray-300 w-72 text-xs text-gray-500">Za dodavatele: Jana Příkladná, jednatelka</p>
+</section>
+
+</body>
+</html>
