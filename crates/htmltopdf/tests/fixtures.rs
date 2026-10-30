@@ -802,3 +802,86 @@ fn address_trailing_break_invoice_is_laid_out_like_chrome() {
         );
     }
 }
+
+/// F30f-l: fixture 34's page 2 is a 51-line block of terms (20 px lines, 1020 px) that overflows its page by half a line.
+/// Chrome puts 49 lines on page 2 and the last two clauses (49., 50.) and the signature on page 3 (`reference/chrome.pdf`,
+/// m141). On main's binary page 2 held all 51 lines, the last at 786-805 pt below the content box (799.4 pt), and only the
+/// signature was on page 3.
+#[test]
+fn terms_page_widow_invoice_leaves_two_clauses_for_the_next_page() {
+    let name = "34-terms-page-widow";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-34.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(xml.matches("<page ").count(), 3, "three pages like Chrome");
+    // (page, yMin, yMax) of each word that is a clause number ("48.") or one of the heading / signature words.
+    let mut page = 0;
+    let mut found: Vec<(usize, f32, f32, String)> = Vec::new();
+    for line in xml.lines() {
+        if line.contains("<page ") {
+            page += 1;
+        } else if let Some(rest) = line.trim().strip_prefix("<word ")
+            && let Some((attrs, word)) = rest.split_once('>')
+            && let Some(word) = word.strip_suffix("</word>")
+        {
+            let attr = |name: &str| -> f32 {
+                let start = attrs.find(name).unwrap() + name.len();
+                attrs[start..start + attrs[start..].find('"').unwrap()]
+                    .parse()
+                    .unwrap()
+            };
+            found.push((page, attr("yMin=\""), attr("yMax=\""), word.to_string()));
+        }
+    }
+    let find = |word: &str| -> (usize, f32, f32) {
+        let hit = found
+            .iter()
+            .find(|w| w.3 == word)
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"));
+        (hit.0, hit.1, hit.2)
+    };
+    assert_eq!(find("Obchodní").0, 2, "the terms start on page 2");
+    assert_eq!(find("48.").0, 2, "clause 48 is the last line of page 2");
+    assert_eq!(find("49.").0, 3, "clauses 49 and 50 move to page 3");
+    assert_eq!(find("50.").0, 3);
+    assert_eq!(find("Převzal:").0, 3);
+    for (p, _, y_max, w) in &found {
+        if *p == 2 {
+            assert!(
+                *y_max <= 799.4,
+                "`{w}` on page 2 ends at {y_max:.1} pt, below the content box (799.4 pt)"
+            );
+        }
+    }
+    // Chrome: 49. at 44.5 pt, the signature at 91.8 pt.
+    for (word, chrome) in [("49.", 44.5), ("Převzal:", 91.8)] {
+        let y = find(word).1;
+        assert!(
+            (y - chrome).abs() <= 1.5,
+            "`{word}` at {y:.1} pt, Chrome puts it at {chrome} pt"
+        );
+    }
+}
