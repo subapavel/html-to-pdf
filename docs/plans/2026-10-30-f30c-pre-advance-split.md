@@ -264,5 +264,11 @@ Contradictions with the plan, and what was done:
   `compare.py` 5.5 / 4.3 % (main's binary 6.8 / 10.1 %), threshold 6.5 % (worst + 1 point). Other fixtures' numbers unchanged.
 - **Speed**: `bench.py --check` ok; `b200-items` 1396 ms (main 1366 ms, byte-identical output; the accepted 1250 ms is not met on
   this host for main either), `b200-text` 888 / 844 ms, `b200-mixed` 956 / 918 ms.
+- **A test the plan did not name**: `break_inside_avoid::a_paragraph_taller_than_a_page_after_content_starts_on_the_next_page`
+  compared a relaxed `avoid` paragraph with the same paragraph without the property (equal page count and first words), which
+  held only because both took the pre-advance. Chrome: `<p>before</p>` + 2500 words `auto` 6 pages, `avoid` 7, `break-before:page`
+  7 (ours 7 / 8 / 8, main 8 / 8 / 8; the one page more is the line-wrap difference of every long document). The reference is now
+  the `break-before:page` twin. Found by the full `cargo test --release --locked --no-fail-fast` (80 test binaries, all ok after
+  that change; the first run stopped at it).
 - **Not done**: `vrt-validator` (the agent has no way to start another agent); the nested half (F30c-n); `orphans` / `widows`
   properties; Chrome 3-line split (F30c-w); float (F30c-f).
