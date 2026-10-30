@@ -339,3 +339,77 @@ anything. Tests: Blitz `trailing_forced_break_tests` (three new, seven edge styl
 - `parallel-construct` feature of Blitz not rerun for this change; the new op is read in the serial part of `build_inline_layout_into`.
 - `dir="rtl"` attribute (Blitz ignores it), vertical writing modes, float / abspos after the break (above).
 - Chrome only at A4 / Inter 14 px / 20 px line height; no measurement in a multi-column box or a table cell for the new shapes (the takeback is the same function there).
+
+## 7.3 Validator round 3: lines the takeback removed that main and Chrome keep
+
+`vrt-validator` round 3 (`out/scratch/f66fv4`, harness `run.py` / `mism.py`) found shapes where the round-2 build (Blitz `67e6be6f`, htmltopdf `2accacc`) is 15 pt short, no text
+lost, main and Chrome agree: (1) a box with a block in it and an end edge, `<div><span style="padding-right:4px">a<br><div>blk</div></span></div><p>AFTER</p>` (AFTER main 88.6, round 2
+73.6, Chrome 88.8; 34 shapes `c4/bl_A_*`, `bl_before_A_*_E`); (2) an empty float after the `<br>` in a padded span (58.6 against 73.6 / 73.8); (3) `<select>`, `<details>`,
+`display:list-item` after the `<br>` (58.6 against 73.6 / 73.8).
+
+### What Chrome does (m141, `out/scratch/f66fv5/s`, `s2`, generator `gen.py`, `gen2.py`; AFTER 58.8 = one line, 73.8 = two, 88.8 = three)
+
+- A box with a block in it is split around the block (css-inline-3 §3). The part before keeps the start edge, the part after the end edge, and a part that holds only an edge is a
+  line of its own: `<span pr>a<br><div>blk</div></span>` is a, blk and that line (88.8). Only the end side for the part after, only the start side for the part before
+  (`pl`: `a<br>blk` 73.8, `blk a<br>` 88.8). Text after the block carries the edge (`a<br>blk w1`: 88.8), so does a box that starts after the break in the last part
+  (`blk a<br><E/>` with `pr`: 88.8; without `<E/>` the close tag belongs to the line the break ends: 73.8). Whitespace, a comment, `display:none` after the block do not matter. Nested boxes:
+  the edge of any open ancestor counts, once (`outer pr [inner [a<br>blk]]` 88.8; `outer pr [inner [a<br>blk] w1]` 88.8 too, the text carries it).
+- A float stays in the line after the break; the end edge makes that line non-empty (73.8) like a box that started (`P_float`, `f_A`, `f_B`, `f_in_plain_A`, `f_nest_closed_inner`). A float opens no
+  line before the text (`<span pl>FL a<br></span>` 58.8); without an end edge there is none (58.8).
+- `<select>`, `<meter>`, `<progress>` are atomic inlines (73.8 after the break, also `Aclosed`, `Apl`), an empty `<details>` shows its default summary (73.8), an empty `display:list-item`
+  or `<li>` with a marker has a line for it (73.8), with `list-style:none` it has none (58.8). `<details>t</details>` is 73.8 too (closed, the text is hidden; Blitz shows it, both give two lines).
+
+### Fix (Blitz `ba908646`; red tests `e8653565`, fix `59b3f651`, refinements `ba908646`)
+
+`construct.rs` `trailing_break_context(nodes, root)` runs for a block whose ops end in a forced break and have no content after it. It reads the tree (DOM `children`, never `layout_children`: those are
+a `RefCell` and the construction runs on rayon) and returns `keep_line` and `end_edge`:
+
+- Walking up through the elements that are laid out as blocks only because a block is among their children (outside `inline`, inside `flow`; the walk stops at a real block), for each level it
+  scans the siblings before and after (`SiblingSide`: text / `<br>` / atomic inline = inline content, a block, a float, a box with a height Chrome has and Blitz does not). End side: nothing but empty
+  inlines after, no block seen: `end_edge` (an `InlineOp::EndEdge` is appended to the ops, so the round-2 rule applies: content only when a box started after the break); only blocks (or empty floats)
+  after: `keep_line`. Start side: only real blocks before (not floats): `keep_line`. Inline content on a side ends the walk for that side. One edge counts once.
+- `keep_line` also when a sibling in the same block container is an empty `<details>` or an empty `display:list-item` with an outside marker, or an empty `select` / `meter` / `progress` that is not
+  in the same inline run. `select`, `meter`, `progress` are `BoxStart { edge: true }` in the inline run. A float with content counts as inline content (it adds its height to the box here).
+- A root that is an atomic inline, a float or out of flow does nothing.
+
+The kept line is where the break is, not where Chrome has it (after the last block): the totals and everything below are right, the words of the blocks that follow the break are 15 pt
+lower than Chrome's, as on main. Making the line after the block needs a line for an empty padded inline, which Blitz does not make anywhere (`<div><span style="padding-right:4px"></span></div>`
+is 0 lines, Chrome 1: F66l), so it is not done here.
+
+Tests first: Blitz `trailing_forced_break_tests` (five new, 156 in all), `crates/htmltopdf/tests/trailing_break.rs` (two new: 28 + 16 Chrome positions, both red before). The refinements after the first
+fix (a float, `details` or `select` with content of its own, and a block that is not anonymous) were found by `out/scratch/f66fv5/s`; their Blitz tests were red before them.
+
+### Evidence
+
+- The validator's 34 `c4` shapes, `rep_float_A`, `P_float`, `B_float`, `floatdiv`, `rep_select_*`, `nr_details_*`, `nr_listitem_*`: at Chrome's AFTER, or at main's where Chrome has more (`x_A_details`, `x_A_li`: 73.6 against 88.8,
+  main 73.6: two lines are missing there, one is made).
+- `f66fv5/s` (182 shapes) and `s2` (17): closer than main 63 / 2, further 0 / 0. Against the round-2 build: one shape worse, `n_A_blk_blk` (`a<br>blk blk2` with `pr`: AFTER 103.6 = main, Chrome 103.8; the two block words 15 pt
+  lower than Chrome, which the round-2 build had right and AFTER 15 pt high), the proxy above.
+- `out/scratch/f66fv5/batch5.py` over 1331 documents against Chrome (the round-2 batches n, p, r1/a-k, and the validator's c, c2, c3, c4, c7, c8): closer than main 655, equal 658, **further than the round-2 build 0**, more differing
+  words than the round-2 build 0, further than main 18, every one identical to the round-2 build and explained: `b/bigpre_nl2` (F30f-l), `b/long200_p`, `k/k1` (artefacts of the sum, §7.2), `ps_*_after_br`, `p2_Apl_*` (pseudo-elements: F66i, F66j),
+  `nr_canvas` / `nr_object` / `nr_video` (F66l), `dir_attr_*` (F66k).
+- Byte gate (`out/scratch/f66fv2/gate.sh`): fixtures 01-33 and the 7 corpus documents (40 files), 1 and 4 threads identical; identical to the round-2 build; against main only fixture 33 differs.
+
+### Gates
+
+| gate | result |
+|---|---|
+| Blitz `cargo test -p blitz-dom --lib` (from the fulgur workspace, forks patched in by `--config`) | 156 passed |
+| Blitz `clippy --all-targets -D warnings`, `cargo fmt --check` | clean |
+| fulgur `cargo test -p fulgur --lib` (fulgur not changed) | 2421 passed; integration binaries not run, no fulgur code changed |
+| html-to-pdf `cargo fmt --check`, `cargo clippy --release --locked --workspace --all-targets -- -D warnings` | clean |
+| html-to-pdf `cargo test --release --locked` | 77 binaries, 888 passed, 0 failed |
+| `Cargo.lock` | the two Blitz lines only (`67e6be6f` -> `ba908646`) |
+| `render-fixtures.sh` + `compare.py` | all 33 ok, every number equal to §7.2's, fixture 33 3.8 % (threshold 5 %), no threshold moved, side-by-side looked at |
+
+### Left open (measured, filed in the findings)
+
+- Both edges on one box (`pl` and `pr`) with blocks: Chrome makes two extra lines (103.8), one is made (`n_plpr_blk_a_E`, `n_pl_blk_only`: Blitz makes no line for a block-only box with an edge, 58.6 against 73.8). F66l.
+- `<details>` / `<li>` in a `<p>` after a break: the HTML parser closes the `<p>`, so it is the sibling case, covered. `x_td_*`, `n_A_blk_td`: a table cell adds 3 pt in Chrome, unrelated.
+- Abspos after the break (`f_A_abs`: 58.6 against 73.8), unchanged from main.
+- F66i-F66l (new findings): nested pseudo-elements lost (HIGH), their end edge, `dir`, trailing `<br>` in multicol and replaced elements after a `<br>`.
+
+### Not verified
+
+- fulgur integration binaries (no fulgur change), the `parallel-construct` feature of Blitz (the new function reads only `children`, styles and tags, which are immutable during construction), vertical writing modes,
+  Chrome at other fonts or line heights, `box-decoration-break: clone` on these boxes, a box with both edges and a block in the middle of the text.
