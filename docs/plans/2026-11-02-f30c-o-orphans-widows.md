@@ -203,4 +203,50 @@ A Czech invoice like 36, with an inline `<style>@media print { p { orphans: 3; w
 
 ## 8. Evidence
 
-To be filled in after implementation: Chrome probes (8.1), the fork commit and tests (8.2), byte gates, sweeps, fixture 38 compare numbers, bench (8.3), and anything not done.
+Done 2026-11-02. Fork `subapavel/fulgur` `htmltopdf/srgb-colours` `55154081` (on top of F209's `0feb944f`). Ours: branch `f30c-o-orphans-widows`, rebased onto main `3001f66` (F209 / PR #81 merged, fixture 37 present).
+
+### 8.1 Chrome probes (step 1)
+
+Chrome m141 through `out/scratch/f30co/{gen,run,sweep}.py` (A4, 15 mm, `14px/21px`, a page of 48 lines). Every expectation of §5 is from these; the 15 tests of `orphans_widows.rs` and the fixture test are green.
+
+- Test 1, 2: 9 lines, room for 2 lines, `orphans: 3` / `4` (`widows` equal or default): 0 / 9, `AFTER` page 2 at 186.3 pt; room 3 with `orphans: 4`: 0 / 9; guards as §1 (`or3` k0, k1: 0 / 9, k3, k4, k5: 3 / 6, 4 / 5, 5 / 4; `or4` k4, k5: 4 / 5, 5 / 4).
+- Test 4: `widows: 3`, 50 lines: 47 / 3 (49: 46 / 3, 51: 48 / 3); `widows: 4`: 46 / 4 (49: 45 / 4); `widows: 1`, 49 lines: 48 / 1. Ours before: 48 / 2, 47 / 2, 48 / 3, 48 / 2, 47 / 2, 47 / 2.
+- Test 5: all of `body{orphans:3}`, `html{orphans:3}`, `style=`, `@media print`, `@layer`, `inherit`, `unset`, `revert`, `!important` against a plain `style`, and `style` `!important` against the sheet's give 0 / 9; `initial` and a later `.x{orphans:2}` give 2 / 7. `calc(3)` is valid in Chrome (0 / 9).
+- Test 7: 30 lines, `orphans: 1`: room for 1 line 1 / 29 (`AFTER` 501.3 pt), room for 2 lines 2 / 28 (485.6 pt), none 0 / 30 (517.1 pt), with or without `widows: 1`.
+- Test 8, how Chrome relaxes (sweep `sw_*`: 52 and 100 lines, `orphans` and `widows` in 1, 2, 10, 30, 47, 48, 49, 60, at the page top and after a 300 px spacer = 33 lines of room, 256 pages). With `R` lines left and `cap` lines on the page:
+  - `orphans > cap`: orphans and widows are both given up (100 lines, `orphans: 60`: 48 / 48 / 4; after a spacer 0 / 48 / 48 / 4: the paragraph moves to a page of its own first);
+  - otherwise the break is at `max(R - widows, orphans)`: when the widows cannot be had without breaking the orphans, **Chrome keeps the orphans and gives up the widows** (100 lines, 30 / 30: 48 / 30 / 22; 2 / 30: 48 / 22 / 30; after the spacer 33 / 37 / 30 for both);
+  - the exceptions are `widows` larger than the page (49, 60 against 48 lines): see F30c-o2.
+- Test 9: `td{orphans:4;widows:4}`, `img60` + 150 words, spacer 996..1032 step 4, 1 px and 2 px borders: 0 | 150 for all 20. `orphans: 2`: 48 | 102 up to 1012, 32 | 118 from 1016 (ours with a 2 px border one word off: 47 | 103, 31 | 119, as before).
+- Test 10: 60 lines `orphans: 3` in a `<section>`: room 1 and 2 give 0 / 48 / 12 (`AFTER` page 3, 233.6 pt), room 3 gives 3 / 48 / 9; `orphans: 2`, room 2: 2 / 48 / 10. Padded `<p>` (30 lines, 9 px above the first line): `orphans: 3` with room for 2 or 3 lines 0 / 30 (530.6 pt), `orphans: 2` with room 3: 2 / 28 (492.3 pt).
+- Fixture 38: with `@media print { p { orphans: 3; widows: 3 } }` page 1 ends with clause 25, page 2 starts with "26." (`AFTER`-like "50." at 249.3 pt, "Převzal:" at 295.8 pt); the same document without the declaration puts two lines of clause 26 at the bottom of page 1, as ours did.
+
+### 8.2 The fork (steps 3-5)
+
+Fork commit `55154081`: `column_css.rs` (`LineCount`, `ColumnStyleProps::{orphans, widows}`, `parse_line_count_value`), `pagination_layout.rs` (`LineRules`, `LineRulesScope`, `line_rules`, `line_break_at`, `keep_orphans_break`, and `LineSplit::rules`, `inline_root_lines(doc, ..)`, `abspos_line_split(doc, ..)`, `plan_line_breaks`, `starts_in_place`, `widow_safe_break`, `fragment_inline_root` with a `rules` argument), `engine.rs` (three scope sites), `render.rs` and `abspos_flow.rs` (call sites, comment). Fork tests: lib 2465 passed (new: reader values, keywords, invalid, `!important`, cascade; `line_rules` without a scope, inherited per property, keywords, td to p, anonymous block and `::before` box; `starts_in_place`, `widow_safe_break`, `line_break_at`, `keep_orphans_break`, `fragment_inline_root` on author values and on values a page cannot keep, `plan_line_breaks`, `LineSplit::leading`), one `render_smoke` case; `cargo clippy -p fulgur --all-targets -- -D warnings` and `cargo fmt` clean.
+
+**Deviations from §4:**
+- *Relaxation.* §4 relaxed to the initial rules. The probes show Chrome keeps the orphans and gives up the widows before that (100 lines, 30 / 30: 48 / 30 / 22, where the initial rules would give 48 / 48 / 4). `fragment_inline_root` therefore has three steps: `line_break_at` with the author's rules, `keep_orphans_break` (only for values other than 2 / 2, only when pulling back would leave the fragment some lines but fewer than `orphans`), `line_break_at` with `INITIAL`, then today's accumulate. With 2 / 2 the first step is today's decision and the other two are empty: byte-identical.
+- `plan_line_breaks` (nested paragraphs) only uses the rules for the pull-back; it has no `keep_orphans_break` (F30c-o2).
+- `Node::parent` is set on anonymous blocks and `::before` boxes (tests), so no `layout_parent` fallback is needed.
+- The length rule `lines >= orphans + widows` stays (F30c-w, F30c-o2).
+- Fixture 38 has nine items and two terms paragraphs of 15 and 16 lines (§5 said about 20); the room on page 1 is about 2.3 lines.
+- The plan's "37" for the fixture was already 38 in the text.
+
+### 8.3 Gates
+
+Baseline binary: main's after F209 (`htmltopdf-main-f209`, fork `0feb944f`; `Cargo.lock` differs only in the fork rev).
+- Byte gates, `RAYON_NUM_THREADS` 1 and 4, run again after the rebase: fixtures 01-37 and the 7 corpus documents byte-identical to the baseline (44 of 44 each; fixtures 24, 25, 30, 31 declare the properties inside multicol and did not move); fixture 38 differs, as it should.
+- Sweeps: 11,975 cases (the f30c sweep 4,616, f183v5 6,209 and the `f30cv` probes) rendered with both binaries: 78 differ, all 78 declare `orphans` / `widows` (the `td{orphans:4}` cells, `p_img_l3_o4_*`, `u_sep*_o4_*`, `u_col*_o4_940..956`), and in all 78 the words per page equal Chrome's (50 of them with Chrome PDFs made for this check); none moved away.
+- Fork `fulgur-vrt`: the 70 `.actual.pdf` of the failing goldens (this host's fonts differ) are byte-identical to the F209 run's (`f209-vrt-new`; assumed to be at `0feb944f`, not re-run at that rev).
+- `compare.py` fixture 38: 5.4 / 2.9 % (baseline binary 5.9 / 5.6 %); threshold 6.4 %. Side-by-side looked at: page 1 ends with clause 25 and blank space below, page 2 starts with clause 26, like Chrome.
+- Tests: `cargo test --release --locked` on the tree before the rebase: 81 test binaries, 937 passed, 0 failed (fixture 37 and F209's tests were not in that tree); after the rebase `fixtures` (18) and `orphans_widows` (15) were run again, green. `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings` clean.
+- `scripts/render-fixtures.sh` and `compare.py --threshold-check`: all 38 fixtures ok, page counts equal Chrome's.
+- `bench.py --check` ok: `b200-items` 1218 ms (accepted exception 1250), `b200-text` 776 ms, `b200-mixed` 897 ms, fixture 38 16.4 ms.
+- Performance with a declaration (scratch): `b200-items` with `body{orphans:3;widows:3}` added, median of 7 runs of the CLI: 1287 ms against 1277 ms without (+0.8 %, within noise).
+
+### 8.4 Not done
+
+- `vrt-validator` and `pdf-reviewer` (the latter not required: layout only) were not run by the implementing agent; left to the merge policy's step 2.
+- The 100-line probes at other page heights, Chrome versions other than m141, `columns` with `orphans` (pinned as unchanged), `float`, and `widows` larger than a page (F30c-o2).
+- Fork `fulgur-vrt` was compared with the earlier F209 run, not re-run at `0feb944f`.
