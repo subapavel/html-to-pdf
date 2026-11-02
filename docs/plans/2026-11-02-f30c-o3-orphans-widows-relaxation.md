@@ -259,3 +259,34 @@ Red: `a_paragraph_taller_than_a_page_starts_where_its_orphans_fit_when_no_break_
   fmt and clippy `-D warnings` clean. `vrt-validator` was not run from this session.
 - Filed: **F215** (`break-before` / `break-after: avoid`), **F216** (a paragraph above a box with its own block size, the F30c-n guard), F30c-o2
   narrowed. F30c-w: a note that Chrome's 2 / 1 is the same family (ADR-0010).
+
+### Validator round 1 (PR #85, `vrt-validator` on `816fac2`): two MEDIUM, one LOW
+
+Fork commits `57648865` (WIP the stop hook forced), `c3a34734`, `d790b08e`, `d5b4a994` (head, the `Cargo.lock` rev); binary `htmltopdf-f30co3b`.
+Repros `f30co3v/repro/R1`-`R6` (Chrome numbers re-measured in `out/scratch/f30co3/rep`); new tests in `orphans_widows.rs`, **red at `c1b7adba`**
+(the three of them failed on the locked build before the bump), green after.
+
+- **M1, a box with insets at a page top.** The orphans-above-a-page clamp (`leading_within`) moves a box whenever "something precedes" it, and the
+  gate counted the box's own top border and padding as content, so the paragraph moved and the box top stayed behind (blank stub page plus an extra
+  page: `R1` 0 / 48 / 12 against Chrome and main 47 / 13; `R4`, `R6` the same). The clamp applies only with real content above
+  (`content_above_child`): `leading_block_size_with(.., clamp_orphans)` and the `first_break_h` gate; `row_mate_can_split` passes `false`
+  (it kept the raw `leading` before F30c-o3 and the first F30c-o3 version clamped it by accident). Test
+  `a_box_with_insets_at_a_page_top_keeps_its_paragraph_when_the_orphans_do_not_fit_a_page` (R1, R6, R4); fork tests for `leading_block_size_with` and the three box shapes.
+- **M2, a padded or bordered `<p>` with widows of a page or more at a page top.** `plan_line_breaks` took "at the top of a page" from
+  `first_room >= page_room`, which a padded paragraph's first strip never meets. `fragment_nested_inline_root` now gets `first_at_top` from its callers
+  (`cursor_y <= 0` for the body-level padded branch, `!content_above_child` in the block walk) and `plan_line_breaks` takes it as a parameter. A
+  paragraph with a top inset of its own (a sliced box) ignores `widows` its short first strip cannot hold, like a continuation fragment (set E
+  `pbord_*`: Chrome 47 / 2 for 49 lines `widows: 48`, 47 / 48 / 5 for 100 lines `widows: 99`); the insets of ancestors do not count (the
+  first version of this rule counted them and broke set B `avoid_n60_o1_w50`, Chrome 10 / 48 / 2, and set D `a5_*`, `land_*`: caught by the rerun and narrowed in `d5b4a994`).
+  Test `a_padded_paragraph_taller_than_a_page_ignores_widows_as_large_as_itself_at_a_page_top` (`R2`, 49 / 60 lines); g2 `pad_n60_o30_w50_k0` / `_k3`
+  (my own two further cases of the first round) now reach Chrome (47 / 13): g2 has 0 further than main.
+- **LOW, `R5`.** Not the same cause: the last relaxation step was the initial 2 / 2 and pulled 49 lines back to 47 / 2; Chrome drops the rule when the orphans
+  cannot be kept (48 / 1, also `body_n49_o49_w2`, `body_n49_o99_w2`, 15 probes in `lw`). The last step is now the natural break with the initial
+  2 orphans and no widows (`choose_line_break`; ADR-0010 sentence corrected). Test `orphans_no_page_can_keep_drop_the_widows_too`.
+- **Leftover: R3 (`td` in a second row, spacer 987 px).** Not caused by the clamp: the first row is 23 px, 987 + 23 = 1010 fits Chrome's 1010 px page and not ours
+  (1009.13, F30f-c). Our table moves to page 2 with its first row, and its second row, whose orphans cannot be kept, moves on to page 3 by the same
+  rule Chrome applies (0 / 0 / 48 / 12 against Chrome 0 / 48 / 12; main 0 / 46 / 14 by accident). At every other spacer
+  (`r3b`: 900-986) ours equals Chrome (main does not). Set A has 3 such cases (`td2_n60_o99_w2_k1_973`, `_982`, `td2_n150_o99_w99_k1_958`).
+- **Validator sets, against main:** A 1,560: 1,331 identical, 226 closer, 3 further (the R3 family). B 699: 129 closer, **0 further**. C 582: 327 closer, 0 further.
+  D 867: 243 closer, **0 further**. E 297: 72 closer, **0 further** (87 further before the fix). The 154 `over` cases of D are main's own.
+- **My sweeps (against main `htmltopdf-main-f30cn`)** and the other gates: see the final report of the round.

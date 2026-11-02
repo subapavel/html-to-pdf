@@ -664,6 +664,111 @@ fn widows_as_large_as_a_paragraph_taller_than_a_page_keep_the_orphans() {
     }
 }
 
+// ── 10b. Validator round 1 (PR #85): a box with insets must not be split from its paragraph ─────────────────────
+
+/// M1: `orphans` of a page or more in a paragraph inside a bordered or padded box that starts the page. Moving the paragraph
+/// because its `orphans` do not fit the strip left the box's top edge behind and made a blank page: the box's own top border
+/// and padding are not content above the paragraph. Chrome (and main): the orphans cannot be kept, so nothing moves and
+/// the paragraph breaks naturally.
+///
+/// - `<div padding 12 border 1><p>` 60 lines, `orphans: 49`: Chrome 47 / 13, `AFTER` on page 2 at 259.1 pt (ours 0 / 48 / 12 before);
+/// - the same box in a 100 x 120 mm page with `orphans: 20` and 40 lines: 19 / 19 / 2, `AFTER` on page 3 at 52.1 pt
+///   (ours 0 / 19 / 19 / 2);
+/// - a bordered `<div>` with a padded `<section>` in it after a full page, 150 lines, `orphans: 99`: 0 / 47 / 48 / 48 / 7 (ours
+///   0 / 0 / 48 / 48 / 48 / 6).
+#[test]
+fn a_box_with_insets_at_a_page_top_keeps_its_paragraph_when_the_orphans_do_not_fit_a_page() {
+    let words = printed_words(&render(
+        "p{orphans:49;widows:2}",
+        &format!(
+            "<div style=\"padding:12px;border:1px solid #333\"><p>{}</p></div><p>AFTER</p>",
+            lines(60)
+        ),
+    ));
+    assert_case(
+        &words,
+        60,
+        &[47, 13],
+        2,
+        259.1,
+        "padded box at the document start",
+    );
+
+    let words = printed_words(&render_doc(
+        "@page{size:100mm 120mm;margin:5mm}body{font:14px/21px Inter;margin:0}p{margin:0}p{orphans:20;widows:5}",
+        &format!(
+            "<div style=\"border:1px solid #333;padding:5px\"><section><p>{}</p></section></div><p>AFTER</p>",
+            lines(40)
+        ),
+    ));
+    assert_eq!(per_page(&words), [19, 19, 2], "small page");
+    assert_after(&words, 3, 52.1);
+
+    let words = printed_words(&render(
+        "p{orphans:99;widows:2}",
+        &format!(
+            "{}<div style=\"border:2px solid #444;padding:10px\"><section style=\"padding:6px\"><p>{}</p></section></div><p>AFTER</p>",
+            spacer(1008),
+            lines(150)
+        ),
+    ));
+    assert_case(
+        &words,
+        150,
+        &[0, 47, 48, 48, 7],
+        5,
+        168.3,
+        "boxes after a full page",
+    );
+}
+
+/// M2: a padded or bordered `<p>` taller than a page with `widows` as large as the paragraph, at the top of a page. The
+/// padding makes the first strip shorter than a page, and the first version took that for a paragraph that follows content:
+/// it kept the orphans (3 / 46). Chrome ignores such widows at the top of a page: 49 lines, `orphans: 3; widows: 49`
+/// after a full page: 0 / 47 / 2, `AFTER` at 82.8 pt on page 3; with 60 lines and `widows: 60`: 0 / 47 / 13.
+#[test]
+fn a_padded_paragraph_taller_than_a_page_ignores_widows_as_large_as_itself_at_a_page_top() {
+    for (n, o, w, per, y) in [
+        (49, 3, 49, [0, 47, 2], 82.8),
+        (49, 1, 60, [0, 47, 2], 82.8),
+        (60, 3, 60, [0, 47, 13], 256.1),
+    ] {
+        let words = printed_words(&render(
+            &format!("p{{orphans:{o};widows:{w}}}"),
+            &format!(
+                "{}<p style=\"border:1px solid #888;padding:8px\">{}</p><p>AFTER</p>",
+                spacer(1008),
+                lines(n)
+            ),
+        ));
+        assert_case(&words, n, &per, 3, y, &format!("{n} lines, {o} / {w}"));
+    }
+}
+
+/// LOW of the same round: a `break-inside: avoid` box with a 49-line paragraph, `orphans: 99; widows: 99`, after a full page.
+/// The orphans cannot be kept, so Chrome drops the rule: 0 / 48 / 1, `AFTER` at 60.3 pt. The initial 2 / 2 as the last step
+/// pulled the break back to 47 / 2; the last step is the initial `orphans` without `widows`.
+#[test]
+fn orphans_no_page_can_keep_drop_the_widows_too() {
+    let words = printed_words(&render(
+        "p{orphans:99;widows:99}",
+        &format!(
+            "{}<div style=\"break-inside:avoid\"><p>{}</p></div><p>AFTER</p>",
+            spacer(1008),
+            lines(49)
+        ),
+    ));
+    assert_case(&words, 49, &[0, 48, 1], 3, 60.3, "avoid box");
+    for (kind, css) in [
+        ("body", "p{orphans:49;widows:2}"),
+        ("body", "p{orphans:99;widows:2}"),
+        ("nest", "p{orphans:99;widows:99}"),
+    ] {
+        let words = shaped(kind, css, 1008, 49);
+        assert_case(&words, 49, &[0, 48, 1], 3, 60.3, &format!("{kind} {css}"));
+    }
+}
+
 // ── 11. `orphans` larger than a page ──────────────────────────────────────────────────────────────────────────────
 
 /// A 100-line paragraph with `orphans: 49`, `50` or `52` (more than the 48 lines a page holds; 47 for the padded one,
