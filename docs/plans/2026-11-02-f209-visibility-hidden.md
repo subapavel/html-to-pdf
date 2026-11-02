@@ -227,6 +227,39 @@ Deviations from the plan's tests, from these numbers:
 - **`<img>` data URIs** draw nothing in our engine (F201), so the `img` case registers a bundled `dot.png`.
 - **Fixture 37:** the sign placeholder trails the number (`30 000,00<span class=sign>-</span>`): with a leading placeholder in a right-aligned cell the digits end at the same x whether or not it is printed, so it would prove nothing.
 
-### 8.2 To be filled by the implementer
+### 8.2 What was built
 
-What was built (commits), gates table (fork tests, clippy/fmt, byte gate 43 files x 2 thread counts, `fulgur-vrt` actuals, our tests, compare number for 37, bench), not verified.
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`, three commits on `d26eeec2`:
+
+| commit | step | change |
+|---|---|---|
+| `341fbc25` | 4.2(1)-(3) | `ShapedGlyphRun::visible` from `node_is_visible(doc, brush.id)` in `extract_paragraph` and `shape_paragraph_glyph_runs`; `draw_shaped_lines` skips a hidden run before the font lookup; `draw_line_decorations`, `lines_right_edge`, `item_is_ink`, `para_has_link_runs` skip it; `extract_heading_title` reads the visible runs' glyph ranges (F209a) |
+| `d06813d2` | 4.2(4) | `paragraph_paints(root_visible, lines)` at the four `ParagraphEntry` sites of `inline_root.rs` / `list_item.rs`; inside markers take the `li`'s visibility, a visible marker makes its paragraph painted |
+| `0feb944f` | 4.2(5) | a hidden inline box is no longer skipped (`draw_shaped_lines`, `paint_inline_box_continuation`); `ib.visible` gates its link rectangle only |
+
+html-to-pdf, branch `f209-visibility-hidden`: red tests (`visibility_hidden.rs`, `fixtures.rs` test for 37), fixture 37 with its Chrome reference, `Cargo.lock` bumped after each fork commit (fulgur line only), findings, `upstream.md`.
+
+Deviations from the plan, besides 8.1: `paragraph_paints` counts a hidden inline box that has visible content only through the box's own `visible` (F212c); a visible marker also sets `entry.visible` (a visible `li` with a hidden `<p>` child keeps its marker); the existing fork test `an_inline_box_continuation_is_painted_once_per_page` asserted that a hidden box is skipped and now asserts it is reached (step 5 by design). F209c (the step-5 fallback) was not needed.
+
+### 8.3 Gates
+
+| gate | result |
+|---|---|
+| fork `cargo test -p fulgur` (all targets, `FONTCONFIG_FILE` pinned) | 3012 passed, 0 failed; new: 6 convert tests (`visibility_tests`), `paragraph_paints_truth_table`, `metrics_from_line_reads_a_hidden_first_run`, 2 paragraph draw tests, 3 heading title / link tests in `render.rs`, `render_smoke_hidden_inline_text_is_not_written_and_keeps_its_advance`; one existing test changed (above) |
+| fork `clippy --all-targets -- -D warnings`, `cargo fmt --check` | clean |
+| byte gate after 4.2(1)-(3), (4), (5): fixtures 01-36 + 7 corpus documents, 1 and 4 rayon threads | identical to main's binary every time (44 files, 37 differs as intended); the stderr differs only in the timing |
+| fork `fulgur-vrt` `.actual.pdf`, `d26eeec2` vs `0feb944f` | 35 of 64 differ from the goldens on this host on both, the 35 files byte-identical between the two runs; no `visibility` in the VRT fixtures; not re-blessed |
+| `cargo test --release --locked` (html-to-pdf) | 931 passed, 0 failed (81 test binaries) |
+| `visibility_hidden.rs` | 9 tests, 8 red on main (`guards_that_already_hold` green) |
+| `cargo clippy --release --all-targets -- -D warnings`, `cargo fmt --check` | clean |
+| `compare.py --threshold-check` | all 37 ok; fixture 37: main 3.22 %, now 3.17 % (threshold 4.2 %); 1 page like Chrome's |
+| `bench.py --check` | ok; b200-text 789 ms, b200-mixed 750 ms; b200-items 1300 ms (host; main 1380 ms and the new binary 1250 ms in an interleaved A/B, 5 runs each); no slowdown |
+| tagged check of a mixed document (hidden `h1`, hidden-only `<p>`, `h2` with a hidden span and a link, hidden `li`, hidden `p` with link and a visible span, hidden `tr`) | `qpdf --check` clean, one `/Link`, `/T (Faktura  odkaz )`, text layer without hidden words |
+
+### 8.4 Not verified
+
+- `vrt-validator` and `pdf-reviewer` (merge policy items 2 and 5) were not run: this session had no way to start those subagents. The qpdf checks above and the tagged tests stand in for the structure part only. The empty marked content of a paragraph with a visible root and only hidden runs was not inspected beyond `qpdf --check`.
+- The spec references in section 2 are still from memory (css-spec-researcher was not run); css-display-3 section 4 on interaction is unverified.
+- Fork VRT goldens: this host's fonts differ from 35 of 64, so a re-bless is deferred (coordinator's note in `upstream.md`).
+- Pagination of a hidden inline-block that splits over pages (continuation pages now dispatch its content) is only covered by the fork unit test, not by a rendered multi-page document.
+- The `/T` of a heading keeps a double space where a hidden word sat between two spaces (`Faktura  odkaz `).
