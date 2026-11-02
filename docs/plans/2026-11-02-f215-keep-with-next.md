@@ -277,3 +277,18 @@ The red tests check later numbers (ours `AFTER` after the move, e.g. 532.6 pt) o
 - **Doc fixes for the F215 PR:**
   - `pagination_layout.rs:8701` and `docs/plans/2026-10-29-f30f-l-sub-line-overflow.md:24` misquote the spec as "fragmented content".
   - §1 of this plan: `parse_break_forced` returns `bool`, not enum values (`column_css.rs:539-552`).
+
+### Coordinator decisions after steps 1 and 2 (2026-11-02)
+
+- **A head at the page top (new step 7b, in scope).**
+  - Case: the chain's head is first on its page (nothing in the flow above it on that page), and the chain head + first fragment of the next box does not fit a fresh page.
+  - Here no allowed break keeps the content inside the fragmentainer. The break before the head sits at the page top, so it gains nothing. So §4.4's relaxation starts, and Rule 3 is dropped first.
+  - Implementation: the walk starts the next paragraph in place with `rule3_dropped = true`. This is the same flag as step 7, set by the same `keep_with_next_extent` when `top(head) == page top`.
+  - `choose_line_break`'s existing fallback order (author rules, then keep the orphans, then 2 / 2, then any break) gives Chrome's measured 1/4, 2/3, 3/2, 3/2 for room 1-4. That is conforming here; see the step 0 result, item "head first on the page".
+  - The test is `a_short_paragraph_after_a_heading_at_the_page_top_relaxes_rule_3`.
+  - This is not Variant B. A head with content above it still moves with the whole short paragraph.
+- **Chrome version.** The reference is m153 (the committed references say `Skia/PDF m153`). Read "m141" in §3 as "Chrome, the version of the committed references".
+- **M3 (a pair taller than a page).** Ours places the box whole. Chrome slices the fixed-height box. That difference is F96 / box slicing, not F215, so the pin stays.
+- **Grid items honour the avoid in Chrome.** That is F215e (out of scope here, ADR-free); the pin stays.
+- **Fixture 41 with 17 item rows.** Accepted.
+- **Next.** Steps 3+ (fork) wait until PR #85 (F30c-o3) merges. The fork branch is linear, one engineer at a time.
