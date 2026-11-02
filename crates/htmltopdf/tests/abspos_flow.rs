@@ -320,9 +320,10 @@ fn an_abspos_wrapper_in_a_static_div_or_in_a_relative_div_keeps_every_word() {
 
 #[test]
 fn an_abspos_wrapper_of_ten_paragraphs_is_fragmented_from_its_start() {
-    // Ten paragraphs of 300 words with a 20 px gap. 1821 of 3000 words printed; Chrome: 9 pages. Short paragraphs
-    // that fit a page move whole inside the wrapper (the nested half of F30c, F30c-n; the body-level half was fixed by
-    // F30c and does not change this case: 10 pages before and after), so the page count may be a little higher.
+    // Ten paragraphs of 300 words with a 20 px gap. 1821 of 3000 words printed; Chrome: 9 pages, 342 / 342 / 343 / 356 /
+    // 343 / 341 / 333 / 342 / 258 words a page. A paragraph that fits a page but not the room left on its page starts there
+    // and is split between its lines, in the wrapper as at body level (F30c-n; before it moved whole and the document had
+    // 10 pages): our pages hold Chrome's words.
     let paragraphs: String = (0..10)
         .map(|i| {
             format!(
@@ -336,10 +337,7 @@ fn an_abspos_wrapper_of_ten_paragraphs_is_fragmented_from_its_start() {
     ));
     assert_every_word_once("A4", &pdf, 3000);
     let pages = page_count(&pdf);
-    assert!(
-        (9..=11).contains(&pages),
-        "{pages} pages, Chrome 9 (+2 for F30c-n)"
-    );
+    assert_eq!(pages, 9, "Chrome 9");
 }
 
 // ── A5: a box under a relative parent that starts below content ───────────────────────────────────────────────────
