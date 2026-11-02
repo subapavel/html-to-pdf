@@ -1,16 +1,3 @@
-` line, ready to commit as `docs/plans/2026-11-02-f209-visibility-hidden.md`. It is about 170 lines. All code references are from reading `/home/user/fulgur` at `d26eeec2` (the `Cargo.lock` rev; HEAD is `htmltopdf/srgb-colours`) and `/home/user/blitz` at `3cea708f`. I could not run anything: no Chrome measurements, no pdftotext, no qpdf. Everything the plan says about Chrome comes from looking at the existing repro PDFs, and step 1 measures the rest.
-
-**What the code shows:**
-- **Cause:** visibility is decided once per paragraph, never per glyph run. `ShapedGlyphRun` has no `visible` field, although `InlineImage` and `InlineBoxItem` already have one. Each run's brush id is the node whose computed `visibility` already reflects inheritance, so fulgur has the data and Blitz needs no change.
-- **Fix approach:** add a `visible` field to each glyph run rather than dropping hidden runs at convert time. `metrics_from_line` and `recalculate_paragraph_line_boxes` read the first text run's font metrics, so dropping runs early would move inline images on lines whose text is hidden. That would change layout, which `visibility` must not do.
-- **Hidden block with a visible child:** the finding says this child is not shown. In the code, block children are already painted, because each has its own entry. The cases that actually fail are inline: a visible span inside a hidden inline root or hidden span, and visible content inside a hidden inline-block (`paragraph.rs:999`, `render.rs:1453`).
-- **Fixture CSS:** the compiled `fixtures/tailwind/tailwind.css` has no `.invisible` rule (the only grep hit was `border-collapse`), so fixture 37 uses an inline `<style>`.
-- **Byte gates:** nothing in fixtures 01-36, the 7 `bench/corpus` documents, `fulgur-vrt` or the fork's examples uses `visibility`. The Blitz UA sheet has only `dialog:modal{visibility:visible}`. So every gated document should stay byte-identical.
-
-**Decision for you:** the plan folds in a second bug in the same function, contrary to the one-finding-per-PR rule. From reading only, I believe every glyph run carries the whole paragraph's text (`paragraph.rs:169-174`), so `extract_heading_title` (`render.rs:1564`) repeats a multi-run heading's text in its `/T` title. It also puts hidden words there. Filtering out hidden runs alone would not remove those words, so the plan builds the title from the drawn glyphs' text ranges, which also stops the repetition. Step 1 confirms the repetition with qpdf; if it is real, it gets filed as F209a. If you would rather keep that separate, the hidden-text-in-`/T` acceptance test has to move with it.
-
-=== PLAN ===
-
 # F209: `visibility: hidden` on inline content is printed
 
 Date: 2026-11-02. Finding: F209 in `2026-10-15-m0-findings.md` (medium: hidden text is printed and extractable). Fork: `subapavel/fulgur` branch `htmltopdf/srgb-colours`, head `d26eeec2` (the rev in `Cargo.lock`). Line numbers are from that checkout; re-read them before editing.
