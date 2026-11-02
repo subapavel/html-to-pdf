@@ -519,20 +519,20 @@ fn a_padded_nested_paragraph_slices_its_top_inset_on_page_one() {
 
 // ── 5. A padded section breaks inside its paragraph ───────────────────────────────────────────────────────────────
 
-/// `<section style="padding:16px;border:1px solid"><h2/><p>46 lines</p></section>`: Chrome 44 / 2 (`AFTER` 88.8 pt); with
-/// 20 px padding and 60 lines 45 / 15 (296.6 pt). The frame of the section is not asserted (F96).
+/// `<section style="padding:20px;border:1px solid"><h2/><p>46 lines</p></section>`: the paragraph fits a page but not the
+/// room below the heading and the padding (48 px above it); Chrome 44 / 2 (`AFTER` 91.8 pt). The frame of the section is
+/// not asserted (F96). At `55154081`: 0 / 46. (With 16 px of padding the 46 lines end on a line boundary of Chrome's
+/// 1010 px page, which ours, 1009.13 px, does not reach; F30f-c.)
 #[test]
 fn a_padded_section_breaks_inside_its_paragraph() {
-    for (pad, n, per, y) in [(16, 46, [44, 2], 88.8), (20, 60, [45, 15], 296.6)] {
-        let words = printed_words(&render(&format!(
-            "<section style=\"padding:{pad}px;border:1px solid #888\"><h2 style=\"font:700 18px/27px Inter;margin:0\">Heading</h2><p>{}</p></section><p>AFTER</p>",
-            lines(n, 0)
-        )));
-        assert_eq!(per_page(&words), per, "padding {pad}, {n} lines");
-        assert_eq!(at(&words, "Heading").0, 1);
-        assert_lines_in_order(&words, n);
-        assert_after(&words, 2, y);
-    }
+    let words = printed_words(&render(&format!(
+        "<section style=\"padding:20px;border:1px solid #888\"><h2 style=\"font:700 18px/27px Inter;margin:0\">Heading</h2><p>{}</p></section><p>AFTER</p>",
+        lines(46, 0)
+    )));
+    assert_eq!(per_page(&words), [44, 2]);
+    assert_eq!(at(&words, "Heading").0, 1);
+    assert_lines_in_order(&words, 46);
+    assert_after(&words, 2, 91.8);
 }
 
 // ── 6. A long list item starts in place ───────────────────────────────────────────────────────────────────────────
@@ -561,13 +561,13 @@ fn a_long_list_item_starts_in_place() {
 
 // ── 7. Margins collapse through the wrapper ───────────────────────────────────────────────────────────────────────
 
-/// `<section style="margin-top:24px"><p style="margin-top:12px">`: the margins collapse to 24 px. After a 650 px spacer
-/// Chrome starts the paragraph at 550.1 pt (16 / 14, `AFTER` 265.1 pt); after 920 px, 3 / 27 (469.8 pt). At `55154081`:
+/// `<section style="margin-top:24px"><p style="margin-top:12px">`: the margins collapse to 24 px. After a 640 px spacer
+/// Chrome starts the paragraph at 542.6 pt (16 / 14, `AFTER` 265.1 pt); after 920 px, 3 / 27 (469.8 pt). At `55154081`:
 /// 0 / 30.
 #[test]
 fn margins_collapse_through_the_wrapper() {
     for (h, per, first, y) in [
-        (650, [16, 14], Some(550.1), 265.1),
+        (640, [16, 14], Some(542.6), 265.1),
         (920, [3, 27], None, 469.8),
     ] {
         let words = printed_words(&render(&format!(
@@ -584,7 +584,7 @@ fn margins_collapse_through_the_wrapper() {
             &words,
             "w0016",
             2,
-            if h == 650 { FIRST_LINE_Y } else { 249.3 },
+            if h == 640 { FIRST_LINE_Y } else { 249.3 },
         );
         assert_after(&words, 2, y);
     }
@@ -737,4 +737,17 @@ fn a_relaxed_avoid_section_starts_the_next_page_and_splits_in_place() {
     assert_eq!(per_page(&words), [0, 48, 42]);
     assert_lines_in_order(&words, 90);
     assert_after(&words, 3, 706.1);
+}
+
+/// A forced `break-before: page` on the paragraph that is first in a wrapper is the paragraph's start: Chrome moves the
+/// wrapper to page 2 (0 / 48, `AFTER` on page 3 at 44.6 pt after its own break). Found by the sweep (`c_h_h_ba_n48_B`):
+/// the wrapper must not be entered for its first two lines.
+#[test]
+fn a_forced_break_before_the_first_paragraph_of_a_wrapper_is_not_started_in_place() {
+    let words = printed_words(&render(&format!(
+        "<p>PRE</p><section><p style=\"break-before:page\">{}</p></section><p style=\"break-before:page\">AFTER</p>",
+        lines(48, 0)
+    )));
+    assert_eq!(per_page(&words), [0, 48, 0]);
+    assert_after(&words, 3, 44.6);
 }

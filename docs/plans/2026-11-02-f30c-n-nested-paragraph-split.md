@@ -271,4 +271,58 @@ Red: second long paragraph (A and B), spacer H=650 / 966, 4 / 5 lines with 3 lin
 (30 / 30 / 30 against 48 / 42); `terms_in_section_invoice_starts_the_long_paragraph_in_place` ("1." on page 2). Green guards: 3-line,
 avoid paragraph (style and class), relaxed avoid paragraph, avoid section, table cell (pinned 0 / 30), flex item (pinned 0 / 30).
 
-*Steps 4-5 (fork commit, byte gate, sweep, corpus against Chrome, `compare.py`, bench) are filled in below when done.*
+### Fork (`subapavel/fulgur` `htmltopdf/srgb-colours`)
+
+Built on `55154081` (F30c-o). Commits: `a699c0c5` (the change), `e9765f05` (the `orphans + widows` length rule moved into one predicate,
+`has_allowed_break`, shared by the body-level `starts_in_place` and `LineSplit::has_inner_break`, so that F30c-o3 changes it in one
+place; coordinator note), `cd9fb62e` (sweep finding below; head, the `Cargo.lock` rev).
+
+- `block_walk_line_split` (now with `avoid_inside`) returns the candidate split also when it overflows the room by more than 1 px, has an
+  allowed break and its inset and first `orphans` lines fit (`LineSplit::starts_in_place`, the negation of the F28 cut's own test), and
+  `may_start_in_place` holds: no `avoid` on the paragraph, no hidden tail or own block size, not block-size constrained, not a table cell,
+  and `block_flow_up_to_root` (every box up to `<body>` in block flow, not a float / table part / transformed / clip box with a block size).
+  The cheap tests run first, the ancestor walk only for a paragraph that overflows and has an allowed break.
+- `leading_block_size`: the arm after the taller-than-a-page one, for a wrapper's first-row paragraph, `column_styles.is_some()` and no
+  forced `break-before` on the paragraph.
+- `nested_line_split` is split in a candidate step and `nested_split_needed`; `body_line_split` and the multicol caller are unchanged.
+- Comments of `nested_line_split`, `clip_shape_supported`, `frame_above` and one test updated. `abspos_flow.rs` and `clip_boxes.rs` comments too.
+- Fork tests: 2476 lib tests pass (13 new / rewritten: `has_inner_break`, `starts_in_place` exact fit / negative room / inset,
+  `block_flow_up_to_root` (14 shapes), shape A and B fragments 0..5 on page 0 at y 100 and 5..10 on page 1, one line of room moves whole,
+  3 lines move whole, padded paragraph sliced, avoid moves whole, flex item and cell unchanged, forced `break-before` counts whole,
+  `a_paragraph_that_fits_a_page_still_moves_whole` rewritten to 5 / 3, `leading_block_size` with column styles gives 40), all
+  integration tests, one `render_smoke` case. Clippy `-D warnings` and fmt clean. The forced-`break-before` test was not run red against the
+  unguarded arm (the sweep case showed it).
+- `fulgur-vrt` on this host (35 `.actual.pdf`, not blessed here): byte-identical to the F30c-o fork's (`55154081`).
+
+### Ours
+
+- Byte gate (RAYON_NUM_THREADS 1 and 4; main-side binary = the F30c-o binary `htmltopdf-f30co`, fixtures 01-37 + 39 + the 7 corpus
+  documents): identical except `39-terms-in-section` (new) and `b200-mixed`. One and four threads give identical bytes. Fixture 38 does not
+  exist on this branch; the gate is re-run when it is rebased onto the merged F30c-o.
+- Wrapped F30c cases (`out/scratch/f30cn/c`, 116 documents: the 52 F30c cases in shapes A and B plus the plan's tests 3-10 and probes):
+  lines per page and `AFTER` page / y (±1 pt) at Chrome's in 108, against 51 on the F30c-o binary. The 8 left: 3-line paragraphs with two
+  lines of room (F30c-w, pinned), `sp968_n30` A / B (room of 2 lines to the pixel: Chrome's 1010 px page against our 1009.13, F30c's
+  body-level twin has the same, F30f-c), the table cell probe (F30c-t, filed).
+- Sweep (`out/scratch/f30cn/sweepgen.py`, `sweep.py`): 756 documents, the 378 body-level F30c / F30f-l cases of `out/scratch/f30flv`
+  (`c_two`, `c_mid`, `c_mid2`, `c_tiny`, `c_first`, `c_h`, `c_wrap`, `c_wrap2`, `c_lh`, `c_long`, `c_rich`, `c_edge`, `c_pg`, `c_hf`, `c_just`,
+  those with the `AFTER` paragraph) in shapes A and B, each with a Chrome PDF. 704 unchanged, 52 changed, **52 closer to Chrome, 0 further**
+  (lines per page and `AFTER`); at Chrome: 648 on the F30c-o binary, 700 now. The first run had one case further (`c_h_h_ba_n48_B`:
+  `<p>PRE</p><section><p style="break-before:page">48 lines</p></section>`; the old binary got 0 / 48 by accident, because the whole
+  wrapper did not fit; the forced break on the first child of a wrapper is not honoured by the fragmenter when the wrapper stays on the
+  page, which is an old gap: with 10 or 30 lines it is ignored on both binaries). Fixed by not counting the paragraph by its first lines
+  when it has a forced `break-before` (guard test `a_forced_break_before_the_first_paragraph_of_a_wrapper_is_not_started_in_place`); the gap
+  itself is filed as F30c-b. The cases left not at Chrome are unchanged ones (heights, `min-height`, line-height families, F30f-c capacity).
+- `b200-mixed`: 203 pages before, **198 now, Chrome 199** (`out/scratch/f30cn/mixed`, the corpus document with the sheet linked). Every
+  word once: the multiset differs from Chrome's only in four hyphen-split tokens (`e-` + `mailem`); the F30c-o binary printed 54 extra words
+  (10 repeated table headers). The heading `Doklad N` is on Chrome's page for 159 of 181 units, against 29 before (the others one page off).
+- `abspos_flow::an_abspos_wrapper_of_ten_paragraphs_is_fragmented_from_its_start`: 10 pages, now 9 like Chrome, with Chrome's words per page
+  (342 / 342 / 343 / 356 / 343 / 341 / 333 / 342 / 258); the test asserts `== 9`.
+- `compare.py --threshold-check`: all fixtures ok. Fixture 39: 7.5 % / 13.4 % on the F30c-o binary, **5.9 % / 4.9 %** now; threshold 0.069
+  (worst + 1 point). No other fixture moved. Side-by-side of 39 looked at: both pages match Chrome's text lines, page 1 ends with clause 27.
+- `bench.py --check` ok: b200-items 1331 ms (byte-identical output; the "1250 ms" note is the machine, as before), b200-text 806 ms,
+  b200-mixed 824 ms (was ~780 before; the chain walk is not measurable), scaling r 3.78.
+- Findings filed: F30c-t (table cell), F30c-g (flex / grid item), F30c-b (forced `break-before` on the first child of a wrapper that stays
+  on its page is ignored); F30f-f unblocked; F30c-o2 / F30c-o3 (keep-the-orphans for short nested paragraphs) left to F30c-o3.
+- Not verified: Chrome numbers for orphans / widows author values on nested paragraphs; shapes with an `avoid` ancestor that holds and is
+  entered for a forced break inside it (reasoned, not measured); the plan's step 5 `vrt-validator` run (not run from this session); a
+  full `cargo test --release --locked` is run at the end (see the final report).

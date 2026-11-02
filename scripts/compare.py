@@ -262,6 +262,12 @@ THRESHOLDS = {
     #     binary before the change the fork did not read `orphans` and left two lines of clause 26 at the bottom of page 1 (clause 26 and
     #     the start of 27 at 768 pt): 5.9 / 5.6 %, page 2 shifted by those two lines. Worst page + 1 point.
     "38-terms-print-orphans": 0.064,
+    # 39: new in F30c-n (a two-page Czech invoice: nine items, then a `<section>` holding an `<h2>`, a 2-line intro, ONE 29-line `<p>`
+    #     of clauses 1 to 60 that does not fit the 240 pt left on page 1, and a 5-line `<p>`; Chrome starts the long paragraph on page 1
+    #     (twelve lines), "28." heads page 2 at 44.5 pt, ours the same line; 2 pages). 5.9 / 4.9 %: the text drift every fixture has
+    #     over two pages of small text. On the binary before F30c-n the paragraph moved to page 2 whole (a wrapper hid it from the
+    #     F30c rule): 7.5 / 13.4 %, the page-2 number being a third of a page of text that was too low. Worst page + 1 point.
+    "39-terms-in-section": 0.069,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
