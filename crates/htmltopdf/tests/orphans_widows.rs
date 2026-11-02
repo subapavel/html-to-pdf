@@ -648,6 +648,22 @@ fn widows_larger_than_a_page_are_ignored_on_a_continuation_fragment() {
     }
 }
 
+/// `widows` as large as the whole paragraph (a paragraph taller than a page: 52 or 60 lines, `widows: 60`) cannot be had at all.
+/// Chrome ignores it in the first fragment and keeps the `orphans`: after 300 px (33 lines of room) `orphans: 1` gives 1 / 48 / 3
+/// (`AFTER` on page 3 at 91.8 pt), `orphans: 2` 2 / 48 / 2 (76.1 pt), 60 lines with `orphans: 10` 10 / 48 / 2 (76.1 pt). Ours
+/// at `cd9fb62e` moved the paragraph whole (0 / 48 / 4): the same page count, the first lines on the wrong page.
+#[test]
+fn widows_as_large_as_a_paragraph_taller_than_a_page_keep_the_orphans() {
+    for (n, o, per, y) in [
+        (52, 1, [1, 48, 3], 91.8),
+        (52, 2, [2, 48, 2], 76.1),
+        (60, 10, [10, 48, 2], 76.1),
+    ] {
+        let words = shaped("body", &format!("p{{orphans:{o};widows:60}}"), 300, n);
+        assert_case(&words, n, &per, 3, y, &format!("{n} lines, orphans {o}"));
+    }
+}
+
 // ── 11. `orphans` larger than a page ──────────────────────────────────────────────────────────────────────────────
 
 /// A 100-line paragraph with `orphans: 49`, `50` or `52` (more than the 48 lines a page holds; 47 for the padded one,
