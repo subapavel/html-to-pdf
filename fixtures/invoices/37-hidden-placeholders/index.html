@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0037</title>
+<style>
+  @font-face { font-family: Inter; font-weight: 400; src: url(../../fonts/Inter-Regular.ttf) format("truetype"); }
+  @font-face { font-family: Inter; font-weight: 600; src: url(../../fonts/Inter-SemiBold.ttf) format("truetype"); }
+  @font-face { font-family: Inter; font-weight: 700; src: url(../../fonts/Inter-Bold.ttf) format("truetype"); }
+
+  /* Plain CSS written for a browser. The compiled Tailwind sheet has no `.invisible` rule and rebuilding it would move every
+     fixture, so the hidden parts of this template are written here: visibility: hidden keeps the box's space and paints
+     nothing (CSS 2.1 section 11.2). */
+  @page { size: A4; margin: 15mm; }
+  body { margin: 0; font: 10pt Inter, sans-serif; color: #111827; }
+  h1 { margin: 0; font-size: 20pt; font-weight: 700; }
+  h2 { margin: 0 0 4px; font-size: 8pt; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #6b7280; }
+  p { margin: 0; }
+  .head { padding-bottom: 12px; border-bottom: 2px solid #111827; }
+  .stamp { display: inline-block; visibility: hidden; margin-right: 12px; padding: 2px 8px; border: 2px solid #dc2626; color: #dc2626; font-weight: 700; }
+  .meta { margin: 16px 0; }
+  .meta div { display: inline-block; vertical-align: top; width: 49%; }
+  .meta dl { margin: 6px 0 0; }
+  .meta dt { display: inline-block; width: 40px; color: #6b7280; }
+  .meta dd { display: inline; margin: 0; font-weight: 600; }
+  /* KS is two digits shorter than VS: a hidden "00" in front of it lines the values up. */
+  .pad::before { content: "00"; visibility: hidden; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th, td { padding: 6px 10px; border: 1px solid #d1d5db; text-align: left; }
+  th { background: #f3f4f6; font-weight: 600; }
+  td.n, th.n { text-align: right; }
+  /* A trailing sign placeholder: hidden on the rows that add, visible on the discount, so the digits stand in one column
+     (a right-aligned cell with a minus after its number). */
+  .sign.plus { visibility: hidden; }
+  .total td { font-weight: 700; background: #111827; color: #fff; border-color: #111827; }
+  .draft { margin: 16px 0; padding: 8px 12px; border: 2px dashed #dc2626; background: #fef2f2; color: #dc2626; font-weight: 700; visibility: hidden; }
+  .draft span { visibility: visible; font-weight: 400; color: #111827; }
+  .screen-only { visibility: hidden; }
+  .note { margin-top: 16px; font-size: 9pt; color: #4b5563; }
+</style>
+</head>
+<body>
+
+<!-- The STORNO stamp is an inline-block that is hidden in the issued invoice; it keeps its place in the title line. -->
+<div class="head"><span class="stamp">STORNO</span><h1 style="display: inline">Faktura 2026-0037</h1></div>
+
+<div class="meta">
+  <div>
+    <h2>Dodavatel</h2>
+    <p><b>Příkladná integrace s.r.o.</b></p>
+    <p>Krátká 12, 541 01 Trutnov</p>
+    <p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2>Platební údaje</h2>
+    <dl>
+      <dt>VS</dt><dd>20260037</dd><br>
+      <dt>KS</dt><dd class="pad">0308</dd><br>
+      <dt>Účet</dt><dd>123456789/0300</dd>
+    </dl>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Popis</th><th class="n">Množství</th><th class="n">Cena/ks</th><th class="n">Celkem</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Licence iFlowMonitor – 12 měsíců</td><td class="n">1 ks</td><td class="n">30 000,00</td><td class="n">30 000,00<span class="sign plus">−</span></td></tr>
+    <tr><td>Implementace a zaškolení</td><td class="n">4 h</td><td class="n">2 500,00</td><td class="n">10 000,00<span class="sign plus">−</span></td></tr>
+    <tr><td>Technická podpora – prioritní linka</td><td class="n">12 měs.</td><td class="n">800,00</td><td class="n">9 600,00<span class="sign plus">−</span></td></tr>
+    <tr><td>Sleva za předčasnou platbu</td><td class="n">1</td><td class="n">1 000,00</td><td class="n">1 000,00<span class="sign">−</span></td></tr>
+  </tbody>
+  <tfoot>
+    <tr class="total"><td colspan="3" class="n">Celkem k úhradě</td><td class="n">48 600,00 Kč</td></tr>
+  </tfoot>
+</table>
+
+<div class="draft">KONCEPT — neplatný doklad<br><span>Doklad byl vystaven elektronicky a je platný bez podpisu.</span></div>
+
+<p class="note">Fakturu najdete také na portálu: <a class="screen-only" href="https://faktury.example.cz/2026-0042">Zobrazit online</a></p>
+
+</body>
+</html>
