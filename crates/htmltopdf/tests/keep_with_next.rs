@@ -579,8 +579,8 @@ fn the_keep_holds_inside_a_section() {
 
 /// Not Chrome, on purpose (F215e, F30d-b): ours does not read the keep inside a multicol container (an `avoid` before a column
 /// end: Chrome moves `H3` to column 2, `AFTER` at 233.6 pt against 217.8 pt without the declaration; with `avoid-column` the
-/// same) or on grid items (Chrome moves both items' headings with the paragraphs: `HEAD` at 44.6 pt on page 2 for room 0 and 1;
-/// ours leaves them at the bottom of page 1). The PDF bytes equal those of the twin without the `avoid`.
+/// same) or between the items of a grid row (the items are level with each other). The PDF bytes equal those of the twin
+/// without the `avoid`.
 #[test]
 fn grid_items_and_columns_ignore_the_keep() {
     let columns = |avoid: &str| {
@@ -599,7 +599,7 @@ fn grid_items_and_columns_ignore_the_keep() {
     let grid = |avoid: &str| {
         render(
             &format!(
-                "h2{{{avoid}}}.g{{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:600px}}"
+                ".g{{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:600px}}.g>div{{{avoid}}}"
             ),
             &format!(
                 "{}<div class=\"g\"><div><h2>HEAD</h2><p>{}</p></div><div><h2>HEADB</h2><p>{}</p></div></div><p>AFTER</p>",
@@ -610,6 +610,32 @@ fn grid_items_and_columns_ignore_the_keep() {
         )
     };
     assert_eq!(grid("break-after:avoid"), grid(""));
+    assert_eq!(grid("break-before:avoid"), grid(""));
+}
+
+/// A heading inside a grid item is a box in block flow, so the keep holds there. Chrome with `h2 { break-after: avoid }` in
+/// each of two grid items of 10 lines, with room for the heading only or the heading and one line: both headings go to
+/// page 2 with their paragraphs (`HEAD` at 44.6 pt, `AFTER` at 217.8 pt; ours 44.3 / 217.6 pt, before F215 the headings
+/// stayed at the bottom of page 1 and `AFTER` was at 201.8 pt). With room for three lines Chrome splits the paragraphs 3 / 7
+/// on page 1 (`AFTER` at 154.8 pt); ours does not split a paragraph in a grid item (F30b), so there the heading goes with
+/// the paragraph too (`AFTER` at 217.6 pt, 201.8 pt before F215): further from Chrome in position, not in content.
+#[test]
+fn a_heading_inside_a_grid_item_moves_with_its_paragraph() {
+    for j in [0, 1, 3] {
+        let words = printed_words(&render(
+            "h2{break-after:avoid}.g{display:grid;grid-template-columns:1fr 1fr;gap:20px;width:600px}",
+            &format!(
+                "{}<div class=\"g\"><div><h2>HEAD</h2><p>{}</p></div><div><h2>HEADB</h2><p>{}</p></div></div><p>AFTER</p>",
+                room_for_heading_and(j),
+                lines(10),
+                lines_from(10, 10)
+            ),
+        ));
+        assert_eq!(page_of(&words, "HEAD"), 2, "room {j}");
+        assert_eq!(page_of(&words, "HEADB"), 2, "room {j}");
+        assert_eq!(per_page(&words), [0, 20], "room {j}");
+        assert_at(&words, "AFTER", 2, 217.6);
+    }
 }
 
 // ── 12. A chain taller than a page: Rule 3 gives way first ────────────────────────────────────────────────────────────
