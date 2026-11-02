@@ -765,7 +765,9 @@ fn orphans_that_a_page_can_keep_still_move_the_paragraph() {
 ///   keeps the first `li` on page 2.
 #[test]
 fn a_short_paragraph_that_fits_a_page_keeps_its_lines_together() {
-    let cases: [(usize, usize, usize, usize, &[usize], f32); 3] = [
+    // (lines, orphans, widows, room in lines, lines per page, `AFTER` y in pt)
+    type Case = (usize, usize, usize, usize, &'static [usize], f32);
+    let cases: [Case; 3] = [
         (5, 3, 3, 3, &[0, 5], 123.1),
         (4, 1, 5, 2, &[0, 4], 107.3),
         (7, 3, 5, 6, &[0, 7], 154.6),

@@ -253,6 +253,9 @@ Red: `a_paragraph_taller_than_a_page_starts_where_its_orphans_fit_when_no_break_
   of 2,940: the 194 are the deliberate ADR-0010 cases. No line below the content box in any changed case (the six `ov` and 13 `ov3` overflow
   cases of before are gone).
 - `compare.py --threshold-check`: all fixtures ok, no number moved (36: 5.5 / 4.3 %, 38: 5.4 / 2.9 %); side-by-side of 38 looked at.
-- `bench.py --check` ok. Full `cargo test --release --locked --no-fail-fast`: see the final report. `vrt-validator` was not run from this session.
+- `bench.py --check` ok (b200-items 1144 ms, b200-text 821, b200-mixed 776, scaling r 3.98). Full `cargo test --release --locked --no-fail-fast` before the merge of
+  main: 82 test binaries, 956 tests, 0 failed; after merging main (F30c-n, fixture 39) `orphans_widows`, `nested_start_in_place`, `fixtures`, `abspos_flow`,
+  `clip_boxes` pass; byte gate against the main binary (`htmltopdf-main-f30cn`) 46 of 46 identical at 1 and 4 threads, `compare.py --threshold-check` ok.
+  fmt and clippy `-D warnings` clean. `vrt-validator` was not run from this session.
 - Filed: **F215** (`break-before` / `break-after: avoid`), **F216** (a paragraph above a box with its own block size, the F30c-n guard), F30c-o2
   narrowed. F30c-w: a note that Chrome's 2 / 1 is the same family (ADR-0010).
