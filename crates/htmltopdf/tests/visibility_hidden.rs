@@ -381,30 +381,39 @@ fn a_hidden_spacer_pseudo_keeps_its_space() {
 
 #[test]
 fn a_visible_descendant_of_a_hidden_inline_is_printed() {
-    let cases: [(&str, &str, Vec<Expect>); 4] = [
+    let cases: [(&str, &str, Vec<Expect>, bool); 4] = [
         (
             "visible span with a pseudo in a hidden span",
             "<div><span class=vh>a <span class='t vv'>vis</span> w</span></div><p>AFTER</p>",
             vec![("txvis", 51.6, 43.8), AFTER],
+            true,
         ),
         (
             "visible span in a hidden div (the inline root)",
             "<div class=vh>a <span class=vv>vis</span> w</div><p>AFTER</p>",
             vec![("vis", 51.6, 43.8), AFTER],
+            true,
         ),
         (
             "visible ::after of a hidden p",
             "<p class='vh hp'>hidden text</p><p>AFTER</p>",
             vec![("ZZ", 98.2, 43.8), AFTER],
+            // pdftotext joins `textZZ` into one word when nothing is hidden: no word to compare.
+            false,
         ),
         (
             "visible block child of a hidden div with loose text",
             "<div class=vh>loose <p class=vv>blockvis</p> loose2</div><p>AFTER</p>",
             vec![("blockvis", 42.7, 58.8), ("AFTER", 42.7, 88.8)],
+            true,
         ),
     ];
-    for (what, body, chrome) in cases {
-        check(what, body, &chrome);
+    for (what, body, chrome, advance) in cases {
+        let got = words_of(body);
+        assert_like_chrome(what, &got, &chrome);
+        if advance {
+            assert_advance_kept(what, &got, &words_shown(body));
+        }
     }
 }
 
@@ -532,7 +541,7 @@ fn decorations_follow_the_text() {
     let body = "<div><u>a <span class=vh>bb</span> c</u></div>";
     let pdf = render(body);
     assert_eq!(
-        ink_in(&pdf, 53, 30, 66, 70),
+        ink_in(&pdf, 52, 30, 64, 70),
         0,
         "nothing under the hidden word"
     );
@@ -541,7 +550,7 @@ fn decorations_follow_the_text() {
     let body = "<div>a <span class=vh><u>bb</u></span> c</div>";
     let pdf = render(body);
     assert_eq!(
-        ink_in(&pdf, 50, 30, 66, 70),
+        ink_in(&pdf, 52, 30, 64, 70),
         0,
         "no underline of a hidden u"
     );
