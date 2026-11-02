@@ -428,7 +428,7 @@ fn hidden_links_have_no_annotation() {
     assert_like_chrome(
         "partly hidden a",
         &printed_words(&pdf),
-        &[("Zobrazit", 42.7, 43.8), ("y", 119.5, 43.8), AFTER],
+        &[("Zobrazit", 42.7, 43.8), AFTER, ("y", 119.5, 43.8)],
     );
     assert_advance_kept("partly hidden a", &printed_words(&pdf), &words_shown(body));
     let rects = link_rects(&check_and_qdf(&pdf));
@@ -532,7 +532,7 @@ fn decorations_follow_the_text() {
     let body = "<div><u>a <span class=vh>bb</span> c</u></div>";
     let pdf = render(body);
     assert_eq!(
-        ink_in(&pdf, 51, 30, 66, 70),
+        ink_in(&pdf, 53, 30, 66, 70),
         0,
         "nothing under the hidden word"
     );
