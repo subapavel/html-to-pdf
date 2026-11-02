@@ -14,7 +14,7 @@
 //!
 //! Where Chrome is not matched the test says so and pins ours: `calc()` in the value (Chrome reads it, the fork's reader
 //! drops it), multicol (the fork ignores even the initial value inside columns: F30d-b), widows larger than a page,
-//! `break-after: avoid` on the heading before a short paragraph (F87h) and, on purpose, a short paragraph that fits a
+//! `break-after: avoid` on the heading before a short paragraph (F215) and, on purpose, a short paragraph that fits a
 //! page and has no allowed break (ADR-0010: the spec moves it whole, Chrome splits it).
 //!
 //! F30c-o3 (tests 10-13 below): a paragraph taller than a page, a paragraph in a `<section>`, `<li>`, `<td>` or with
@@ -621,6 +621,33 @@ fn a_long_nested_paragraph_keeps_its_orphans() {
     }
 }
 
+/// `widows` larger than a page's lines on a continuation fragment (F30c-o2, probes `out/scratch/f30co3/wid`): 100 lines at the top
+/// of a page, `orphans: 10`. Chrome keeps the orphans and gives up the widows while a page can still hold them (`widows: 47`
+/// and `48`: 0 / 48 / 10 / 42, `AFTER` at 706.1 pt) and ignores them when no page can (`widows: 49`, `50`: 0 / 48 / 48 / 4,
+/// 107.6 pt). A `<section>`, `<li>`, cell and the body-level paragraph agree; the nested splitter pulled back to 10 / 42 for
+/// both before the chooser knew the page (and was at Chrome by accident for 49 and 50, F30c-o3 first version: 48 / 10 / 42).
+#[test]
+fn widows_larger_than_a_page_are_ignored_on_a_continuation_fragment() {
+    for kind in ["body", "nest", "li", "td"] {
+        for (w, per, y) in [
+            (47, [0, 48, 10, 42], 706.1),
+            (48, [0, 48, 10, 42], 706.1),
+            (49, [0, 48, 48, 4], 107.6),
+            (50, [0, 48, 48, 4], 107.6),
+        ] {
+            let css = format!(
+                "p{{orphans:10;widows:{w}}}li{{orphans:10;widows:{w}}}td{{orphans:10;widows:{w}}}"
+            );
+            let words = shaped(kind, &css, 1008, 100);
+            assert_eq!(per_page(&words), per, "{kind}, widows {w}");
+            assert_lines_in_order(&words, 100);
+            if kind != "td" {
+                assert_after(&words, 4, y);
+            }
+        }
+    }
+}
+
 // ── 11. `orphans` larger than a page ──────────────────────────────────────────────────────────────────────────────
 
 /// A 100-line paragraph with `orphans: 49`, `50` or `52` (more than the 48 lines a page holds; 47 for the padded one,
@@ -756,8 +783,8 @@ fn a_short_paragraph_that_fits_a_page_keeps_its_lines_together() {
 /// lines the heading moves with the paragraph (0 / 5, the heading on page 2, `AFTER` at 139.1 pt).
 ///
 /// Ours does not honour `break-before: avoid` / `break-after: avoid` at all (F87c parses them as `auto`; there is no
-/// keep-with-next: F87h), so this pins what ours does: the heading stays on page 1 and the paragraph moves whole,
-/// 0 / 5 with `AFTER` at 123.1 pt. The red-then-green fix belongs to F87h. An ancestor's `break-inside: avoid` is a
+/// keep-with-next: F215), so this pins what ours does: the heading stays on page 1 and the paragraph moves whole,
+/// 0 / 5 with `AFTER` at 123.1 pt. The red-then-green fix belongs to F215. An ancestor's `break-inside: avoid` is a
 /// different case: the ancestor itself moves whole, and ours matches Chrome (0 / 5, 123.3 pt).
 #[test]
 fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
@@ -771,7 +798,7 @@ fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
                 lines(5)
             ),
         ));
-        // Ours (F87h open); Chrome 3 / 2 and `AFTER` at 76.1 pt.
+        // Ours (F215 open); Chrome 3 / 2 and `AFTER` at 76.1 pt.
         assert_eq!(
             per_page(&words),
             [0, 5],
