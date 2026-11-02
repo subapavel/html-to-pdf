@@ -252,7 +252,7 @@ THRESHOLDS = {
     "36-terms-after-items": 0.065,
     # 37: new in F209 (a one-page Czech invoice written in plain CSS that hides parts of itself with `visibility: hidden`: a trailing `-`
     #     on the amounts that add, a `00` spacer before the KS value, a STORNO stamp, a draft box with a visible note, a "Zobrazit
-    #     online" link; 1 page like Chrome's). 3.2 % on main's binary (the hidden words printed and the note missing): the text drift
+    #     online" link; 1 page like Chrome's). 3.2 % on main's binary (the hidden words printed and the note missing), 3.17 % now: the text drift
     #     every fixture has plus a few words.
     "37-hidden-placeholders": 0.042,
 }
