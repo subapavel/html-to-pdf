@@ -194,4 +194,103 @@ fn starts_in_place(lines: &[(f32, f32)], top: f32, bottom: f32, fresh: f32, rule
 
 ## 8. Evidence
 
-To be filled after implementation.
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`, append-only history: `cd9fb62e` (F30c-n) -> `96a68961` (the first F30c-o3 commit) -> `16c5e2ec`
+(revert, "for ordering") -> `e8c22256`, `ac2d2ce8` (the F30c-n validator guards, they land first and are part of PR #84's tree) -> `6c025c23`
+(F30c-o3 again, cherry-picked) -> `9a3c5d3c`, `ac0117e0`, `e98c013e`, `c1b7adba` (head, the `Cargo.lock` rev; follow-ups found by the sweeps,
+below). The byte-gate baseline is the F30c-n binary with the guards (`htmltopdf-f30cn2`), not the F30c-n binary of §5.
+
+### Step 0 and 1: spec and Chrome
+
+ADR-0010 is the decision (default variant, not Variant B). New Chrome probes (m141, `out/scratch/f30co3/`): the `li` and padded twins of
+`ov/` (`ov3`, 84 documents), the `break-after: avoid` shapes (`avoid`, 28), `widows` 46-50 against 48 lines (`wid`, 60) and the F30c-o
+sweep with Chrome PDFs (`swc`, 1,936). Contradictions to §2 and what was done:
+
+- **The tall arm needs more than the plan said.** `keep_orphans_break` for `widows` as large as the paragraph (§4: "leave alone, it only
+  occurs past a page") is reached on the first strip by every tall paragraph with `n <= widows` (52 lines, `orphans: 1; widows: 60`).
+  Chrome: 1 / 48 / 3 in the middle of a page, 48 / 4 at the top of a page (the paragraph moved), `orphans` kept only in the first case. Done
+  in `choose_line_break` (`at_top`) and `keep_orphans_break` (`start == 0 && total <= widows`); sweep `swc` found it (20 cases further
+  from Chrome on the first version).
+- **`widows` larger than the lines of a page in a continuation fragment** (F30c-o2) became reachable in the nested splitter, which had
+  not kept the orphans before and matched Chrome by accident (37 `g2` cases went further: 100 lines, `orphans: 10; widows: 50`, Chrome 48 / 48 /
+  4, the shared chooser 48 / 10 / 42). Chrome ignores such `widows` in a continuation fragment (`widows` 47 and 48 keep the orphans, 49 and 50
+  do not); `page_capacity` and the `continuation` argument do the same. For the first fragment Chrome's numbers are irregular (60 lines:
+  `widows: 49` 48 / 12, `50` 10 / 48 / 2, `orphans: 30; widows: 50` 30 / 30) and the pull-back of before is right for most; left to F30c-o2.
+- **`break-after: avoid` heading (coordinator note):** Chrome moves the heading with the paragraph (0 / 5, heading on page 2, `AFTER` 139.1 pt)
+  with room for the heading and 0-2 lines and keeps the orphans (3 / 2, 76.1 pt) with room for 3 or 4; `break-before: avoid` on the paragraph the
+  same; an ancestor's `break-inside: avoid` moves the ancestor whole (matches ours). Ours does not honour `break-before` / `break-after:
+  avoid` at all (F87c maps them to "none"), so the heading stays on page 1 and the paragraph moves whole (0 / 5, 123.1 pt). Not small:
+  filed as **F215** (keep-with-next). The test `a_short_paragraph_after_an_avoid_break_keeps_its_orphans` pins ours.
+
+### Red list (at `cd9fb62e`, `orphans_widows.rs`, 22 tests of which 4 red)
+
+Red: `a_paragraph_taller_than_a_page_starts_where_its_orphans_fit_when_no_break_keeps_the_widows` (0 / 30 / 30), `a_long_nested_paragraph_keeps_its_orphans`
+(48 / 48 / 4), `orphans_larger_than_a_page_move_the_paragraph_and_keep_every_line_inside` (1 / 48 / 48 / 3 ...),
+`a_cell_with_orphans_sixty_after_a_full_page_is_not_cut_into_a_strip` (1 / 48 / 48 / 3). Green pins: the 194-case short-paragraph deviation
+(`a_short_paragraph_that_fits_a_page_keeps_its_lines_together`, ADR-0010), the avoid shapes, `orphans_that_a_page_can_keep_still_move_the_paragraph`
+(`o44`-`o48`). Added after the sweeps: `widows_larger_than_a_page_are_ignored_on_a_continuation_fragment`,
+`widows_as_large_as_a_paragraph_taller_than_a_page_keep_the_orphans`. 24 tests in the file now.
+
+### Fork
+
+- `choose_line_break` (author rules, keep the orphans, initial 2 / 2) in `fragment_inline_root` and `plan_line_breaks`; `has_allowed_break(n,
+  taller_than_a_page, rules)`; `starts_in_place(.., fresh, ..)`; `LineSplit::leading_within` at the five sites (`row_mate_can_split` keeps
+  `leading()`); `page_capacity`; comments of `has_allowed_break`, `plan_line_breaks`, `LineSplit::leading`, `start_here` updated.
+- Fork tests: `choose_line_break` equals the old chain for every `start < i < total <= 60` (6 rule sets); `plan_line_breaks(INITIAL)` equals a
+  test-local copy of the old function for `n <= 120`, rooms 1-60, three later rooms, two tails (21,600 plans); the 48 / 30 / 22 plan;
+  `has_allowed_break` truth table; `starts_in_place` tall; `leading_within`; `leading_block_size` of a `<section>` with `orphans: 50`
+  gives the page; a first-in-body paragraph with `orphans: 60` and a body offset stays on page 0; `widows` larger than a page; `widows` as large as
+  the paragraph; one `render_smoke` case. 2,493 lib tests pass; clippy `-D warnings` and fmt clean.
+
+### Ours
+
+- **Byte gates** (1 and 4 threads) against the F30c-n + guards binary: fixtures 01-39 and the 7 corpus documents byte-identical (46 PDFs).
+  Sweeps byte-identical: `grid` 2,940, `int` 265, `casc` 128, `ext` 41, the F30c sweeps `f30flv` 1,047, `f30cv` 1,218, `f30c` 68, the F30c-n sweep
+  756, `f183v5` 6,209, `avoid` 28.
+- **Changed, against Chrome (lines per page):** `g2` 312 changed (310 closer, 2 further: `pad_n60_o30_w50_k0` / `_k3`, a first fragment
+  with `widows` of a page, Chrome 47 / 13, ours 30 / 30, matched by accident before): 980 -> 1,288 of 1,320 at Chrome; `ov` 75 -> 105 of 105;
+  `ov3` (li, padded) 39 changed, all closer; `tbl` 160 -> 162 of 209 (`T6_wideorph_k0` and one more); `cell` 3 closer; `wid` 21 changed,
+  19 closer, 2 equal (`widows: 49` first fragment, F30c-o2); `swc` 159 changed of 1,936, 157 closer, 2 equal, 0 further. `grid` stays at 2,746
+  of 2,940: the 194 are the deliberate ADR-0010 cases. No line below the content box in any changed case (the six `ov` and 13 `ov3` overflow
+  cases of before are gone).
+- `compare.py --threshold-check`: all fixtures ok, no number moved (36: 5.5 / 4.3 %, 38: 5.4 / 2.9 %); side-by-side of 38 looked at.
+- `bench.py --check` ok (b200-items 1144 ms, b200-text 821, b200-mixed 776, scaling r 3.98). Full `cargo test --release --locked --no-fail-fast` before the merge of
+  main: 82 test binaries, 956 tests, 0 failed; after merging main (F30c-n, fixture 39) `orphans_widows`, `nested_start_in_place`, `fixtures`, `abspos_flow`,
+  `clip_boxes` pass; byte gate against the main binary (`htmltopdf-main-f30cn`) 46 of 46 identical at 1 and 4 threads, `compare.py --threshold-check` ok.
+  fmt and clippy `-D warnings` clean. `vrt-validator` was not run from this session.
+- Filed: **F215** (`break-before` / `break-after: avoid`), **F216** (a paragraph above a box with its own block size, the F30c-n guard), F30c-o2
+  narrowed. F30c-w: a note that Chrome's 2 / 1 is the same family (ADR-0010).
+
+### Validator round 1 (PR #85, `vrt-validator` on `816fac2`): two MEDIUM, one LOW
+
+Fork commits `57648865` (WIP the stop hook forced), `c3a34734`, `d790b08e`, `d5b4a994` (head, the `Cargo.lock` rev); binary `htmltopdf-f30co3b`.
+Repros `f30co3v/repro/R1`-`R6` (Chrome numbers re-measured in `out/scratch/f30co3/rep`); new tests in `orphans_widows.rs`, **red at `c1b7adba`**
+(the three of them failed on the locked build before the bump), green after.
+
+- **M1, a box with insets at a page top.** The orphans-above-a-page clamp (`leading_within`) moves a box whenever "something precedes" it, and the
+  gate counted the box's own top border and padding as content, so the paragraph moved and the box top stayed behind (blank stub page plus an extra
+  page: `R1` 0 / 48 / 12 against Chrome and main 47 / 13; `R4`, `R6` the same). The clamp applies only with real content above
+  (`content_above_child`): `leading_block_size_with(.., clamp_orphans)` and the `first_break_h` gate; `row_mate_can_split` passes `false`
+  (it kept the raw `leading` before F30c-o3 and the first F30c-o3 version clamped it by accident). Test
+  `a_box_with_insets_at_a_page_top_keeps_its_paragraph_when_the_orphans_do_not_fit_a_page` (R1, R6, R4); fork tests for `leading_block_size_with` and the three box shapes.
+- **M2, a padded or bordered `<p>` with widows of a page or more at a page top.** `plan_line_breaks` took "at the top of a page" from
+  `first_room >= page_room`, which a padded paragraph's first strip never meets. `fragment_nested_inline_root` now gets `first_at_top` from its callers
+  (`cursor_y <= 0` for the body-level padded branch, `!content_above_child` in the block walk) and `plan_line_breaks` takes it as a parameter. A
+  paragraph with a top inset of its own (a sliced box) ignores `widows` its short first strip cannot hold, like a continuation fragment (set E
+  `pbord_*`: Chrome 47 / 2 for 49 lines `widows: 48`, 47 / 48 / 5 for 100 lines `widows: 99`); the insets of ancestors do not count (the
+  first version of this rule counted them and broke set B `avoid_n60_o1_w50`, Chrome 10 / 48 / 2, and set D `a5_*`, `land_*`: caught by the rerun and narrowed in `d5b4a994`).
+  Test `a_padded_paragraph_taller_than_a_page_ignores_widows_as_large_as_itself_at_a_page_top` (`R2`, 49 / 60 lines); g2 `pad_n60_o30_w50_k0` / `_k3`
+  (my own two further cases of the first round) now reach Chrome (47 / 13): g2 has 0 further than main.
+- **LOW, `R5`.** Not the same cause: the last relaxation step was the initial 2 / 2 and pulled 49 lines back to 47 / 2; Chrome drops the rule when the orphans
+  cannot be kept (48 / 1, also `body_n49_o49_w2`, `body_n49_o99_w2`, 15 probes in `lw`). The last step is now the natural break with the initial
+  2 orphans and no widows (`choose_line_break`; ADR-0010 sentence corrected). Test `orphans_no_page_can_keep_drop_the_widows_too`.
+- **Leftover: R3 (`td` in a second row, spacer 987 px).** Not caused by the clamp: the first row is 23 px, 987 + 23 = 1010 fits Chrome's 1010 px page and not ours
+  (1009.13, F30f-c). Our table moves to page 2 with its first row, and its second row, whose orphans cannot be kept, moves on to page 3 by the same
+  rule Chrome applies (0 / 0 / 48 / 12 against Chrome 0 / 48 / 12; main 0 / 46 / 14 by accident). At every other spacer
+  (`r3b`: 900-986) ours equals Chrome (main does not). Set A has 3 such cases (`td2_n60_o99_w2_k1_973`, `_982`, `td2_n150_o99_w99_k1_958`).
+- **Validator sets, against main:** A 1,560: 1,331 identical, 226 closer, 3 further (the R3 family). B 699: 129 closer, **0 further**. C 582: 327 closer, 0 further.
+  D 867: 243 closer, **0 further**. E 297: 72 closer, **0 further** (87 further before the fix). The 154 `over` cases of D are main's own.
+- **My sweeps (against main `htmltopdf-main-f30cn`):** byte-identical `grid` 2,940, `int`, `casc`, `ext`, `avoid`, `f30flv` 1,047, `f30cv` 1,218, `f30c` 68, `f30cn-sw` 756,
+  `f183v5` 6,209. Changed, all closer to Chrome, 0 further: `g2` 315 (was 312 with 2 further), `ov` 30, `ov3` 39, `tbl` 2, `cell` 3, `wid` 21 (19 closer, 2 equal: the first-fragment
+  `widows: 49`, F30c-o2), `swc` 159 (157 closer, 2 equal). The only further case is `R3` / `r3b/sp987` (above).
+- **Gates:** fixtures 01-39 and the 7 corpus documents byte-identical to `htmltopdf-main-f30cn` at 1 and 4 threads (46 of 46); `compare.py --threshold-check` ok, no number moved; `bench.py --check` ok
+  (b200-text 791 ms, b200-mixed 821 ms, scaling r 4.37); fmt and clippy `-D warnings` clean in both repos; fork 3,065 tests pass; full `cargo test --release --locked --no-fail-fast` 83 binaries, 981 tests, 0 failed.

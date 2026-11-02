@@ -13,7 +13,13 @@
 //! decide). Probes: `out/scratch/f30co/` (plan §8.1).
 //!
 //! Where Chrome is not matched the test says so and pins ours: `calc()` in the value (Chrome reads it, the fork's reader
-//! drops it), multicol (the fork ignores even the initial value inside columns: F30d-b) and widows larger than a page.
+//! drops it), multicol (the fork ignores even the initial value inside columns: F30d-b), widows larger than a page,
+//! `break-after: avoid` on the heading before a short paragraph (F215) and, on purpose, a short paragraph that fits a
+//! page and has no allowed break (ADR-0010: the spec moves it whole, Chrome splits it).
+//!
+//! F30c-o3 (tests 10-13 below): a paragraph taller than a page, a paragraph in a `<section>`, `<li>`, `<td>` or with
+//! padding keep their orphans like the body-level one, and an `orphans` larger than a page moves the paragraph to the
+//! next page where it relaxes to the initial values (Chrome 0 / 48 / 48 / 4) instead of printing a line below the content box.
 
 use htmltopdf::{RenderOptions, Renderer};
 
@@ -548,4 +554,401 @@ fn columns_keep_their_output() {
     let declared = render("p{orphans:4;widows:4}", &body);
     assert_eq!(plain, declared, "the declaration changed the columns");
     assert_eq!(per_page(&printed_words(&plain)), [80]);
+}
+
+// ── 10. F30c-o3: a paragraph taller than a page keeps its orphans where no break keeps its widows ──────────────────
+
+/// Shapes of the F30c-o3 probes (`f30cov/g2/`, `ov/`): the same 60 or 100 lines wrapped as a body-level `<p>`, in a
+/// `<section>`, a `<li>`, a `<td>` of a collapsed table, or in a padded and bordered `<p>`. `css` is the whole rule list
+/// after the page set-up (the properties go on `p`, `li` and `td` alike).
+fn shaped(kind: &str, css: &str, spacer_px: usize, n: usize) -> Vec<Word> {
+    let sp = if spacer_px == 0 {
+        String::new()
+    } else {
+        spacer(spacer_px)
+    };
+    let l = lines(n);
+    let body = match kind {
+        "body" => format!("{sp}<p>{l}</p><p>AFTER</p>"),
+        "nest" => format!("{sp}<section><p>{l}</p></section><p>AFTER</p>"),
+        "pad" => format!("{sp}<p style=\"padding:8px;border:1px solid #888\">{l}</p><p>AFTER</p>"),
+        "li" => {
+            format!("{sp}<ul style=\"margin:0;padding-left:20px\"><li>{l}</li></ul><p>AFTER</p>")
+        }
+        "td" => format!(
+            "{sp}<table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"vertical-align:top\">{l}</td></tr></table><p>AFTER</p>"
+        ),
+        _ => panic!("unknown shape {kind}"),
+    };
+    printed_words(&render(css, &body))
+}
+
+/// 60 lines, `orphans: 30; widows: 47` (or 50), room for 40 lines. No break leaves 30 lines before it and 47 after it
+/// (30 + 47 > 60), and the paragraph is taller than a page, so the class A break before it does not avoid the overflow
+/// either: css-break-3 §4.4 lets the widows go. Chrome keeps the orphans: 30 / 30, `AFTER` on page 2 at 517.1 pt. Ours
+/// at `cd9fb62e` moved the paragraph whole (0 / 30 / 30, three pages).
+#[test]
+fn a_paragraph_taller_than_a_page_starts_where_its_orphans_fit_when_no_break_keeps_the_widows() {
+    for w in [47, 50] {
+        let words = shaped("body", &format!("p{{orphans:30;widows:{w}}}"), 168, 60);
+        assert_case(&words, 60, &[30, 30], 2, 517.1, &format!("widows {w}"));
+        assert_line_step(&words);
+    }
+}
+
+/// The nested splitter keeps the orphans too. 100 lines on an empty page, `orphans: 30; widows: 30`: page 2 takes 48,
+/// the 52 left cannot give 30 after a break that leaves 30 before it, so the next page keeps its 30 and gives up the
+/// widows (Chrome 0 / 48 / 30 / 22, `AFTER` on page 4 at 391.1 pt for `<section>` and `<li>`, 391.8 for a cell; the
+/// padded paragraph has 9 px above its first line, 0 / 47 / 30 / 23, 413.6 pt). Ours at `cd9fb62e`: 48 / 48 / 4 (and
+/// 47 / 48 / 5). With 60 lines and room for 40, `orphans: 30; widows: 47`: 30 / 30 (517.1 pt; ours 40 / 20).
+#[test]
+fn a_long_nested_paragraph_keeps_its_orphans() {
+    for kind in ["nest", "li", "td", "pad"] {
+        let css = "p{orphans:30;widows:30}li{orphans:30;widows:30}td{orphans:30;widows:30}";
+        let words = shaped(kind, css, 1008, 100);
+        let (per, y): (&[usize], f32) = match kind {
+            "pad" => (&[0, 47, 30, 23], 413.6),
+            "td" => (&[0, 48, 30, 22], 391.8),
+            _ => (&[0, 48, 30, 22], 391.1),
+        };
+        assert_case(&words, 100, per, 4, y, &format!("{kind}, 100 lines"));
+    }
+    for kind in ["nest", "li", "td"] {
+        let css = "p{orphans:30;widows:47}li{orphans:30;widows:47}td{orphans:30;widows:47}";
+        let words = shaped(kind, css, 168, 60);
+        let y = if kind == "td" { 517.8 } else { 517.1 };
+        assert_case(&words, 60, &[30, 30], 2, y, &format!("{kind}, 60 lines"));
+    }
+}
+
+/// `widows` larger than a page's lines on a continuation fragment (F30c-o2, probes `out/scratch/f30co3/wid`): 100 lines at the top
+/// of a page, `orphans: 10`. Chrome keeps the orphans and gives up the widows while a page can still hold them (`widows: 47`
+/// and `48`: 0 / 48 / 10 / 42, `AFTER` at 706.1 pt) and ignores them when no page can (`widows: 49`, `50`: 0 / 48 / 48 / 4,
+/// 107.6 pt). A `<section>`, `<li>`, cell and the body-level paragraph agree; the nested splitter pulled back to 10 / 42 for
+/// both before the chooser knew the page (and was at Chrome by accident for 49 and 50, F30c-o3 first version: 48 / 10 / 42).
+#[test]
+fn widows_larger_than_a_page_are_ignored_on_a_continuation_fragment() {
+    for kind in ["body", "nest", "li", "td"] {
+        for (w, per, y) in [
+            (47, [0, 48, 10, 42], 706.1),
+            (48, [0, 48, 10, 42], 706.1),
+            (49, [0, 48, 48, 4], 107.6),
+            (50, [0, 48, 48, 4], 107.6),
+        ] {
+            let css = format!(
+                "p{{orphans:10;widows:{w}}}li{{orphans:10;widows:{w}}}td{{orphans:10;widows:{w}}}"
+            );
+            let words = shaped(kind, &css, 1008, 100);
+            assert_eq!(per_page(&words), per, "{kind}, widows {w}");
+            assert_lines_in_order(&words, 100);
+            if kind != "td" {
+                assert_after(&words, 4, y);
+            }
+        }
+    }
+}
+
+/// `widows` as large as the whole paragraph (a paragraph taller than a page: 52 or 60 lines, `widows: 60`) cannot be had at all.
+/// Chrome ignores it in the first fragment and keeps the `orphans`: after 300 px (33 lines of room) `orphans: 1` gives 1 / 48 / 3
+/// (`AFTER` on page 3 at 91.8 pt), `orphans: 2` 2 / 48 / 2 (76.1 pt), 60 lines with `orphans: 10` 10 / 48 / 2 (76.1 pt). Ours
+/// at `cd9fb62e` moved the paragraph whole (0 / 48 / 4): the same page count, the first lines on the wrong page.
+#[test]
+fn widows_as_large_as_a_paragraph_taller_than_a_page_keep_the_orphans() {
+    for (n, o, per, y) in [
+        (52, 1, [1, 48, 3], 91.8),
+        (52, 2, [2, 48, 2], 76.1),
+        (60, 10, [10, 48, 2], 76.1),
+    ] {
+        let words = shaped("body", &format!("p{{orphans:{o};widows:60}}"), 300, n);
+        assert_case(&words, n, &per, 3, y, &format!("{n} lines, orphans {o}"));
+    }
+}
+
+// ── 10b. Validator round 1 (PR #85): a box with insets must not be split from its paragraph ─────────────────────
+
+/// M1: `orphans` of a page or more in a paragraph inside a bordered or padded box that starts the page. Moving the paragraph
+/// because its `orphans` do not fit the strip left the box's top edge behind and made a blank page: the box's own top border
+/// and padding are not content above the paragraph. Chrome (and main): the orphans cannot be kept, so nothing moves and
+/// the paragraph breaks naturally.
+///
+/// - `<div padding 12 border 1><p>` 60 lines, `orphans: 49`: Chrome 47 / 13, `AFTER` on page 2 at 259.1 pt (ours 0 / 48 / 12 before);
+/// - the same box in a 100 x 120 mm page with `orphans: 20` and 40 lines: 19 / 19 / 2, `AFTER` on page 3 at 52.1 pt
+///   (ours 0 / 19 / 19 / 2);
+/// - a bordered `<div>` with a padded `<section>` in it after a full page, 150 lines, `orphans: 99`: 0 / 47 / 48 / 48 / 7 (ours
+///   0 / 0 / 48 / 48 / 48 / 6).
+#[test]
+fn a_box_with_insets_at_a_page_top_keeps_its_paragraph_when_the_orphans_do_not_fit_a_page() {
+    let words = printed_words(&render(
+        "p{orphans:49;widows:2}",
+        &format!(
+            "<div style=\"padding:12px;border:1px solid #333\"><p>{}</p></div><p>AFTER</p>",
+            lines(60)
+        ),
+    ));
+    assert_case(
+        &words,
+        60,
+        &[47, 13],
+        2,
+        259.1,
+        "padded box at the document start",
+    );
+
+    let words = printed_words(&render_doc(
+        "@page{size:100mm 120mm;margin:5mm}body{font:14px/21px Inter;margin:0}p{margin:0}p{orphans:20;widows:5}",
+        &format!(
+            "<div style=\"border:1px solid #333;padding:5px\"><section><p>{}</p></section></div><p>AFTER</p>",
+            lines(40)
+        ),
+    ));
+    assert_eq!(per_page(&words), [19, 19, 2], "small page");
+    assert_after(&words, 3, 52.1);
+
+    let words = printed_words(&render(
+        "p{orphans:99;widows:2}",
+        &format!(
+            "{}<div style=\"border:2px solid #444;padding:10px\"><section style=\"padding:6px\"><p>{}</p></section></div><p>AFTER</p>",
+            spacer(1008),
+            lines(150)
+        ),
+    ));
+    assert_case(
+        &words,
+        150,
+        &[0, 47, 48, 48, 7],
+        5,
+        168.3,
+        "boxes after a full page",
+    );
+}
+
+/// M2: a padded or bordered `<p>` taller than a page with `widows` as large as the paragraph, at the top of a page. The
+/// padding makes the first strip shorter than a page, and the first version took that for a paragraph that follows content:
+/// it kept the orphans (3 / 46). Chrome ignores such widows at the top of a page: 49 lines, `orphans: 3; widows: 49`
+/// after a full page: 0 / 47 / 2, `AFTER` at 82.8 pt on page 3; with 60 lines and `widows: 60`: 0 / 47 / 13.
+#[test]
+fn a_padded_paragraph_taller_than_a_page_ignores_widows_as_large_as_itself_at_a_page_top() {
+    for (n, o, w, per, y) in [
+        (49, 3, 49, [0, 47, 2], 82.8),
+        (49, 1, 60, [0, 47, 2], 82.8),
+        (60, 3, 60, [0, 47, 13], 256.1),
+    ] {
+        let words = printed_words(&render(
+            &format!("p{{orphans:{o};widows:{w}}}"),
+            &format!(
+                "{}<p style=\"border:1px solid #888;padding:8px\">{}</p><p>AFTER</p>",
+                spacer(1008),
+                lines(n)
+            ),
+        ));
+        assert_case(&words, n, &per, 3, y, &format!("{n} lines, {o} / {w}"));
+    }
+}
+
+/// LOW of the same round: a `break-inside: avoid` box with a 49-line paragraph, `orphans: 99; widows: 99`, after a full page.
+/// The orphans cannot be kept, so Chrome drops the rule: 0 / 48 / 1, `AFTER` at 60.3 pt. The initial 2 / 2 as the last step
+/// pulled the break back to 47 / 2; the last step is the initial `orphans` without `widows`.
+#[test]
+fn orphans_no_page_can_keep_drop_the_widows_too() {
+    let words = printed_words(&render(
+        "p{orphans:99;widows:99}",
+        &format!(
+            "{}<div style=\"break-inside:avoid\"><p>{}</p></div><p>AFTER</p>",
+            spacer(1008),
+            lines(49)
+        ),
+    ));
+    assert_case(&words, 49, &[0, 48, 1], 3, 60.3, "avoid box");
+    for (kind, css) in [
+        ("body", "p{orphans:49;widows:2}"),
+        ("body", "p{orphans:99;widows:2}"),
+        ("nest", "p{orphans:99;widows:99}"),
+    ] {
+        let words = shaped(kind, css, 1008, 49);
+        assert_case(&words, 49, &[0, 48, 1], 3, 60.3, &format!("{kind} {css}"));
+    }
+}
+
+// ── 11. `orphans` larger than a page ──────────────────────────────────────────────────────────────────────────────
+
+/// A 100-line paragraph with `orphans: 49`, `50` or `52` (more than the 48 lines a page holds; 47 for the padded one,
+/// which has 9 px above its first line, so `48` is too many there as well) after a spacer that leaves room for 0, 3 or
+/// 10 lines. No break keeps that many lines on any page, so Chrome moves the paragraph to the next page, where it
+/// relaxes to the initial 2 / 2: 0 / 48 / 48 / 4 (`AFTER` on page 4 at 107.6 pt), padded 0 / 47 / 48 / 5 (130.1 pt).
+/// Ours at `cd9fb62e` started it in place with its `orphans` first lines "fitting" a 1 px strip: 1, 3 or 10 lines on
+/// page 1 and one of them (`w0000` at 800 pt) below the content box. `td` is a cell with no padding.
+#[test]
+fn orphans_larger_than_a_page_move_the_paragraph_and_keep_every_line_inside() {
+    for kind in ["nest", "td", "li", "pad"] {
+        let first_too_big = if kind == "pad" { 48 } else { 49 };
+        for o in [first_too_big, 50, 52] {
+            for k in [0, 3, 10] {
+                let css = format!("p{{orphans:{o}}}td{{orphans:{o}}}li{{orphans:{o}}}");
+                let words = if kind == "td" {
+                    printed_words(&render(
+                        &css,
+                        &format!(
+                            "{}<table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"vertical-align:top;padding:0\">{}</td></tr></table><p>AFTER</p>",
+                            spacer(1008 - 21 * k),
+                            lines(100)
+                        ),
+                    ))
+                } else {
+                    shaped(kind, &css, 1008 - 21 * k, 100)
+                };
+                let (per, y): (&[usize], f32) = if kind == "pad" {
+                    (&[0, 47, 48, 5], 130.1)
+                } else {
+                    (&[0, 48, 48, 4], 107.6)
+                };
+                assert_case(
+                    &words,
+                    100,
+                    per,
+                    4,
+                    y,
+                    &format!("{kind}, orphans {o}, room {k}"),
+                );
+                assert_inside(&words, CONTENT_BOTTOM);
+            }
+        }
+    }
+}
+
+/// `td { orphans: 60; widows: 2 }` in a fixed-layout table after a full page (`tbl/T6_wideorph_k0`): Chrome 0 / 48 / 48 /
+/// 4. Ours at `cd9fb62e` printed `w0000` below the content box (1 px strip).
+#[test]
+fn a_cell_with_orphans_sixty_after_a_full_page_is_not_cut_into_a_strip() {
+    let words = printed_words(&render(
+        "td{orphans:60;widows:2}",
+        &format!(
+            "{}<table style=\"border-collapse:collapse;width:100%;table-layout:fixed\"><tr><td style=\"vertical-align:top;padding:0\">{}</td></tr></table><p>AFTER</p>",
+            spacer(1008),
+            lines(100)
+        ),
+    ));
+    assert_case(&words, 100, &[0, 48, 48, 4], 4, 107.6, "td orphans 60");
+}
+
+/// The values just below a page's lines are not touched: `orphans` 44 to 48 (47 for the padded paragraph) already
+/// started the next page, as Chrome does. Green before and after F30c-o3.
+#[test]
+fn orphans_that_a_page_can_keep_still_move_the_paragraph() {
+    for kind in ["nest", "td", "li", "pad"] {
+        let top = if kind == "pad" { 47 } else { 48 };
+        for o in [44, 46, 47, top] {
+            for k in [0, 3, 10] {
+                let css = format!("p{{orphans:{o}}}td{{orphans:{o}}}li{{orphans:{o}}}");
+                let words = shaped(kind, &css, 1008 - 21 * k, 100);
+                let (per, y): (&[usize], f32) = if kind == "pad" {
+                    (&[0, 47, 48, 5], 130.1)
+                } else {
+                    (&[0, 48, 48, 4], 107.6)
+                };
+                // A cell has 1 px of border spacing, so only the line counts are compared there.
+                assert_eq!(per_page(&words), per, "{kind}, orphans {o}, room {k}");
+                assert_inside(&words, CONTENT_BOTTOM);
+                if kind != "td" {
+                    assert_after(&words, 4, y);
+                }
+            }
+        }
+    }
+}
+
+// ── 12. A short paragraph that fits a page and has no allowed break moves whole (ADR-0010) ─────────────────────────
+
+/// Deliberately not Chrome. A paragraph of `n` lines that fits a page has no allowed break between its lines when
+/// `n < orphans + widows` (css-break-3 §3.3: "all lines in the block must be kept together"), and the class A break before it
+/// avoids the overflow, so §4.4 does not relax the rule: it moves whole. Chrome m141 splits it (it fails Blink's and
+/// WebKit's own `printing/page-break-orphans-and-widows` test). ADR-0010; do not "fix" this towards Chrome.
+///
+/// - 5 lines, `orphans: 3; widows: 3`, room for 3: Chrome 3 / 2 (`AFTER` at 76.1 pt), ours 0 / 5 (123.1 pt);
+/// - 4 lines, `orphans: 1; widows: 5`, room for 2: Chrome 1 / 3 (91.8 pt), ours 0 / 4 (107.3 pt);
+/// - 7 lines, `orphans: 3; widows: 5`, room for 6: Chrome 3 / 4 (107.6 pt), ours 0 / 7 (154.6 pt);
+/// - two `li` of 4 lines, `orphans: 3; widows: 3`, room for 3: Chrome 3 / 1 in the first (`w0000`-`w0002` on page 1), ours
+///   keeps the first `li` on page 2.
+#[test]
+fn a_short_paragraph_that_fits_a_page_keeps_its_lines_together() {
+    // (lines, orphans, widows, room in lines, lines per page, `AFTER` y in pt)
+    type Case = (usize, usize, usize, usize, &'static [usize], f32);
+    let cases: [Case; 3] = [
+        (5, 3, 3, 3, &[0, 5], 123.1),
+        (4, 1, 5, 2, &[0, 4], 107.3),
+        (7, 3, 5, 6, &[0, 7], 154.6),
+    ];
+    for (n, o, w, k, per, y) in cases {
+        let words = printed_words(&render(
+            &format!("p{{orphans:{o};widows:{w}}}"),
+            &format!("{}<p>{}</p><p>AFTER</p>", room(k), lines(n)),
+        ));
+        assert_case(&words, n, per, 2, y, &format!("n {n}, {o} / {w}, room {k}"));
+    }
+    let list = format!(
+        "{}<ul style=\"margin:0;padding-left:20px\"><li>{}</li><li>{}</li></ul><p>AFTER</p>",
+        room(3),
+        lines(4),
+        (4..8)
+            .map(|i| format!("w{i:04}"))
+            .collect::<Vec<_>>()
+            .join("<br>")
+    );
+    let words = printed_words(&render("li{orphans:3;widows:3}", &list));
+    assert_eq!(per_page(&words), [0, 8], "two li, Chrome 3 / 5");
+}
+
+// ── 13. The break before the paragraph is forbidden ──────────────────────────────────────────────────────────────
+
+/// A 5-line paragraph with `orphans: 3; widows: 3` has no allowed break between its lines, so it moves whole when the
+/// class A break before it is allowed. When that break is forbidden, css-break-3 §4.4 drops Rule 3 first (before the
+/// `avoid` rules): `h2 { break-after: avoid }` or `p { break-before: avoid }`, with room for the heading and 3 or 4 lines,
+/// Chrome keeps the orphans and prints 3 / 2 (`AFTER` on page 2 at 76.1 pt); with room for the heading and fewer than 3
+/// lines the heading moves with the paragraph (0 / 5, the heading on page 2, `AFTER` at 139.1 pt).
+///
+/// Ours does not honour `break-before: avoid` / `break-after: avoid` at all (F87c parses them as `auto`; there is no
+/// keep-with-next: F215), so this pins what ours does: the heading stays on page 1 and the paragraph moves whole,
+/// 0 / 5 with `AFTER` at 123.1 pt. The red-then-green fix belongs to F215. An ancestor's `break-inside: avoid` is a
+/// different case: the ancestor itself moves whole, and ours matches Chrome (0 / 5, 123.3 pt).
+#[test]
+fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
+    let head_css = "h2{margin:0;font:600 14px/21px Inter;break-after:avoid}p{orphans:3;widows:3}";
+    for k in [4, 5] {
+        let words = printed_words(&render(
+            head_css,
+            &format!(
+                "{}<h2>HEAD</h2><p>{}</p><p>AFTER</p>",
+                spacer(1008 - 21 * k),
+                lines(5)
+            ),
+        ));
+        // Ours (F215 open); Chrome 3 / 2 and `AFTER` at 76.1 pt.
+        assert_eq!(
+            per_page(&words),
+            [0, 5],
+            "heading + room for {} lines",
+            k - 1
+        );
+        assert_eq!(
+            words.iter().find(|w| w.text == "HEAD").map(|w| w.page),
+            Some(1)
+        );
+    }
+    for k in [3, 4] {
+        let words = printed_words(&render(
+            "div.w{break-inside:avoid}p{orphans:3;widows:3}",
+            &format!(
+                "{}<div class=\"w\"><p>{}</p></div><p>AFTER</p>",
+                spacer(1008 - 21 * k),
+                lines(5)
+            ),
+        ));
+        assert_case(
+            &words,
+            5,
+            &[0, 5],
+            2,
+            123.3,
+            &format!("avoid ancestor, room {k}"),
+        );
+    }
 }
