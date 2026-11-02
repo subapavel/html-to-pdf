@@ -239,4 +239,36 @@ After the section: `<p class="mt-6 text-sm border-t pt-2">Převzal: …</p>`. Al
 
 ## 8. Evidence
 
-To be filled in step 1 (Chrome numbers, with any contradictions to §2 and what was done) and steps 4-5 (fork commit, byte gate, sweep, corpus against Chrome, `compare.py` before / after, bench, tests not named here).
+### Step 1: Chrome (m141), `out/scratch/f30cn/{gen.py,chrome.txt,ours.sh}`
+
+Every shape-A / shape-B twin of the 52 F30c cases (117 documents with the extra shapes below) gives Chrome's body-level number:
+`two_49_47` 47 / 47 / 2, spacer 650 17 / 13, 966 2 / 28, 975 0 / 30, h1 + 46 lines 44 / 2, `hp_2` 2 / 28, `hp_3` 3 / 27, 600 words
+232 / 368, and so on. §2 holds: nesting depth does not change Chrome's split. Further Chrome numbers (test file
+`crates/htmltopdf/tests/nested_start_in_place.rs`):
+
+- padded `<p>` (8 px + 1 px border) after 650 px, shape A and B: 16 / 14, AFTER 271.8 pt, first line of page 2 at 44.58 pt;
+- `<section style="padding:16px;border:1px solid">` + h2 + 46 lines: 44 / 2; with padding 20 px and 60 lines: 45 / 15 (16 px and 60
+  lines is on a line boundary, 46 / 14 on Chrome's 1010 px page and 45 / 15 on ours, F30f-c, so not used);
+- 40 one-line `<li>` and a 12-line `<li>`: 8 / 4, marker on page 1;
+- `<section style="margin-top:24px"><p style="margin-top:12px">` after 650 px: 16 / 14, first line at 550.08 pt (the margins collapse to 24 px);
+- relaxed avoid ancestor (three 30-line paragraphs in an avoid section after 300 px): 0 / 48 / 42, as §5 item 10 expects;
+- links and inline images: on the page of their line, 17 / 13;
+- `td > h3 + p` after 650 px: 16 / 14 (Chrome splits inside the cell; ours 0 / 30; filed as F30c-t);
+- flex item: Chrome 15 / 15, ours 0 / 30 (F30b, pinned);
+- fixture 39: "28." heads page 2 at 44.5 pt, "65." 358.0 pt, "Převzal:" 411.3 pt, 2 pages.
+
+### Deviations from the plan
+
+- The test file is `nested_start_in_place.rs`, not `nested_paragraph_split.rs`: that name is taken by F30's tests (taller than a page).
+- Test 8 (links and one inline `<img>`): green at `55154081` (a paragraph with inline boxes takes another path and already splits
+  there); a variant without the images is red. Both are in the test.
+- Test 5 uses padding 20 px for the 60-line case (see above).
+
+### Red at `55154081` (12 of 18 in `nested_start_in_place.rs`, fixture test)
+
+Red: second long paragraph (A and B), spacer H=650 / 966, 4 / 5 lines with 3 lines of room, running text, heading + paragraph (46, 48,
+`hp_2`, `hp_3`), padded paragraph, padded section, list item, margins, links without images, relaxed avoid ancestor
+(30 / 30 / 30 against 48 / 42); `terms_in_section_invoice_starts_the_long_paragraph_in_place` ("1." on page 2). Green guards: 3-line,
+avoid paragraph (style and class), relaxed avoid paragraph, avoid section, table cell (pinned 0 / 30), flex item (pinned 0 / 30).
+
+*Steps 4-5 (fork commit, byte gate, sweep, corpus against Chrome, `compare.py`, bench) are filled in below when done.*

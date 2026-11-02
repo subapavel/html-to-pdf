@@ -1280,3 +1280,96 @@ fn terms_print_orphans_invoice_moves_the_second_paragraph_to_page_two() {
         );
     }
 }
+
+/// F30c-n: fixture 39 has its terms inside a `<section>`: a heading, a 2-line paragraph, a 29-line paragraph that fits a page but
+/// not the 240 pt left on page 1, and a 5-line paragraph. Chrome starts the long paragraph where it is (twelve lines on page 1,
+/// clauses 1 to 27; "28." heads page 2 at 44.5 pt) and breaks it between line boxes (`reference/chrome.pdf`, m141). Before F30c-n
+/// the paragraph moved to page 2 whole because it had a wrapper, although the same text at body level starts in place (fixture 36).
+#[test]
+fn terms_in_section_invoice_starts_the_long_paragraph_in_place() {
+    let name = "39-terms-in-section";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-39.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (page, yMin, word) in reading order.
+    let words_of = |pdf: &Path| -> Vec<(usize, f32, String)> {
+        let out = std::process::Command::new("pdftotext")
+            .arg("-bbox")
+            .arg(pdf)
+            .arg("-")
+            .output()
+            .expect(
+                "pdftotext (poppler-utils) is required for this test and was not found in PATH",
+            );
+        let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mut page = 0;
+        let mut found = Vec::new();
+        for line in xml.lines() {
+            if line.contains("<page ") {
+                page += 1;
+            } else if let Some(rest) = line.trim().strip_prefix("<word ")
+                && let Some((attrs, word)) = rest.split_once('>')
+                && let Some(word) = word.strip_suffix("</word>")
+            {
+                let start = attrs.find("yMin=\"").unwrap() + 6;
+                let y = attrs[start..start + attrs[start..].find('"').unwrap()]
+                    .parse()
+                    .unwrap();
+                found.push((page, y, word.to_string()));
+            }
+        }
+        found
+    };
+    let ours = words_of(&path);
+    let chrome = words_of(&dir.join("reference/chrome.pdf"));
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        ours.iter().map(|w| w.0).max(),
+        Some(2),
+        "two pages like Chrome"
+    );
+    let find = |words: &[(usize, f32, String)], word: &str| -> usize {
+        words
+            .iter()
+            .position(|w| w.2 == word)
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"))
+    };
+    assert_eq!(ours[find(&ours, "Obchodní")].0, 1);
+    assert_eq!(
+        ours[find(&ours, "1.")].0,
+        1,
+        "the long paragraph starts on page 1, below the intro"
+    );
+    assert_eq!(
+        ours[find(&ours, "27.")].0,
+        1,
+        "its twelfth line is on page 1"
+    );
+    assert_eq!(ours[find(&ours, "Převzal:")].0, 2);
+    // The first word of page 2 is Chrome's, give or take one line (about 14 words).
+    let first_on_2 = |words: &[(usize, f32, String)]| words.iter().position(|w| w.0 == 2).unwrap();
+    let (o, c) = (first_on_2(&ours), first_on_2(&chrome));
+    assert!(
+        o.abs_diff(c) <= 14,
+        "page 2 starts at word {o} (`{}`), Chrome at word {c} (`{}`)",
+        ours[o].2,
+        chrome[c].2
+    );
+    for word in ["28.", "65.", "Převzal:"] {
+        let (y, cy) = (ours[find(&ours, word)].1, chrome[find(&chrome, word)].1);
+        assert!(
+            (y - cy).abs() <= 3.0,
+            "`{word}` at {y:.1} pt, Chrome puts it at {cy:.1} pt"
+        );
+    }
+}
