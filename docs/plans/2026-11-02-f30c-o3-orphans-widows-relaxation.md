@@ -289,4 +289,8 @@ Repros `f30co3v/repro/R1`-`R6` (Chrome numbers re-measured in `out/scratch/f30co
   (`r3b`: 900-986) ours equals Chrome (main does not). Set A has 3 such cases (`td2_n60_o99_w2_k1_973`, `_982`, `td2_n150_o99_w99_k1_958`).
 - **Validator sets, against main:** A 1,560: 1,331 identical, 226 closer, 3 further (the R3 family). B 699: 129 closer, **0 further**. C 582: 327 closer, 0 further.
   D 867: 243 closer, **0 further**. E 297: 72 closer, **0 further** (87 further before the fix). The 154 `over` cases of D are main's own.
-- **My sweeps (against main `htmltopdf-main-f30cn`)** and the other gates: see the final report of the round.
+- **My sweeps (against main `htmltopdf-main-f30cn`):** byte-identical `grid` 2,940, `int`, `casc`, `ext`, `avoid`, `f30flv` 1,047, `f30cv` 1,218, `f30c` 68, `f30cn-sw` 756,
+  `f183v5` 6,209. Changed, all closer to Chrome, 0 further: `g2` 315 (was 312 with 2 further), `ov` 30, `ov3` 39, `tbl` 2, `cell` 3, `wid` 21 (19 closer, 2 equal: the first-fragment
+  `widows: 49`, F30c-o2), `swc` 159 (157 closer, 2 equal). The only further case is `R3` / `r3b/sp987` (above).
+- **Gates:** fixtures 01-39 and the 7 corpus documents byte-identical to `htmltopdf-main-f30cn` at 1 and 4 threads (46 of 46); `compare.py --threshold-check` ok, no number moved; `bench.py --check` ok
+  (b200-text 791 ms, b200-mixed 821 ms, scaling r 4.37); fmt and clippy `-D warnings` clean in both repos; fork 3,065 tests pass; full `cargo test --release --locked --no-fail-fast` 83 binaries, 981 tests, 0 failed.
