@@ -13,9 +13,9 @@
 //! decide). Probes: `out/scratch/f30co/` (plan §8.1).
 //!
 //! Where Chrome is not matched the test says so and pins ours: `calc()` in the value (Chrome reads it, the fork's reader
-//! drops it), multicol (the fork ignores even the initial value inside columns: F30d-b), widows larger than a page,
-//! `break-after: avoid` on the heading before a short paragraph (F215) and, on purpose, a short paragraph that fits a
-//! page and has no allowed break (ADR-0010: the spec moves it whole, Chrome splits it).
+//! drops it), multicol (the fork ignores even the initial value inside columns: F30d-b), widows larger than a page
+//! and, on purpose, a short paragraph that fits a page and has no allowed break (ADR-0010: the spec moves it whole,
+//! Chrome splits it; test 13 is the same case after an avoided break, where F215 keeps the heading with it).
 //!
 //! F30c-o3 (tests 10-13 below): a paragraph taller than a page, a paragraph in a `<section>`, `<li>`, `<td>` or with
 //! padding keep their orphans like the body-level one, and an `orphans` larger than a page moves the paragraph to the
@@ -794,20 +794,24 @@ fn a_short_paragraph_that_fits_a_page_keeps_its_lines_together() {
 
 // ── 13. The break before the paragraph is forbidden ──────────────────────────────────────────────────────────────
 
-/// A 5-line paragraph with `orphans: 3; widows: 3` has no allowed break between its lines, so it moves whole when the
-/// class A break before it is allowed. When that break is forbidden, css-break-3 §4.4 drops Rule 3 first (before the
-/// `avoid` rules): `h2 { break-after: avoid }` or `p { break-before: avoid }`, with room for the heading and 3 or 4 lines,
-/// Chrome keeps the orphans and prints 3 / 2 (`AFTER` on page 2 at 76.1 pt); with room for the heading and fewer than 3
-/// lines the heading moves with the paragraph (0 / 5, the heading on page 2, `AFTER` at 139.1 pt).
+/// Formerly `a_short_paragraph_after_an_avoid_break_keeps_its_orphans` (F30c-o3 pin; grep for the old name).
 ///
-/// Ours does not honour `break-before: avoid` / `break-after: avoid` at all (F87c parses them as `auto`; there is no
-/// keep-with-next: F215), so this pins what ours does: the heading stays on page 1 and the paragraph moves whole,
-/// 0 / 5 with `AFTER` at 123.1 pt. The red-then-green fix belongs to F215. An ancestor's `break-inside: avoid` is a
-/// different case: the ancestor itself moves whole, and ours matches Chrome (0 / 5, 123.3 pt).
+/// A 5-line paragraph with `orphans: 3; widows: 3` has no allowed break between its lines, so it moves whole when the class A
+/// break before it is allowed. `h2 { break-after: avoid }` or `p { break-before: avoid }` forbids the break between the heading
+/// and the paragraph, but the class A break before the heading is allowed, and heading and paragraph fit a page together
+/// (css-break-3 §4.4: the rules are dropped only when no allowed break keeps the content inside the page). So the pair moves:
+/// heading on page 2, 0 / 5, `AFTER` at 139.1 pt. Chrome does that with room for the heading and 0 to 2 lines (k = 1 to 3).
+/// With room for the heading and 3 or 4 lines (k = 4, 5) Chrome keeps the orphans and prints 3 / 2 (`AFTER` at 76.1 pt): it
+/// violates Rule 3 while an allowed break (before the heading) exists, which §4.4 does not allow. Deliberately not Chrome
+/// there, same as test 12 and ADR-0010; plan `docs/plans/2026-11-02-f215-keep-with-next.md` section 2. Do not "fix" this towards Chrome.
+///
+/// Ours before F215: `break-before: avoid` / `break-after: avoid` were read as `auto` (F87c; there was no keep-with-next), so the
+/// heading stayed on page 1 and the paragraph moved whole, 0 / 5 with `AFTER` at 123.1 pt. An ancestor's `break-inside: avoid`
+/// is a different case: the ancestor itself moves whole, and ours matches Chrome (0 / 5, 123.3 pt).
 #[test]
-fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
+fn a_short_paragraph_after_an_avoid_break_moves_with_its_heading() {
     let head_css = "h2{margin:0;font:600 14px/21px Inter;break-after:avoid}p{orphans:3;widows:3}";
-    for k in [4, 5] {
+    for k in 1..=5 {
         let words = printed_words(&render(
             head_css,
             &format!(
@@ -816,7 +820,6 @@ fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
                 lines(5)
             ),
         ));
-        // Ours (F215 open); Chrome 3 / 2 and `AFTER` at 76.1 pt.
         assert_eq!(
             per_page(&words),
             [0, 5],
@@ -825,8 +828,10 @@ fn a_short_paragraph_after_an_avoid_break_keeps_its_orphans() {
         );
         assert_eq!(
             words.iter().find(|w| w.text == "HEAD").map(|w| w.page),
-            Some(1)
+            Some(2),
+            "the heading moves with the paragraph (k = {k})"
         );
+        assert_after(&words, 2, 139.1);
     }
     for k in [3, 4] {
         let words = printed_words(&render(

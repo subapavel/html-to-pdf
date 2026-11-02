@@ -1373,3 +1373,105 @@ fn terms_in_section_invoice_starts_the_long_paragraph_in_place() {
         );
     }
 }
+
+/// F215: fixture 41 has a print sheet with `@media print { h2, h3 { break-after: avoid } }`, an items table of seventeen rows, the
+/// total, `<h2>Obchodní podmínky</h2>` and ONE terms paragraph of about 24 lines (initial `orphans: 2`). The room under the
+/// heading block on page 1 is 22 pt (29 px), 1.5 lines of 19.5 px, so the paragraph cannot start there. Chrome moves the heading with
+/// the paragraph: page 1 ends with the total ("Kč" at 719.7 pt), page 2 starts with "Obchodní" at 43.8 pt and "Převzal:" is at
+/// 448.8 pt (`reference/chrome.pdf`, m153; the twin without the print sheet leaves the heading alone at the bottom of page 1,
+/// ours and Chrome's). Before F215 the fork parsed `avoid` as `auto`, so ours left the heading at 757.6 pt on page 1.
+#[test]
+fn terms_heading_keep_invoice_moves_the_heading_with_its_paragraph() {
+    let name = "41-terms-heading-keep";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-41.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (page, yMin, word) in reading order.
+    let words_of = |pdf: &Path| -> Vec<(usize, f32, String)> {
+        let out = std::process::Command::new("pdftotext")
+            .arg("-bbox")
+            .arg(pdf)
+            .arg("-")
+            .output()
+            .expect(
+                "pdftotext (poppler-utils) is required for this test and was not found in PATH",
+            );
+        let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mut page = 0;
+        let mut found = Vec::new();
+        for line in xml.lines() {
+            if line.contains("<page ") {
+                page += 1;
+            } else if let Some(rest) = line.trim().strip_prefix("<word ")
+                && let Some((attrs, word)) = rest.split_once('>')
+                && let Some(word) = word.strip_suffix("</word>")
+            {
+                let start = attrs.find("yMin=\"").unwrap() + 6;
+                let y = attrs[start..start + attrs[start..].find('"').unwrap()]
+                    .parse()
+                    .unwrap();
+                found.push((page, y, word.to_string()));
+            }
+        }
+        found
+    };
+    let ours = words_of(&path);
+    let chrome = words_of(&dir.join("reference/chrome.pdf"));
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        ours.iter().map(|w| w.0).max(),
+        Some(2),
+        "two pages like Chrome"
+    );
+    let find = |words: &[(usize, f32, String)], word: &str| -> usize {
+        words
+            .iter()
+            .position(|w| w.2 == word)
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"))
+    };
+    assert_eq!(
+        ours[find(&ours, "Obchodní")].0,
+        2,
+        "the heading moves to page 2 with its paragraph, it is not left alone at the bottom of page 1"
+    );
+    // The first word of page 2 is Chrome's: the heading.
+    let first_on_2 = |words: &[(usize, f32, String)]| words.iter().position(|w| w.0 == 2).unwrap();
+    let (o, c) = (first_on_2(&ours), first_on_2(&chrome));
+    assert_eq!(
+        ours[o].2, chrome[c].2,
+        "page 2 starts with `{}`, Chrome with `{}`",
+        ours[o].2, chrome[c].2
+    );
+    // The last word of page 1 is Chrome's: the total.
+    let last_on_1 = |words: &[(usize, f32, String)]| {
+        words
+            .iter()
+            .rposition(|w| w.0 == 1)
+            .map(|i| words[i].2.clone())
+            .unwrap()
+    };
+    assert_eq!(last_on_1(&ours), last_on_1(&chrome), "last word of page 1");
+    let (y, cy) = (
+        ours[find(&ours, "Obchodní")].1,
+        chrome[find(&chrome, "Obchodní")].1,
+    );
+    assert!(
+        (y - cy).abs() <= 3.0,
+        "`Obchodní` at {y:.1} pt, Chrome puts it at {cy:.1} pt"
+    );
+    assert_eq!(
+        ours[find(&ours, "Převzal:")].0,
+        chrome[find(&chrome, "Převzal:")].0,
+        "`Převzal:` is on Chrome's page"
+    );
+}
