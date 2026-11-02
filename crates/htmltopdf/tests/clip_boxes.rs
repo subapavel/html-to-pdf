@@ -716,9 +716,10 @@ struct MainShape {
 fn a_constrained_clip_box_whose_content_is_not_one_paragraph_at_its_top_is_what_main_made_of_it() {
     // The clip semantics of this change (the box is fragmented by its own block size, the writer drops what lies below
     // its clip) are written for a box whose content is direct text, or one paragraph at its content top (plan 7, "Supported
-    // shapes"). The fragmenter splits only the first thing on a strip (F30c): with anything above the paragraph the
-    // paragraph moved whole and was clipped, and lines Chrome shows on page 1 were not in the PDF (the third pass:
-    // hp_pad 14 words against main's 371 and Chrome's 98). Such a box keeps main's output until F30c (finding F30f-f).
+    // shapes"). Inside a clip box the fragmenter splits only the first thing on a strip (F30c-n starts a nested paragraph
+    // in place only in plain block flow outside clip boxes): with anything above the paragraph the paragraph moved whole
+    // and was clipped, and lines Chrome shows on page 1 were not in the PDF (the third pass: hp_pad 14 words against
+    // main's 371 and Chrome's 98). Such a box keeps main's output until F30f-f.
     // Numbers: main's binary (fork 516558cc) on these documents; Chrome m141 shows 98 / 105 / 98 / 101 / 84 / 98 words.
     let w4 = w();
     let img = "<img style=\"display:block\" width=\"120\" height=\"60\" \
