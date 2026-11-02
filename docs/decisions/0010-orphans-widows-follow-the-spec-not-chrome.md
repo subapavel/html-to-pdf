@@ -57,7 +57,8 @@ Other engines:
      and the CSSWG resolved for the css-break-3 order in September 2015.
 
    When we relax, the order is Chrome's: the author's rules, then keep the orphans and drop the widows, then the
-   initial 2 / 2. The spec leaves that choice to the UA, and WPT `css-break/widows-orphans-018.html` pins
+   natural break with the initial 2 orphans and no widows (F30c-o3 validator round 1: Chrome drops Rule 3 altogether when the
+   orphans cannot be kept, 49 lines with `orphans: 49` give 48 / 1, not 47 / 2). The spec leaves that choice to the UA, and WPT `css-break/widows-orphans-018.html` pins
    keep-the-orphans in a continuation fragment.
 3. Where this makes a fixture differ from its Chrome reference, the threshold comment in `scripts/compare.py` names
    this ADR. Each test that pins one of these shapes names it as well and gives Chrome's numbers. That way the next
