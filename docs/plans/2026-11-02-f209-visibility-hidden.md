@@ -185,4 +185,48 @@ The PNG must show aligned amounts, an empty gap where the stamp and draft box we
 
 ## 8. Evidence
 
-To be filled by the implementer: Chrome numbers (step 1), what was built (commits), deviations, gates table (fork tests, clippy/fmt, byte gate 43 files × 2 thread counts, `fulgur-vrt` actuals, our tests, compare number for 37, bench), not verified.
+### 8.1 Chrome m141 measurements (step 1; `out/scratch/f209/gen.py` writes the 41 HTML files, `words.py`, `annots.py`, `ink.py` read them)
+
+A4, 15 mm, Inter 14px/20px, `AFTER` paragraph below where given. x in pt, within 1 pt of ours (Chrome's x is 0.2 pt right of ours everywhere).
+
+| case | Chrome | main |
+|---|---|---|
+| hidden span `a [hid] w` / `collapse` span | `a` 42.7, `w` 69.7 | prints `hid` |
+| `<span>a <span class='t vh'>hid</span> w</span>` | `a`, `w` 78.9 | `a txhid w` |
+| hidden outer span with a nested pseudo | only `AFTER` | all |
+| spacer pseudos (`vh_d1`, `vh_d2`) | `a` 42.7, `w` 63.7, `q` 75.3, `e` 111.2 | `tx`, `q0000` |
+| `.vh > .t.vv` | `txvis` 51.6 | `a txvis w` |
+| hidden `div` (inline root) with a visible span | `vis` 51.6 | nothing |
+| hidden `p` with a visible `::after` | `ZZ` 98.2 (not the p's text) | nothing |
+| hidden `div` with loose text and a visible `p` | `blockvis` 42.7,58.8; `AFTER` 88.8 | same (guard) |
+| visible child of a hidden inline-block | `vischild` 70.5, `w` 136.5 (y 44.6) | not printed (our inline-block is 2.7 pt low, a separate gap: x only) |
+| ink of a hidden inline-block / `img` / `svg` / pseudo inline-block | none | none (guard) |
+| visible inline-block in a hidden span | shown | shown |
+| `<u>a <span class=vh>bb</span> c</u>` underline | runs under `a ` and ` c`, **gap** under the hidden word (px 69-85) | the same gap (our underline is per run; with a visible span there is a gap too, a separate gap) |
+| `<span class=vh><u>bb</u></span>` | no underline | underline drawn (red) |
+| `<span class=vh>a <u class=vv>bb</u> c</span>` | underline under `bb` only | the same |
+| hidden `<a>` | no annotation | 1 annotation |
+| `<a>` holding only a hidden span | **one annotation** over the blank (51.8-81.0) | 1 annotation |
+| `<a>Zobrazit <span vh>online</span></a>` | **two** rectangles, 42.8-87.0 and 87.0-116.2 (the whole link) | 1 over the whole |
+| `<h2>Faktura <span class=vh>KONCEPT</span></h2>` | words: `Faktura` | `Faktura KONCEPT`; `/T (Faktura KONCEPTFaktura KONCEPT)` |
+| `<h2>Faktura <b>č. 42</b> za rok</h2>` (no span hidden) | n/a | `/T` holds the text **three times** (three runs): F209a confirmed |
+| hidden `li` / `li` visible in hidden `ul` | no text / text | same, one `•` (guard) |
+| hidden `td`, `tr`, `tr collapse` | no text | no text (guard) |
+| rows `first / tr height:60px / third`: hidden vs `collapse` | hidden keeps the 60 px (`third` 103.8); **collapse removes it (`third` 73.8)** | 103.6 both: F209b confirmed |
+| `<col class=collapse>` | the column's cell text is gone, `shown` at 42.7 | `hidcolshown` printed: F209b |
+| flex item hidden / `collapse` | `aa` 42.7, `cc` 73.8 both (the collapsed item keeps its main size here) | same, no text of the item (so no finding for flex items) |
+| `opacity:0` span | text **not** in Chrome's PDF | `zero` printed: filed (F211) |
+| hidden block background, visible child's background | only the child's | same (guard) |
+
+Deviations from the plan's tests, from these numbers:
+
+- **Links (test 4).** Chrome's annotation follows the `<a>` element's own visibility, not the runs: a hidden `<a>` has none (as planned), but a visible `<a>` keeps rectangles over hidden text inside it, `online` included. The plan's "one annotation of the visible run's width" is kept: a clickable blank is the kind of residue ADR-0009 removes, and css-display-3 says a hidden box cannot be interacted with (section number unverified). The test records Chrome's first rectangle (`Zobrazit ` with its space, 42.8-87.0) as the oracle for the one we write, and says why Chrome's second rectangle is not copied.
+- **Decorations (test 6).** Chrome draws no underline under hidden text, as the plan's default. `<u>a <span class=vh>bb</span> c</u>` is already right on main (a different gap: our decoration is per run, so no span child of a `<u>` is underlined, hidden or not), so only `<span class=vh><u>bb</u></span>` is red.
+- **Flex `collapse`** (plan section 7, out of scope): Chrome's collapsed item gives the same layout as a hidden one and ours matches, so it is no longer listed.
+- **`-r 96` raster** replaced by `-r 72` in `ink_in`: one pixel is one pt, so the test converts no units.
+- **`<img>` data URIs** draw nothing in our engine (F201), so the `img` case registers a bundled `dot.png`.
+- **Fixture 37:** the sign placeholder trails the number (`30 000,00<span class=sign>-</span>`): with a leading placeholder in a right-aligned cell the digits end at the same x whether or not it is printed, so it would prove nothing.
+
+### 8.2 To be filled by the implementer
+
+What was built (commits), gates table (fork tests, clippy/fmt, byte gate 43 files x 2 thread counts, `fulgur-vrt` actuals, our tests, compare number for 37, bench), not verified.
