@@ -296,9 +296,9 @@ place; coordinator note), `cd9fb62e` (sweep finding below; head, the `Cargo.lock
 
 ### Ours
 
-- Byte gate (RAYON_NUM_THREADS 1 and 4; main-side binary = the F30c-o binary `htmltopdf-f30co`, fixtures 01-37 + 39 + the 7 corpus
-  documents): identical except `39-terms-in-section` (new) and `b200-mixed`. One and four threads give identical bytes. Fixture 38 does not
-  exist on this branch; the gate is re-run when it is rebased onto the merged F30c-o.
+- Byte gate (RAYON_NUM_THREADS 1 and 4; baseline = the F30c-o binary, built from main `5f9a54c` with the fork at `55154081`; fixtures 01-39
+  + the 7 corpus documents), run on the branch rebased onto `5f9a54c` (F30c-o merged, fixture 38 in the gate): identical except
+  `39-terms-in-section` (new) and `b200-mixed`. One and four threads give identical bytes.
 - Wrapped F30c cases (`out/scratch/f30cn/c`, 116 documents: the 52 F30c cases in shapes A and B plus the plan's tests 3-10 and probes):
   lines per page and `AFTER` page / y (±1 pt) at Chrome's in 108, against 51 on the F30c-o binary. The 8 left: 3-line paragraphs with two
   lines of room (F30c-w, pinned), `sp968_n30` A / B (room of 2 lines to the pixel: Chrome's 1010 px page against our 1009.13, F30c's
