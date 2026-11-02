@@ -326,3 +326,41 @@ place; coordinator note), `cd9fb62e` (sweep finding below; head, the `Cargo.lock
 - Not verified: Chrome numbers for orphans / widows author values on nested paragraphs; shapes with an `avoid` ancestor that holds and is
   entered for a forced break inside it (reasoned, not measured); the plan's step 5 `vrt-validator` run (not run from this session); a
   full `cargo test --release --locked` is run at the end (see the final report).
+
+### Validator round 1 (2026-11-02): two guards
+
+The F30c-n `vrt-validator` found two MEDIUM regressions. Both are fixed in the fork (`e8c22256`, `ac2d2ce8`, head; the
+`Cargo.lock` rev), on top of `cd9fb62e` and F30c-o3's first, reverted commit (`96a68961`, `16c5e2ec`: history on
+`htmltopdf/srgb-colours` is append-only; the tree of the guards is `cd9fb62e` + the two guards).
+
+- **M1, a box with a block size of its own.** `may_start_in_place` refuses (`has_own_block_size_above`) when a box between the
+  paragraph and `<body>` reaches more than 1 px below the bottom of its last in-flow child's margin box plus its own bottom padding and
+  border (`height`, `min-height`), or when the bottom paddings and borders above the paragraph (and its own) add up to more than an eighth
+  of a page (`padding-bottom: 750px`). The planner reserves that tail under the last line, so the in-place start printed a box up to 800 px
+  taller than its page and lines on a page of their own (`p10/hs_1500`: Chrome 17 / 13 / 1, old 0 / 30 / 1, F30c-n 17 / 11 / 3; `hs_2500`:
+  Chrome 4 pages, old 4, F30c-n 3). Children that are floats, out of flow, `relative` / `sticky` (their layout location includes the
+  offset) are not measured, and an ancestor with a multicol child is not measured at all (the layout height of a multicol container is not
+  the block size the fragmenter gives it; the first version read the two-column terms block of every `b200-mixed` unit as a 52 px
+  height and moved the document from 198 back to 203 pages). Such a box keeps the old path: `p10/*`, `p9/*`, `p7/sp650_h_*`,
+  `p8/tail_pad_*`, `p6/h_*`, `minh_*`, `ovh_*`, `p1/minh`, `fixh`, `ovf_hidden_h_big` are byte-identical to the F30c-o binary. This
+  also removes the 1.2-2 pt `AFTER` shifts of `p6/h_900`, `p6/minh_700`, `p1/minh`. **Deviation from the coordinator's list:** `p10/vh100`
+  (`min-height: 100vh`) is the old output (0 / 30 / 1, 3 pages) and not Chrome's 17 / 14; the simple guard cannot tell it from `vh150`.
+  F30c-n's in-place start was right there. A guard that compares the page of the box end with the page of the last line would keep it;
+  it needs the placement, which `leading_block_size` does not have (finding F96's neighbourhood, not done).
+- **M2, monolithic boxes.** `block_flow_up_to_root` stops at a box that is an atomic inline (`inline-block`, `inline-flex`,
+  `inline-grid`, `inline-table`) or a `<button>` of any `display` (`is_monolithic_box`), also when it is the paragraph itself (the old
+  check looked at the parent only). Chrome does not break inside them: `p3/ib_p`, `ib_p_full`, `ib_p_va`, `ib_div_text`,
+  `ib_div_text_body`, `ib_span_long`, `p11/button_like` (Chrome 0 / 30 and `AFTER` at 517.1 / 518.6 pt) are the old bytes; `p3/ib_p_two`
+  and `p1/inlineblock` stay the old bytes.
+- **Evidence.** Byte gate 1 and 4 threads, fixtures 01-39 + 7 corpus documents (46 PDFs), F30c-n binary against the guard binary
+  (`htmltopdf-f30cn2`): identical. The 756-case sweep: 704 unchanged, 52 at Chrome (the same 52). The p1-p11 shapes (1242 documents
+  with the sweep): 105 differ from the F30c-n binary, all of them the shapes above, plus `p2/p_pos_rel` and `p3/rel_p` (the first
+  version read a `position: relative; top: -5px` paragraph's shifted location as a gap; fixed with the relative / sticky exclusion, they
+  are F30c-n's 17 / 14 again). Fork: 3,046 tests pass, clippy `-D warnings` and fmt clean; new fork tests `has_own_block_size_above_*`
+  (13 shapes), `a_paragraph_in_a_box_with_a_block_size_of_its_own_keeps_the_old_path`,
+  `a_paragraph_that_is_or_sits_in_a_monolithic_box_keeps_the_old_path`, five new cases of
+  `block_flow_up_to_root_is_plain_block_flow_all_the_way`; ours `nested_start_in_place.rs`
+  `a_paragraph_in_a_box_with_a_block_size_of_its_own_keeps_the_old_path`, `a_paragraph_in_a_monolithic_box_moves_whole`. The new tests
+  were red on the F30c-n binary for the shapes (17 / 11 / 3 and 17 / 14 against the expected 0 / 30 and 0 / 30); not run red on
+  `cd9fb62e` as tests.
+- **Filed:** F96 note (frames closed on ordinary bordered cards after F30c-n; queue position right after F30c-o3).

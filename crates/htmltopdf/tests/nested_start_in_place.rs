@@ -751,3 +751,61 @@ fn a_forced_break_before_the_first_paragraph_of_a_wrapper_is_not_started_in_plac
     assert_eq!(per_page(&words), [0, 48, 0]);
     assert_after(&words, 3, 44.6);
 }
+
+// ── 11. Validator round 1: boxes the in-place start must not touch ────────────────────────────────────────────────
+
+/// M1: a `<section>` with a `height` (or `min-height`, or a `padding-bottom`) that reaches a later page than its last line
+/// keeps the old path: the paragraph moves whole and the box is framed by its own height. Chrome splits the paragraph
+/// 17 / 13 and lets the box end on page 3 (`AFTER` at 142.1 pt for `height: 1500px`, 607.1 pt for `padding-bottom: 750px`);
+/// ours 0 / 30 / 1 (412.5 pt and 322.5 pt) is the page count of Chrome's. The in-place start (17 / 11 / 3 with the box
+/// about 800 px too tall) was worse. A card of ordinary padding still starts in place (tests above).
+#[test]
+fn a_paragraph_in_a_box_with_a_block_size_of_its_own_keeps_the_old_path() {
+    for (style, y) in [
+        ("height:1500px;background:#eef", 412.5),
+        ("min-height:150vh;background:#eef", 423.0),
+        ("padding-bottom:750px;background:#eef", 322.5),
+    ] {
+        let words = printed_words(&render(&format!(
+            "{}<section style=\"{style}\"><p>{}</p></section><p>AFTER</p>",
+            spacer(650),
+            lines(30, 0)
+        )));
+        assert_eq!(per_page(&words), [0, 30, 0], "{style}; Chrome 17 / 13 / 0");
+        assert_after(&words, 3, y);
+    }
+}
+
+/// M2: an atomic inline (`inline-block`) or a `<button>` is monolithic for Chrome: a paragraph that is or sits in one moves
+/// whole (0 / 30, `AFTER` on page 2 at 517.1 pt, 518.6 pt for the button), as before F30c-n. The in-place start split it 17 / 13.
+#[test]
+fn a_paragraph_in_a_monolithic_box_moves_whole() {
+    for (body, y) in [
+        (
+            format!(
+                "<section><p style=\"display:inline-block;width:300px\">{}</p></section>",
+                lines(30, 0)
+            ),
+            517.1,
+        ),
+        (
+            format!(
+                "<section><div style=\"display:inline-block;width:300px\">{}</div></section>",
+                lines(30, 0)
+            ),
+            517.1,
+        ),
+        (
+            // Chrome: 518.6 pt (the button's own padding).
+            format!(
+                "<button style=\"display:block;text-align:left;border:0;background:#eee;font:inherit;width:100%\"><p>{}</p></button>",
+                lines(30, 0)
+            ),
+            518.6,
+        ),
+    ] {
+        let words = printed_words(&render(&format!("{}{body}<p>AFTER</p>", spacer(650))));
+        assert_eq!(per_page(&words), [0, 30], "{body}; Chrome 0 / 30");
+        assert_after(&words, 2, y);
+    }
+}
