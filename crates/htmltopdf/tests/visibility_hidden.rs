@@ -443,7 +443,7 @@ fn boxes_in_a_hidden_span() {
         ("inline-block with border and text", "<span class=ibt>boxtext</span>", 93),
         (
             "img",
-            "<img width=30 height=12 src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='>",
+            "<img width=30 height=12 src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg=='>",
             76,
         ),
         ("inline svg", "<svg width=30 height=12><rect width=30 height=12 fill='#000'/></svg>", 76),
