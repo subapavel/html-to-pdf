@@ -1194,7 +1194,7 @@ fn hidden_placeholders_invoice_prints_only_what_is_visible() {
 }
 
 /// F30c-o: fixture 38 has two body-level terms paragraphs and a print sheet with `@media print { p { orphans: 3; widows: 3 } }`.
-/// The first one ends on page 1 with room for two lines (2.3 here, 2.4 in Chrome) under it. Chrome keeps three lines at the page
+/// The first one ends on page 1 with room for about 2.3 lines (34 pt) under it. Chrome keeps three lines at the page
 /// bottom or none: the second paragraph starts page 2 ("26." at the top, page 1 ends with "odpovídá"; `reference/chrome.pdf`, m141).
 /// Before the fork read the property, ours started it on page 1 with two lines (clause 26 and the start of 27, page 2 beginning with
 /// "samostatnou").

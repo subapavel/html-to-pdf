@@ -255,6 +255,13 @@ THRESHOLDS = {
     #     online" link; 1 page like Chrome's). 3.2 % on main's binary (the hidden words printed and the note missing), 3.17 % now: the text drift
     #     every fixture has plus a few words.
     "37-hidden-placeholders": 0.042,
+    # 38: new in F30c-o (a two-page Czech invoice: nine items, then `<h2>` and TWO body-level `<p>` of terms (clauses 1-25 and 26-50,
+    #     15 and 16 lines), a print sheet with `@media print { p { orphans: 3; widows: 3 } }`; the first paragraph ends page 1 with room
+    #     for 2.3 lines, which the second one cannot use with three lines: Chrome moves it to page 2, "26." at the top, 2 pages like
+    #     Chrome's, "50." at 249.3 pt, ours the same). 5.4 / 2.9 %: the text drift every fixture has over two pages of small text. On the
+    #     binary before the change the fork did not read `orphans` and left two lines of clause 26 at the bottom of page 1 (clause 26 and
+    #     the start of 27 at 768 pt): 5.9 / 5.6 %, page 2 shifted by those two lines. Worst page + 1 point.
+    "38-terms-print-orphans": 0.064,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

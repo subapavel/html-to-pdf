@@ -24,8 +24,8 @@ printing (from memory, the Blink source was not read). Those wrappers are not co
 ## Decision
 
 An `inline-block` that is the only thing on its carrier's single line (`alone_on_its_line`) is split between its line
-boxes, with orphans and widows 2, each line in exactly one fragment (css-break-3 §4.4, the F78 rule), exactly like a
-block. We do not slice a line in two.
+boxes, with the inner block container's `orphans` and `widows` (initially 2; read since F30c-o), each line in exactly one
+fragment (css-break-3 §4.4, the F78 rule), exactly like a block. We do not slice a line in two.
 
 An `inline-block` that shares its line, and `inline-flex` / `inline-grid` / `inline-table`, are not split (F30f-b);
 the warning names the barrier.

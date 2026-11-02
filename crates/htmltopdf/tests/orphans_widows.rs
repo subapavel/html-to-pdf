@@ -386,7 +386,8 @@ fn orphans_one_keeps_a_single_line() {
 /// Every line is printed once, in order, inside the page.
 #[test]
 fn a_value_larger_than_a_page_loses_nothing() {
-    let cases: [(usize, usize, usize, &[usize], usize, f32); 6] = [
+    type Case = (usize, usize, usize, &'static [usize], usize, f32);
+    let cases: [Case; 6] = [
         (60, 2, 0, &[48, 48, 4], 3, 107.6),
         (60, 2, 300, &[0, 48, 48, 4], 4, 107.6),
         (30, 30, 0, &[48, 30, 22], 3, 391.1),

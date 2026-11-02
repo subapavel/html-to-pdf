@@ -5,8 +5,8 @@ Two-page Czech invoice. Page 1 is the header, party grid and an items table of n
 leading-relaxed">`: clauses 1-25 (about 15 lines of 19.5 px) and clauses 26-50 (about 16 lines), then `<p class="mt-6 text-sm">Převzal: …</p>`.
 The inline style sheet holds `@media print { p { orphans: 3; widows: 3; } }`, the usual line of a print sheet.
 
-The items table is sized so that the first terms paragraph ends on page 1 with room for 2.3 lines (ours; Chrome 2.4) under it: the room
-is 5 pt from the two-line boundary and 10 pt from the three-line one, clear of the 1 px difference between our page capacity and
+The items table is sized so that the first terms paragraph ends on page 1 with room for about 2.3 lines under it (34 pt of room; two lines are 29 pt, three 44 pt): the room
+is 5 pt from the two-line boundary and 9.5 pt from the three-line one, clear of the 1 px difference between our page capacity and
 Chrome's (F30f-c).
 
 Exercises:
