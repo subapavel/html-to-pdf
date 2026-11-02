@@ -43,10 +43,20 @@ fn page(body: &str, show_all: bool) -> String {
     )
 }
 
+/// A 1x1 black PNG, registered as `dot.png` (a data URI is not a bundled image and draws nothing).
+const DOT: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x3a, 0x7e, 0x9b,
+    0x55, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x60, 0x00, 0x00, 0x00,
+    0x02, 0x00, 0x01, 0x48, 0xaf, 0xa4, 0x71, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+];
+
 fn renderer() -> Renderer {
     Renderer::builder()
         .font_bytes(inter())
         .unwrap()
+        .image("dot.png", DOT.to_vec())
         .strict_fonts(true)
         .build()
 }
@@ -430,9 +440,14 @@ fn hidden_links_have_no_annotation() {
     );
 
     // Only a hidden run in a visible `<a>`: nothing to click.
-    let body = "<div>x <a href='https://e.cz/'><span class=vh>online</span></a> y</div><p>AFTER</p>";
+    let body =
+        "<div>x <a href='https://e.cz/'><span class=vh>online</span></a> y</div><p>AFTER</p>";
     let pdf = render(body);
-    assert_eq!(link_rects(&check_and_qdf(&pdf)).len(), 0, "only hidden text");
+    assert_eq!(
+        link_rects(&check_and_qdf(&pdf)).len(),
+        0,
+        "only hidden text"
+    );
 }
 
 #[test]
@@ -440,13 +455,17 @@ fn boxes_in_a_hidden_span() {
     // (what, hidden content, the x range between `a` and the next word in which the box would be)
     let cases = [
         ("inline-block with background", "<span class=ib></span>", 79),
-        ("inline-block with border and text", "<span class=ibt>boxtext</span>", 93),
         (
-            "img",
-            "<img width=30 height=12 src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg=='>",
+            "inline-block with border and text",
+            "<span class=ibt>boxtext</span>",
+            93,
+        ),
+        ("img", "<img width=30 height=12 src='dot.png'>", 76),
+        (
+            "inline svg",
+            "<svg width=30 height=12><rect width=30 height=12 fill='#000'/></svg>",
             76,
         ),
-        ("inline svg", "<svg width=30 height=12><rect width=30 height=12 fill='#000'/></svg>", 76),
     ];
     for (what, hidden, w_x) in cases {
         let body = format!("<div>a <span class=vh>{hidden}</span> w</div>");
@@ -473,7 +492,11 @@ fn boxes_in_a_hidden_span() {
     let body = "<div>a <span class='vh pib'></span> w</div>";
     let pdf = render(body);
     assert_eq!(ink_in(&pdf, 50, 30, 68, 80), 0, "pseudo inline-block: ink");
-    assert_advance_kept("pseudo inline-block", &printed_words(&pdf), &words_shown(body));
+    assert_advance_kept(
+        "pseudo inline-block",
+        &printed_words(&pdf),
+        &words_shown(body),
+    );
     // A visible inline-block in a hidden span is shown (already so on main).
     let body = "<div>a <span class=vh><span class='ibt vv'>vischild</span></span> w</div>";
     let got = words_of(body);
@@ -495,7 +518,11 @@ fn boxes_in_a_hidden_span() {
     );
     assert!((got[1].x_min - 70.5).abs() <= 1.0, "{}", describe(&got));
     assert!((got[2].x_min - 136.5).abs() <= 1.0, "{}", describe(&got));
-    assert_advance_kept("visible child of a hidden inline-block", &got, &words_shown(body));
+    assert_advance_kept(
+        "visible child of a hidden inline-block",
+        &got,
+        &words_shown(body),
+    );
 }
 
 #[test]
@@ -513,11 +540,18 @@ fn decorations_follow_the_text() {
     // A hidden `<u>`: the glyphs are skipped and so is the underline that is drawn with them.
     let body = "<div>a <span class=vh><u>bb</u></span> c</div>";
     let pdf = render(body);
-    assert_eq!(ink_in(&pdf, 50, 30, 66, 70), 0, "no underline of a hidden u");
+    assert_eq!(
+        ink_in(&pdf, 50, 30, 66, 70),
+        0,
+        "no underline of a hidden u"
+    );
     // A visible `<u>` in a hidden span keeps its underline.
     let body = "<div><span class=vh>a <u class=vv>bb</u> c</span></div>";
     let pdf = render(body);
-    assert!(ink_in(&pdf, 50, 30, 66, 70) > 0, "the visible u's underline");
+    assert!(
+        ink_in(&pdf, 50, 30, 66, 70) > 0,
+        "the visible u's underline"
+    );
 }
 
 #[test]

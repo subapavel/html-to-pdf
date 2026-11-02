@@ -250,6 +250,11 @@ THRESHOLDS = {
     #     small text. On main's binary the heading stood alone at the bottom of page 1 and the whole paragraph moved to page 2
     #     ("50." at 468.8 pt): 6.8 / 10.1 %, the page-2 number being the text that was a third of a page too low. Worst page + 1 point.
     "36-terms-after-items": 0.065,
+    # 37: new in F209 (a one-page Czech invoice written in plain CSS that hides parts of itself with `visibility: hidden`: a trailing `-`
+    #     on the amounts that add, a `00` spacer before the KS value, a STORNO stamp, a draft box with a visible note, a "Zobrazit
+    #     online" link; 1 page like Chrome's). 3.2 % on main's binary (the hidden words printed and the note missing): the text drift
+    #     every fixture has plus a few words.
+    "37-hidden-placeholders": 0.042,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

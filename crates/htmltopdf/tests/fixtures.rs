@@ -1064,3 +1064,131 @@ fn terms_after_items_invoice_starts_the_terms_below_their_heading() {
         );
     }
 }
+
+/// F209: fixture 37 is a hand-written invoice that hides parts of itself with `visibility: hidden` (plain CSS, an inline `<style>`):
+/// a trailing `−` placeholder on the amounts of the rows that add (visible on the discount), `00` before the KS value so it lines up
+/// under VS, a STORNO stamp (an inline-block) before the title, a draft box whose visible `<span>` is the signature note, and a
+/// "Zobrazit online" link. On main's binary all of it was printed except the stamp, the note was missing (a hidden inline root with
+/// a visible descendant paints nothing), and the link had an annotation. Chrome's words (m141, `reference/chrome.pdf`): x within a
+/// point outside the items table, whose columns are a few pt off Chrome's on main too.
+#[test]
+fn hidden_placeholders_invoice_prints_only_what_is_visible() {
+    let name = "37-hidden-placeholders";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer_with(uses_tailwind(&html))
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-37.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (word, xMin, yMin) in reading order.
+    let words_of = |pdf: &Path| -> Vec<(String, f32, f32)> {
+        let out = std::process::Command::new("pdftotext")
+            .arg("-bbox")
+            .arg(pdf)
+            .arg("-")
+            .output()
+            .expect(
+                "pdftotext (poppler-utils) is required for this test and was not found in PATH",
+            );
+        let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+        let attr = |attrs: &str, name: &str| -> f32 {
+            let start = attrs.find(name).unwrap() + name.len();
+            attrs[start..start + attrs[start..].find('"').unwrap()]
+                .parse()
+                .unwrap()
+        };
+        let mut found = Vec::new();
+        for line in xml.lines() {
+            if let Some(rest) = line.trim().strip_prefix("<word ")
+                && let Some((attrs, word)) = rest.split_once('>')
+                && let Some(word) = word.strip_suffix("</word>")
+            {
+                found.push((
+                    word.to_string(),
+                    attr(attrs, "xMin=\""),
+                    attr(attrs, "yMin=\""),
+                ));
+            }
+        }
+        found
+    };
+    let ours = words_of(&path);
+    let chrome = words_of(&dir.join("reference/chrome.pdf"));
+    // No hidden word, no link annotation (`qpdf` writes the file out uncompressed).
+    let qdf =
+        std::env::temp_dir().join(format!("htmltopdf-test-{}-37.qdf.pdf", std::process::id()));
+    let status = std::process::Command::new("qpdf")
+        .args(["--qdf", "--object-streams=disable"])
+        .arg(&path)
+        .arg(&qdf)
+        .status()
+        .expect("qpdf is required for this test and was not found in PATH");
+    assert!(status.success(), "qpdf --qdf failed");
+    let qdf_text = String::from_utf8_lossy(&std::fs::read(&qdf).unwrap()).into_owned();
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&qdf);
+    assert!(
+        !qdf_text.contains("/Subtype /Link"),
+        "the hidden link has no annotation"
+    );
+    for hidden in [
+        "KONCEPT",
+        "STORNO",
+        "Zobrazit",
+        "online",
+        "neplatný",
+        "000308",
+    ] {
+        assert!(
+            !ours.iter().any(|w| w.0.contains(hidden)),
+            "`{hidden}` is hidden and must not be printed"
+        );
+    }
+    assert_eq!(
+        ours.iter().filter(|w| w.0.contains('\u{2212}')).count(),
+        1,
+        "one visible minus, the discount's"
+    );
+    // The note inside the hidden draft box is printed (Chrome: "Doklad" at x 53.2).
+    assert!(ours.iter().any(|w| w.0 == "Doklad"), "the visible note");
+    // Every word of Chrome's x within a point, but the items table's (y 150 to 275 pt) and the words of the amounts' column.
+    for (n, (word, cx, cy)) in chrome.iter().enumerate() {
+        if (150.0..275.0).contains(cy) {
+            continue;
+        }
+        let nth = chrome[..n].iter().filter(|w| &w.0 == word).count();
+        let hit = ours
+            .iter()
+            .filter(|w| &w.0 == word)
+            .nth(nth)
+            .unwrap_or_else(|| panic!("`{word}` #{nth} (Chrome x {cx:.1}) is not in our text"));
+        assert!(
+            (hit.1 - cx).abs() <= 1.0,
+            "`{word}` at x {:.1}, Chrome puts it at {cx:.1}",
+            hit.1
+        );
+    }
+    // The amounts stand in one column: the `000,00` of the three amounts that have it starts at one x whether or not the trailing
+    // `−` is visible (the hidden one kept its width), and within 2 pt of Chrome's (ours are 1.2 pt left, as on main).
+    let thousands = |words: &[(String, f32, f32)]| -> Vec<f32> {
+        words
+            .iter()
+            .filter(|w| w.1 > 480.0 && w.0.starts_with("000,00"))
+            .map(|w| w.1)
+            .collect()
+    };
+    let (o, c) = (thousands(&ours), thousands(&chrome));
+    assert_eq!(o.len(), 3, "three amounts with thousands: {o:?}");
+    assert!(
+        o.iter().all(|x| (x - o[0]).abs() <= 0.01),
+        "amounts not aligned: {o:?}"
+    );
+    assert!((o[0] - c[0]).abs() <= 2.0, "ours {o:?}, Chrome {c:?}");
+}
