@@ -532,3 +532,79 @@ fn g_a_fixed_height_inline_table_alone_moves_whole_already() {
         assert_eq!(page_count(&pdf), 2, "room {r}");
     }
 }
+
+// --- F213d review round 1: the last pixel of a page, and a margin below the last child -------------------------------
+
+/// Every `L01`..`Lnn` and `AFTER` printed once.
+fn assert_every_line_printed(words: &[Word], n: u32, what: &str) {
+    for i in 1..=n {
+        let t = format!("L{i:02}");
+        let hits = words.iter().filter(|w| w.text == t).count();
+        assert_eq!(hits, 1, "{what}: `{t}` is printed {hits} times");
+    }
+    let hits = words.iter().filter(|w| w.text == "AFTER").count();
+    assert_eq!(hits, 1, "{what}: `AFTER` is printed {hits} times");
+}
+
+#[test]
+fn r_a_box_in_the_last_pixel_of_a_page_loses_no_line_in_any_wrapper() {
+    // Validator HIGH-1: an alone box whose outer height is within about 1.2 px above the content height (1009.13 px) did not
+    // fit a page, but the one pixel of slack of the strip slicer counted it as fitting: the carrier was moved and a
+    // `section`, grid, flex or table-cell wrapper placed it whole, below the page edge. Every line of the box was lost; main
+    // splits the box between its lines and prints all of them. Chrome puts the box on page 2 (its fragmentainer is 1010 px).
+    // The box is a 300 px wide `border-box` with 30 block lines, 30 px of room.
+    let lines: String = (1..=30)
+        .map(|i| format!("<span style=\"display:block\">L{i:02}</span>"))
+        .collect();
+    let wrappers: [(&str, &str); 5] = [
+        ("body", "{}"),
+        ("section", "<section><p>{}</p></section>"),
+        ("flex", "<div style=\"display:flex\"><div>{}</div></div>"),
+        ("grid", "<div style=\"display:grid\"><div>{}</div></div>"),
+        ("td", "<table><tr><td>{}</td></tr></table>"),
+    ];
+    for height in ["267.1mm", "267.3mm", "1010px", "1011px", "1009px", "267mm"] {
+        for (name, wrapper) in wrappers {
+            let bx = format!(
+                "<span style=\"display:inline-block;width:300px;box-sizing:border-box;border:1px solid #000;height:{height}\">{lines}</span>"
+            );
+            let html = wrapper.replace("{}", &bx);
+            let pdf = render(&format!("{}{html}<p>AFTER</p>", room(30)));
+            let words = printed_words(&pdf);
+            assert_every_line_printed(&words, 30, &format!("{name}, height {height}"));
+        }
+    }
+}
+
+#[test]
+fn r_an_auto_box_whose_last_child_has_a_bottom_margin_moves_whole() {
+    // Validator MEDIUM-1: Blitz's auto height omits the margin below the last in-flow child, so `content_ends_inside` saw the
+    // content overflow the box by that margin and the box was split between its children; Chrome moves it whole (a margin
+    // is blank space, and an `inline-block` is a BFC root). Room 100 px; a default `<ul>` of 10 items (232 px, 16 px margins),
+    // and 8 paragraphs with `margin: 0 0 16px`.
+    let ul = format!(
+        "<ul>{}</ul>",
+        (1..=10)
+            .map(|i| format!("<li>L{i:02}</li>"))
+            .collect::<String>()
+    );
+    let ps: String = (1..=8)
+        .map(|i| format!("<p style=\"margin:0 0 16px\">L{i:02}</p>"))
+        .collect();
+    for (name, inner, n) in [("ul", ul, 10), ("p with a margin below", ps, 8)] {
+        let pdf = render(&format!(
+            "{}<div><span style=\"display:inline-block;width:300px\">{inner}</span></div><p>AFTER</p>",
+            room(100)
+        ));
+        let words = printed_words(&pdf);
+        assert_every_line_printed(&words, n, name);
+        for i in 1..=n {
+            let t = format!("L{i:02}");
+            assert_eq!(
+                find(&words, &t).page,
+                2,
+                "{name}: `{t}` is on page 1, Chrome moves the box whole to page 2"
+            );
+        }
+    }
+}
