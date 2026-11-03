@@ -45,6 +45,17 @@ css-spec-researcher was not run. The wording and section numbers below are cited
 
 ## 3. Where it belongs: cause and design
 
+> **Coordinator decision 2026-11-03 (after step 1, section 7.1; supersedes the design below where they differ).**
+>
+> - **Scope: monolithic boxes only.** The offset move applies to the plain advance (`:4312`: carriers, images, inline-blocks and other replaced or atomic boxes) and to the carrier / paragraph rules that move a *monolithic line*. Nothing else changes.
+> - **`chrome_bottom(0)`.** In the offset-only branch (`cursor_y == 0`, `offset_above(page)`) the box moves when `cursor + size > chrome_bottom(0)` (= `ceil(bottom(0))`, F30f-b), not `bottom(0)`: C8 shows Chrome keeps a 1002 px image under `body{margin:8px}` and moves 1003 px. The `size <= fresh() + 1.0` bound stays (a box taller than a page is F213b / F29b; C12).
+> - **No `keeps_whole_at` / F28 leading change.** Do not make `keeps_whole_at` or the F28 leading filters (`:4236`, `:4241`) take `offset_above`. Chrome splits a first `break-inside: avoid` box in place (C5, C6; css-break-3 section 4.1: nothing before it, no break point), and main already matches (40 / 5 for cards of blocks, in a section, flex, grid, table); those guards must stay green.
+> - **Card shapes are separate findings.** F213e-b (first avoid card of inline text only hangs and loses lines) and F213e-c (zero-height sibling before an avoid card), queued right after F213e. Their tests `f213e_c5_…`, `f213e_c6_…card` and `f213e_c5z_…` are `#[ignore]`d with Chrome's numbers.
+> - **`@page :first` stays F109;** boxes and lines taller than a page stay F213b / F29b (the C12 ignore is correct).
+> - **Fixture 45 uses an `inline-block`.** A plain `<main class="break-inside-avoid">` is split in place by Chrome (207 words stay on page 1) and by ours, so it would be green and show nothing. Only a monolithic box is moved, so the invoice is `inline-block w-full break-inside-avoid`. Its threshold stays 0.065 until the fix lowers it.
+>
+> In the design below read "the five rules" as the rules that move a monolithic box or line (`:3731` multicol and `:4226` F28 wrapper move are not monolithic; leave them), and strike the `keeps_whole_at` / leading-filter bullet.
+
 This is fulgur fragmenter behaviour, so the fix goes in the fork (`pagination_layout.rs` only). htmltopdf only bumps `Cargo.lock` and updates `docs/upstream.md`. No upstream PR or issue.
 
 **Hypotheses, ranked:**
@@ -84,6 +95,14 @@ impl PageStrips {
 - **Determinism:** no new map and no change to float arithmetic. A moved box gets `cursor_y = 0.0` as on the existing paths.
 
 ## 4. Acceptance
+
+> **Coordinator decision 2026-11-03 (see section 3 and 7.1).** The acceptance below is amended as follows.
+>
+> - **Fixture 45** is `body{margin-top:70mm}` and ONE `main.inline-block.w-full.break-inside-avoid` of 843 px (14 rows), not a plain avoid `main`; page 1 empty, page 2 the whole invoice (Chrome, 2 pages). Before: 4.3 / 5.5 %. The asserts are in `fixtures.rs` `letterhead_invoice_moves_whole_to_page_two`.
+> - **Red tests that the fix must turn green:** `f213e_c4_…`, `f213e_c11_…`, `f213e_c6_a_first_tall_image_…`, `f213e_c8_…` (1003 / 1004 / 1008 px), `f213e_q1_…`, `f213e_q1b_…`, `f213e_c10_…`, the new Q1 entry in `page_bottom_warning.rs` and the fixture 45 test.
+> - **Guards, green before and after:** the `f213e_g_*` and `f213e_g1/g2/g3_*` tests, including `f213e_g_c5_a_first_avoid_card_of_blocks_…` (no whole-move of avoid boxes), `f213e_g_c8_…` (1001 / 1002 px stay) and C7 (no blank page).
+> - **Ignored, with Chrome's numbers:** `f213e_c5_…` and `f213e_c6_…card` (F213e-b), `f213e_c5z_…` (F213e-c), `f213e_c12_…` (F213b / F29b), `f213e_c3_…` (F109). The C5 / C6 "moved whole" and C12 "not moved" lines below are superseded by section 7.1.
+> - **Byte gates** are unchanged; with the narrower scope any change outside 45 stops the work.
 
 **Fixture `45-letterhead-keep-together`** (Czech invoice for pre-printed letterhead paper).
 
