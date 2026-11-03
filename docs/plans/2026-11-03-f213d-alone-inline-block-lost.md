@@ -228,4 +228,103 @@ fn report_unpainted(geometry: &PaginationGeometryTable, drawables: &Drawables);
 
 ## 7. Evidence
 
-To be filled in by the implementer: probes, the hypothesis that holds, red/green, gates, sweep, compare numbers.
+### 7.1 Step 1: probes, Chrome and main
+
+Measured 2026-11-03. Chrome is the Playwright Chromium of this VM, the version of the committed references (`Skia/PDF m153`), with `emulateMedia(print)` and
+`preferCSSPageSize`, like `scripts/reference/render.mjs`. Ours is main 5c04d20 (`Cargo.lock` pins fork `329b4e43`), the prebuilt CLI binary, bundled Inter.
+Words and y (yMin, pt from the page top) from `pdftotext -bbox`; "lost" means the word is on no page. "Wide" is the MediaBox read-back of F213 section 7.2:
+every page's MediaBox widened downwards by 3000 pt, then `pdftotext -bbox`. The probe scripts are in the scratchpad `f213d/` (`q.py`, `q11.py` to `q15.py`); `S(R)`, `A(h)` are as in section 1.
+The CLI prints no warning for any case below that is called "silent".
+
+| Id | Chrome | main |
+|---|---|---|
+| Q1 `A(300)`, R 5, 10, 15, 20 | p2 `BOXTOP` 41.7, `AFTER` 267.4 | same pages (p2), moved whole; the threshold is the box's first row, 21 px (1 px border + 20 px line): R 19 and 20 move, R 21 and up do not |
+| Q1 R 25, 60, 120, 199 | the same | p2 `AFTER` 43.6 only. **`BOXTOP` is lost**: wide shows it on p1 at 996.8 (R 25), 970.6 (60), 925.6 (120), 866.3 (199). Silent. The box (border too) is painted below the page edge: page 1 is empty in the PNG |
+| Q1 R 250, 299 | the same (the box is 302 px) | `BOXTOP` on p1 at 828.1 / 791.3, `AFTER` p2: the box stays on page 1 hanging into the margin; nothing is lost but the box's bottom |
+| Q1 R 303, 310 | box and `AFTER` fit: p1 `BOXTOP` 571.2 / 565.9, p2 `AFTER` 40.9 | p1 `BOXTOP` 788.3 / 783.1, p2 `AFTER` 43.6: same pages |
+| Q2 `A(h)`, R 120, h 100 | box fits (102 px): p1 `BOXTOP` 708.4, p2 `AFTER` | same pages |
+| Q2 h 600 | p2 `BOXTOP` 41.7, `AFTER` 492.4 | `BOXTOP` lost (wide p1 1150.6), silent |
+| Q2 h 1000, 1009, 1012, 1200, 2500 | p2 `BOXTOP`; `AFTER` on p3 (p4 for 2500); the box is sliced from 1012 up | `BOXTOP` lost, silent (wide p1 1450 to 2575); `AFTER` on p2, so 2 pages instead of 3 (4) |
+| Q3 auto height, 15 **block** children, R 120 | **p2 L01 to L15 and `AFTER`: moved whole** | split: L01 to L05 p1 (711.1 to 771.1), L06 to L15 p2. Same at fixed 300 px with 15 block children |
+| Q3 auto height, 15 lines of text (`L01<br>L02...`), R 10, 120, 250 | p2, whole | p2, whole already (the box is itself the inline formatting context; also 30 and 45 lines): this shape is **green on main** |
+| Q3 `min-height:300px`; auto with `padding-bottom:250px` | p2 `BOXTOP` 41.7 | `BOXTOP` lost (wide p1 925.6 / 903.1), silent |
+| Q3 fixed 300 px, 40 block children (800 px of overflow) | p2 all 40 lines, whole | split: L01 to L05 p1, L06 to L40 p2: every word once |
+| Q3 fixed 300 px, 40 **text** lines (`L01<br>...`) | p2 all 40 lines | **L01 to L22 are on no page, even at the top of page 1 with no `S`**: L23 is at y 3.8 on p2, so the first 22 lines sit above the page top. Silent. A bug of the F183c family (the overflow of a fixed box is seated above it), not this finding |
+| Q4 fixed 196 px: caption, 72 px svg, name; R 40, 100 | p2 CAPTION 41.7, NAME 122.7 | cut: CAPTION p1 (771 / 726), NAME p2 |
+| Q4 R 130 | the same | CAPTION p1 759.1; NAME painted at 840.1, past the page edge: lost (wide only) |
+| Q4 R 150, 170, 190, 195 | the same (R 200 fits, Chrome keeps it on p1) | the whole box on p1, its words 5 to 50 pt below the content box, inside the page margin: printed, in the wrong place |
+| Q5 `START A TAIL`, `A TAIL`, `START A`, `Úvod<br>A` | p2 for all | p2 for all (F213): green |
+| Q6 section, card, `overflow:hidden` card, `section p x`, table cell, flex item | p2 `BOXTOP` (`x` stays on p1, 707.7) | `BOXTOP` lost in every one (wide p1 925.6 to 940.6), silent |
+| Q7 inline-table of table-row spans, fixed 300 px | p2 | p2: green |
+| Q7 inline-table, auto, 15 rows | p2 all rows | split 5 / 10, like Q3 blocks |
+| Q7 `inline-flex`, R 10 and 120 | p2 | p2: green (F213) |
+| Q8 `vertical-align` top, middle, bottom; Q9 `text-align` right, center | p2 | `BOXTOP` lost for all five (wide p1 925.6), silent |
+| Q10 no `S`, `A(1200)` | p1 `BOXTOP` 41.7 (sliced), p2 `AFTER` 184.9 | `BOXTOP` **lost at the top of page 1**: wide p1 933.8; `AFTER` p2 43.6; silent |
+| Q10 R 120, `A(1200)` | p2 `BOXTOP`, p3 `AFTER` | lost (wide p1 1600.6), 2 pages |
+
+Differences from the plan:
+
+- **Q3, the question of the brief.** Chrome moves an auto-height box of 15 lines that fits a page whole, as the plan predicts (css-break-3 section 4.4). What differs is main:
+  only a box with **block children** is split (5 / 10); a box of plain text lines is already moved whole. The red test uses block children; the text-lines shape is a guard.
+- Guard "Q3 overflowing, every word once" holds for block children only; with text lines main loses L01 to L22 (above). The guard uses block children.
+- Q2 at h 1200 is not a guard: `BOXTOP` is lost on main (silent). Q10 is lost at the top of the page with no `S`, so it is a residual of any alone box taller than a page whose child is short;
+  Chrome slices it. The guard "every word printed once, ADR-0004" uses an auto-height box of 70 block lines (1402 px).
+- The loss is not only for a box with the first row fitting but a **short child**: any box whose first row fits is entered in place; whether words are lost depends on how far the box
+  is painted below its line (F183c seats a fixed-height box on the baseline of its last line, so it hangs below by about its free space). A fixed 196 px box with a 129 px content
+  (the plan's fixture) is never lost, only misplaced into the page margin (Q4 R 150 to 195); the fixture needs a taller box (section 7.3).
+- A real `<table style="display:inline-table">` cannot be alone in a `<p>` (the parser closes the paragraph); in a `<div>` it moves on main as the span-built one does.
+
+### 7.2 Which hypothesis holds: H1
+
+1. Q1 R 120: page 1 is empty in the PNG (not even the box's border is on it), page 2 has `AFTER` only; the widened MediaBox shows `BOXTOP` on **page 1**, 925.6 pt, below the
+   page edge (841.89 pt). The carrier is therefore one fragment on page 1 and its content is painted there: H1. H2 (a split carrier with no slices) and H3 (a line drawn on a page without
+   the box's fragment) predict that nothing is painted anywhere, widened or not: refuted for Q1, Q3, Q6, Q7, Q8, Q9 and Q10, every case above whose word shows in wide.
+2. The room threshold is F28's first-row test exactly: R 20 moves, R 21 stays (the first row is the border plus one 20 px line, 21 px). H1 predicted it.
+3. The silence is as H1 predicted: the fork at 329b4e43 paints the box's content under `canvas.paint_extent.enter_local()` (`paragraph.rs:1071`), and `PaintExtent` records nothing while local
+   (`draw_primitives.rs:804-808`); the line itself holds only whitespace. Function names checked at `git show 329b4e43:`: `monolithic_line_carrier` (line 8227), `alone_on_its_line` (8170),
+   `leading_block_size_with` (4648), `record_carrier_slices_after` (6955), `clip_hides_nothing` (7506). `alone_on_its_line` returns false for a box that shares the line, true
+   for ours; the exclusion in `monolithic_line_carrier` therefore stops the F213 move for it, as the plan says.
+4. No fork dump test was run (the fork is not edited in this round); the read-back separates H1 from H2 and H3 without it.
+5. The F213 mechanism is the same one with text beside the box; the difference is that here nothing else on the line has glyphs, so even the F111 text check has nothing to see.
+
+### 7.3 Step 2: tests, fixture 44, fixtures with an alone inline-block
+
+**Grep.** `inline-block`, `inline-flex`, `inline-table`, `inline-grid` in `fixtures/invoices/*/index.html`: 03 (two pills in one paragraph: they share the line), 27 (`.meta div`
+twice at 49 % each, `.pay dt` next to its `dd`), 35 (`.dot::before` before text), 37 (hidden `.stamp` beside the title; `.meta div`, `.meta dt`), 43 (the QR box beside text). None is alone on its
+line, and none is on a line that crosses a page. `bench/corpus` has none. D1 should leave every PDF but 44 byte-identical; the byte gate of step 4 confirms it.
+
+**Fixture 44** (`fixtures/invoices/44-signature-box-page-bottom`). Thirteen rows of 41's table, the total, the thank-you line, then the signature box last. `.podpis{height:70mm}` (about 265 px) in the
+fixture's `<style>`; every class is in the committed `tailwind.css`. The plan's `52mm` loses nothing at any row count: with 9 to 12 rows the whole box is on page 1 (the name 50 to 133 pt above the
+edge), with 13 the name is in the page margin (820 pt), with 14 to 16 the box is cut (caption p1, name p2), with 17 it moves. A 60 mm box loses the name by 0.1 pt at 13 rows only. 70 mm: 12 rows lose the name
+(843 pt, 1 pt past the edge), 13 rows lose it by 29 pt (871 pt) with the layout room 160 px, above the 147 px height of the content so the box is not cut. 13 rows chosen.
+In Chrome the thank-you line is at 646 pt and the box is on page 2 (`RAZÍTKO` 55.8, name 140.5). In ours the thank-you line is at 646 pt, `RAZÍTKO` at 786 pt on page 1, the name at 871 pt (wide).
+After the fix the box is expected on page 2 below Chrome's by about the free space below the name (F183c): the README says so, to be measured in step 6.
+
+**Fixture 44 on main 5c04d20** (`scripts/render-fixtures.sh`, `scripts/compare.py 44-signature-box-page-bottom`): **1 page, Chrome 2**; pixel diff **3.5 % (page 1), 0.4 % (page 2, ours absent)**, worst 3.5 %,
+page-count mismatch (FAIL: no `PAGE_COUNT_MAY_DIFFER` entry and no threshold; none is added in this round). No warning. The PNG shows page 1 ending with the thank-you line and, below a gap, the top of the box
+(border, caption, the top of the stamp) cut by the page edge; page 2 does not exist.
+
+**Tests**, run on main with `CARGO_TARGET_DIR=/home/user/html-to-pdf/target cargo test --release --locked --offline --no-fail-fast -p htmltopdf --test alone_inline_block_line --test fixtures --test page_bottom_warning --test no_unpainted_content`:
+
+| Test | Result on main |
+|---|---|
+| `alone_inline_block_line::r_a_fixed_height_box_alone_on_its_line_moves_to_the_next_page` (Q1 R 60, 120, 199) | **red** (`BOXTOP` printed 0 times) |
+| `…::r_the_same_with_vertical_align_and_text_align` (Q8, Q9) | **red** (same) |
+| `…::r_a_box_with_several_block_children_moves_whole` (Q4, R 40 to 190) | **red** (`CAPTION` on page 1) |
+| `…::r_the_same_in_a_section_a_card_a_cell_and_a_flex_item` (Q6) | **red** (`BOXTOP` 0 times) |
+| `…::r_an_inline_table_alone_that_fits_a_page_moves_whole` (Q7 auto, 15 rows) | **red** (`L01` on page 1) |
+| `…::r_an_auto_height_box_that_fits_a_page_moves_whole` (Q3: 15 blocks, fixed 300 with 15 blocks, `min-height`, `padding-bottom`) | **red** (`L01` on page 1) |
+| `…::g_a_box_whose_first_row_does_not_fit_the_room_already_moves` (Q1 R 10, 20) | green |
+| `…::g_a_box_that_fits_the_room_stays_on_page_one` (Q2 h 100) | green |
+| `…::g_an_inline_flex_box_alone_moves_whole` (Q7) | green |
+| `…::g_a_fixed_height_inline_table_alone_moves_whole_already` (Q7) | green |
+| `…::g_a_box_that_shares_its_line_keeps_f213` (Q5, four shapes) | green |
+| `…::g_a_box_taller_than_a_page_with_block_lines_prints_every_line_once` (70 blocks, ADR-0004) | green |
+| `…::g_a_box_whose_content_overflows_it_visibly_prints_every_line_once` (Q3, 40 blocks) | green |
+| `…::g_a_box_of_text_lines_moves_whole_on_main_already` (Q3, 15 text lines) | green |
+| `page_bottom_warning::warns_about_content_below_the_page_only` | **red** at the new "must warn" case, Q10 (a 1200 px box alone, with 120 px of room): no warning. The 7 new "must not warn" entries (Q1 to Q4, Q6) are green on main: they are guards for step 3, where the net will see the box |
+| `no_unpainted_content::no_fixture_has_content_that_is_painted_on_no_page` | **red** at its sentinel (a 1200 px box alone: the net is silent). The loop over the 43 fixtures passes on main (no warning), so the allow-list is empty |
+| `fixtures::signature_box_invoice_moves_the_whole_box_to_page_two` | **red** (1 page, Chrome 2) |
+| the other 22 tests of `fixtures.rs` | green |
+
+`cargo fmt --all -- --check` and `cargo clippy --release --locked --offline -p htmltopdf --tests -- -D warnings` pass.
