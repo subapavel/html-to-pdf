@@ -27,7 +27,7 @@ The spec is cited by the planner from memory (css-spec-researcher not run). The 
 - **css-break-3 §4.4**: orphans/widows (Rule 3), relaxed only when the allowed breaks cannot avoid overflow (as quoted in ADR-0010). For P1 the Class A break before the paragraph avoids overflow, so it is the break to take.
 - **CSS 2.1 §13.3.3**: page breaks occur between block boxes and between line boxes, never inside a line box.
 - **Monolithic content taller than the fragmentainer**: css-break-3 lets paged media slice it, as quoted in ADR-0004. The brief places this in "§5.x"; the section is unverified. It applies to P2 only.
-- **Chrome m141, predicted** (step 1 measures with `scripts/reference/render.mjs` plus `pdftotext -bbox`; words per page, y of `START`, `BOXTOP`, `TAIL`, `AFTER`, page count):
+- **Chrome (version of the committed references), predicted; measured in section 7** (step 1 measured with `scripts/reference/render.mjs` plus `pdftotext -bbox`; words per page, y of `START`, `BOXTOP`, `TAIL`, `AFTER`, page count):
   - P1, P1e, P1t, P3, P5: the whole line goes to the top of page 2.
   - P4: 2 / 3.
   - P4b: Chrome may split it 2 / 1 (ADR-0010: we move it whole).
@@ -146,4 +146,98 @@ fn monolithic_line_carrier(doc: &BaseDocument, node: &blitz_dom::Node, fresh: f3
 
 ## 7. Evidence
 
-(to be filled in by the implementer)
+### 7.1 Step 1: probes, Chrome and main
+
+Measured 2026-11-03. Chrome is the Playwright Chromium of this VM, the version of the committed references (`Skia/PDF m153`), with
+`emulateMedia(print)` and `preferCSSPageSize`, like `scripts/reference/render.mjs`. Ours is main 58f8992 (`Cargo.lock` pins fork
+`7a79be15`), the prebuilt CLI binary, bundled Inter. Words and y (yMin in pt from the page top) from `pdftotext -bbox`; "lost" means the
+word is on no page. The probes are in the scratchpad `f213/probes.py`, the bare HTML in `f213/p/`.
+
+| Probe | Chrome | main |
+|---|---|---|
+| P1 | p1 empty; p2 `START` `BOXTOP` `TAIL` 41.7, `AFTER` 267.4 | p1 empty; p2 `AFTER` 43.6; `START` `BOXTOP` `TAIL` lost; warns 32.4 pt |
+| P1e (empty box) | p2 `START` `TAIL` 256.2, `AFTER` 271.2 | p2 `START` `TAIL` 257.3, `AFTER` 270.1; no warning |
+| P1t (`vertical-align:top`) | p2 `START` `TAIL` 40.9, `BOXTOP` 41.7, `AFTER` 267.4 | as P1; warns 32.4 pt |
+| P2 (box 1200, after `S`) | p2 `START` `BOXTOP` `TAIL` 41.7; p3 `AFTER` 184.9 (box sliced) | p2 `AFTER` 43.6; the rest lost; warns 707.4 pt |
+| P2a (box 1200, no `S`) | p1 `START` `BOXTOP` `TAIL` 41.7; p2 `AFTER` 184.9 | p2 `AFTER` 43.6; warns 100.6 pt |
+| P3 (`<img>` 100x300) | p2 `START` `TAIL` 254.7, `AFTER` 269.7 | p2 `START` `TAIL` 257.3, `AFTER` 272.3 |
+| P3s (inline `<svg>`) | as P3 | p2 `START` `TAIL` 257.3, `AFTER` 272.3 |
+| P4 | p1 `L1` 647.7 `L2` 662.7; p2 `START` `BOXTOP` `TAIL` 41.7, `L4` 267.4, `L5` 282.4, `AFTER` 297.4 | p1 `L1` `L2`; p2 the rest (`START` 258.8, `L4` 271.6): same pages |
+| P4b | p1 `L1` `L2`; p2 `START` `BOXTOP` `TAIL` 41.7, `AFTER` 267.4 (2 / 1) | p2 everything (`L1` 43.6, `START` 287.3): moves whole (ADR-0010) |
+| P5 | p2 all four words (`START` 41.7) | as P1; warns 32.4 pt |
+| P5b | p1 `x` 647.7; p2 all four words | p1 `x` 650.3; as P1; warns 47.4 pt |
+
+Page counts: P1, P1e, P1t, P3, P3s, P5, P5b 2 pages in both; P2 3 in Chrome (2 in ours); P2a 2 in both; P4, P4b 2 in both.
+
+**What differs from the prediction in section 2.**
+
+- P1 / P1t / P5: Chrome's y is **not** "the line at the top of page 2 with the box below it". For a box with in-flow content Chrome puts the
+  box's baseline on its last line box (CSS 2.1 10.8.1), so `START` is level with `BOXTOP` at the top of the box (41.7 pt) and the line is 300 px
+  *below* the baseline. Ours seats every inline box bottom-on-baseline (F183c), so `START` is at the box's bottom (257.3 pt on page 2 after the fix)
+  and, for a box of **fixed height with block content**, the box itself is painted hanging below that baseline: Q0, a fixed-height box with a block
+  child, no `S`, on one page: Chrome `START` 41.7, `AFTER` 267.4; main `START` 257.3 (`BOXTOP` 257.3, the box's top edge also at 257), `AFTER` 270.1. An
+  auto-height box (the fixture's) is placed like Chrome's within 5.6 pt (probe R_nofixh: label/`BOXTOP` 47.3 vs 41.7, `START` 287.3 vs 281.7). So the test "START within 1 pt
+  of Chrome" cannot hold for P1; it asserts pages only. The y comparison is kept for P1e, P3 and P3s (within 1.1, 2.6 and 2.6 pt).
+  This misplaced fixed-height box is **pre-existing and outside F213** (a box that fits, or a line that is alone, shows it the same way); to be filed with
+  F183c.
+- P1e and P3 / P3s are green on main, as predicted.
+- P4 is green, as predicted. P4b moves whole, as ADR-0010 says; Chrome splits it 2 / 1.
+- P3 first drew no image on ours ("not a bundled image": a `data:` URI is not a bundled image). The layout is the same; the red test registers `red60.png`.
+- The plan's fixture assertion "`QR` appears once" is wrong: `QR Platba` is upper-cased and the sentence says `QR kódem`, so `QR` is printed twice.
+
+### 7.2 Which hypothesis holds: H1 (with the box cut, a case of H1b)
+
+Evidence (no fork test; the PDF is read back):
+
+1. P1, P5: `qpdf --qdf` of page 1 shows the carrier's text painted **on page 1**, below the media box: `START` at y = 874.27 pt (page height 841.89,
+   content bottom 799.37, so 32.4 pt past the edge, the figure of the warning), then `BOXTOP`, then `TAIL`. Page 2 holds only `AFTER`. So the
+   carrier is not moved and its line is painted: nothing is "measured away" (H1b as the plan describes it does not occur for a box with one child).
+2. Widening each page's MediaBox downwards and running `pdftotext -bbox` lists the words below the edge (`geo.py`): P1 p1 `START` `BOXTOP` `TAIL` at 864.1.
+3. **The room threshold matches H1's F28 test.** Box with one block child, `S` leaving `room` px (fixed 300 px box, first row `BOXTOP`): `room` 10 and 15 px
+   move the line to page 2 (Chrome: page 2 for all); 19, 21, 22, 25, 40, 200 px lose the words and warn. The box's own first row (the border and
+   one 20 px line) is about 17 to 19 px; once it fits, `leading_block_size_with` reports "fits" and the carrier is entered in place.
+4. **The leaf case differs as predicted.** A box with only an `<svg display:block>` child (first row = the whole 300 px) moves; a box whose child is text
+   (an inline root, `D_text`) moves; an empty box (P1e) moves. Only a box whose first row is a *block child shorter than the room* loses its line.
+5. **A box with several blocks is cut inside** (the H1b shape). Auto-height box = label + 300 px block `<svg>` + amount (`D_blksvg`, and fixture 43's QR box):
+   page 1 gets the label (`BOXTOP` at 649.6 pt), the cut moves the `<svg>` and the amount to page 2 (`AFTER` at 268.6 pt on page 2, after the `<svg>`'s 225 pt), and the line
+   is still painted on page 1 below the edge (`START` at 879.1 pt, widened). Fixture 43 on main: the label `PLATBA` stays at 740.3 pt on page 1, `Zaplaťte … 0300.` at 856.6 pt
+   (lost), the amount `CZK` and `Děkujeme` on page 2. So the carrier does get a second fragment here, but the line goes to the first fragment, where its baseline is
+   below the edge; it is not "painted nowhere". The remedy is the same: do not enter the line.
+6. Reading the fork at `7a79be15`: `gate` is in `fragment_block_subtree`'s caller (`pagination_layout.rs`, `let gate = |doc, available_strip, keeps_whole|`, about line 3872 at that commit,
+   not `:3879`); `would_split_block_subtree` (about 4496), `leading_block_size_with` (about 4638: the first-row walk that the F28 move at about 3913 uses, with the F30 /
+   `abspos_line_split` shortcut only for an inline root of two lines or more) and `fragment_block_subtree` (about 5213), `fragment_inline_root` (about 9039) and
+   `record_carrier_slices_after` (about 6762). The plan's line numbers were off by 10 to 300; its function names are right.
+
+Not tested without a fork test: the exact `fragments` / `line_slices` of the carrier (the plan's dump). Evidence 1 to 5 settle which path runs, so the dump is only needed in step 3 as a
+lib test. H2 (P2) is as predicted: lost with a warning (707.4 pt, 100.6 pt past the edge). H3 (P5, P5b) is the same as P1: lost with a warning.
+
+### 7.3 Step 2: tests and fixture 43
+
+Run on main 58f8992 with `CARGO_TARGET_DIR=/home/user/html-to-pdf/target cargo test --release --locked --offline --no-fail-fast -p htmltopdf --test tall_inline_box_line --test fixtures --test page_bottom_warning`.
+
+| Test | Result on main |
+|---|---|
+| `tall_inline_box_line::p1_a_line_with_an_inline_block_taller_than_the_room_moves_to_the_next_page` | **red** (`START` printed 0 times) |
+| `tall_inline_box_line::p1_a_box_of_several_blocks_moves_with_its_line` | **red** (`START` 0 times; the box is cut: `BOXTOP` p1, `AMOUNT` p2) |
+| `tall_inline_box_line::p1t_the_same_with_vertical_align_top` | **red** |
+| `tall_inline_box_line::p5_the_same_nested_in_a_section` | **red** (so H3 holds: the nested gate has the same hole) |
+| `tall_inline_box_line::p5b_the_same_after_a_paragraph_in_a_section` | **red** |
+| `tall_inline_box_line::g1_an_empty_box_moves_with_its_line` (P1e) | green |
+| `tall_inline_box_line::g2_a_tall_image_moves_with_its_line` (P3) | green |
+| `tall_inline_box_line::g3_a_tall_svg_moves_with_its_line` (P3s) | green |
+| `tall_inline_box_line::g4_a_tall_box_on_the_third_line_splits_before_its_line` (P4) | green |
+| `tall_inline_box_line::g5_a_tall_box_on_the_last_of_three_lines_moves_the_whole_paragraph` (P4b, ADR-0010) | green |
+| `page_bottom_warning::warns_about_content_below_the_page_only` | **red** at the new silent entry "F213 P1" (warning 32.4 pt, the CLI's figure). With the two F213 silent entries skipped (temporary edit, not committed) the rest of the test, including the new "must warn" case for a 1200 px box (F213b), is **green** |
+| `fixtures::qr_inline_block_invoice_moves_the_whole_payment_line_to_page_two` | **red** (`Zaplaťte` printed 0 times) |
+| the other 20 tests of `fixtures.rs` | green (`every_fixture_renders_to_a_pdf_deterministically` includes 43) |
+
+`cargo fmt --all -- --check` and `cargo clippy --release --locked --offline -p htmltopdf --tests -- -D warnings` pass.
+
+**Fixture 43, main (`scripts/render-fixtures.sh` with the prebuilt main binary, then `scripts/compare.py 43-qr-inline-block-page-bottom`):** 2 pages, Chrome 2;
+pixel diff **3.8 % (page 1) / 1.3 % (page 2), worst 3.8 %**. The number is low because the lost line is small and page 2 is nearly empty; the words are what the test checks.
+The renderer warns "content extends 24.9 pt past the bottom page edge on page 1 and is not printed". The side-by-side shows page 1 with the stranded `QR PLATBA` label in a
+box without a bottom, page 2 with the QR and amount but not `Zaplaťte QR kódem` / `nebo převodem na účet 123456789/0300.`. No threshold is set in `compare.py` yet; the fix PR sets
+it to the worst page after the fix + 1 point (the default of 10 % holds until then).
+
+Sizing: sixteen rows of 41's table. In Chrome the line with a 16 px stand-in for the box starts at 727.2 pt (about 100 px of room), in ours at 729.8 pt (about 97 px); fifteen rows give
+about 60 px more room, seventeen about 37 px less (below the 33 px leading of the box, so the label would not fit and main would already move the line).

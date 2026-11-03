@@ -1475,3 +1475,116 @@ fn terms_heading_keep_invoice_moves_the_heading_with_its_paragraph() {
         "`Převzal:` is on Chrome's page"
     );
 }
+
+#[test]
+fn qr_inline_block_invoice_moves_the_whole_payment_line_to_page_two() {
+    // F213. Page 1 ends 100 px above the bottom of the content box with the total; the paragraph "Zaplaťte QR kódem
+    // [box of 186 px] nebo převodem …" does not fit, and neither does its box. Chrome moves the whole line to page 2
+    // (the box's top at 42.6 pt, "Zaplaťte" at 153.4 pt level with the amount), then "Děkujeme". Before the fix the words
+    // of the line were painted below the edge of page 1 and printed nowhere, and the box was cut in two (its label stayed
+    // on page 1, the QR and the amount went to page 2).
+    let name = "43-qr-inline-block-page-bottom";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-43.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (page, yMin, yMax, word) in reading order.
+    let words_of = |pdf: &Path| -> Vec<(usize, f32, f32, String)> {
+        let out = std::process::Command::new("pdftotext")
+            .arg("-bbox")
+            .arg(pdf)
+            .arg("-")
+            .output()
+            .expect(
+                "pdftotext (poppler-utils) is required for this test and was not found in PATH",
+            );
+        let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+        let attr = |attrs: &str, key: &str| -> f32 {
+            let start = attrs.find(&format!("{key}=\"")).unwrap() + key.len() + 2;
+            attrs[start..start + attrs[start..].find('"').unwrap()]
+                .parse()
+                .unwrap()
+        };
+        let mut page = 0;
+        let mut found = Vec::new();
+        for line in xml.lines() {
+            if line.contains("<page ") {
+                page += 1;
+            } else if let Some(rest) = line.trim().strip_prefix("<word ")
+                && let Some((attrs, word)) = rest.split_once('>')
+                && let Some(word) = word.strip_suffix("</word>")
+            {
+                found.push((
+                    page,
+                    attr(attrs, "yMin"),
+                    attr(attrs, "yMax"),
+                    word.to_string(),
+                ));
+            }
+        }
+        found
+    };
+    let ours = words_of(&path);
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        ours.iter().map(|w| w.0).max(),
+        Some(2),
+        "two pages like Chrome"
+    );
+    // Content box bottom: A4 height 841.89 pt minus the 15 mm margin.
+    let content_bottom = 841.89 - 15.0 / 25.4 * 72.0;
+    // Each word of the payment line is printed the stated number of times, all on page 2, inside the content box. The
+    // label `QR Platba` is upper-cased by `uppercase`, so `QR` is printed twice (label and sentence).
+    for (word, times) in [
+        ("Zaplaťte", 1),
+        ("QR", 2),
+        ("kódem", 1),
+        ("PLATBA", 1),
+        ("CZK", 1),
+        ("nebo", 1),
+        ("převodem", 1),
+        ("123456789/0300.", 1),
+        ("Děkujeme", 1),
+    ] {
+        let hits: Vec<_> = ours.iter().filter(|w| w.3 == word).collect();
+        assert_eq!(
+            hits.len(),
+            times,
+            "`{word}` is printed {} times, expected {times}",
+            hits.len()
+        );
+        for h in hits {
+            assert_eq!(
+                h.0, 2,
+                "`{word}` is on page {}, Chrome has it on page 2",
+                h.0
+            );
+            assert!(
+                h.2 <= content_bottom + 5.0,
+                "`{word}` ends at {:.1} pt, below the content box",
+                h.2
+            );
+        }
+    }
+    // Page 1 ends with the total, as in Chrome ("Kč" is its last word), with the payment line nowhere on it.
+    let last_on_1 = ours
+        .iter()
+        .rposition(|w| w.0 == 1)
+        .map(|i| ours[i].3.clone());
+    assert_eq!(last_on_1.as_deref(), Some("Kč"), "last word of page 1");
+    // The thank-you line follows the payment line.
+    let y = |word: &str| ours.iter().find(|w| w.3 == word).unwrap().1;
+    assert!(
+        y("Děkujeme") > y("Zaplaťte"),
+        "`Děkujeme` is below `Zaplaťte`"
+    );
+}
