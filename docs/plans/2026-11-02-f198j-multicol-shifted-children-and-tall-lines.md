@@ -281,3 +281,11 @@ count of Chrome's; the first-word distance falls from "column empty" to 2 to 60 
 `p_top_pos12` (`top: 12px` on every paragraph, which main baked into the flow): its columns started 6 words early; they are now the unshifted layout's, six
 words late in three columns where main happened to be exact (the flat layout is 6 words from Chrome there too), in total 18 words from Chrome's against 24.
 No word is lost in either.
+
+**Other gates.** Fork `cargo fmt` and `cargo clippy --all-targets -D warnings` clean; `cargo test -p fulgur` green. Here: `cargo fmt --check`,
+`cargo clippy --release --locked --all-targets -- -D warnings` clean, `cargo test --release --locked --no-fail-fast` green (the one failure of the first run was
+fixture 40's own test, which took `pdftotext`'s reading order for the column order: it lists clause 15 before clause 11, in Chrome's PDF too; it now
+compares the order with Chrome's). `compare.py`: fixture 40 9.4 / 6.8 % (threshold 0.104), every other fixture unchanged and under its threshold.
+`bench.py --check` ok (b200-items 1336 ms against 1347 ms of the F213 binary on the same machine, which is slower today than when the 1250 ms exception was
+measured; fixture 40 28 ms). Fork VRT: 35 of 64 goldens differ on this host (the pinned fonts are missing, as before); the 35 `.actual.pdf` are
+byte-identical between fork `329b4e43` and `58c78ae2`.

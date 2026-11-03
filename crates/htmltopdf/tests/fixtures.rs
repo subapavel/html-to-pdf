@@ -805,13 +805,33 @@ fn terms_card_strips_columns_invoice_prints_every_clause() {
     }
     assert_eq!(needles.len(), 20, "{name}: the 20 clauses");
     needles.push("Fakturu vystavila Jana Nováková".into());
-    let mut at = 0;
-    for n in &needles {
-        let pos = text[at..]
-            .find(n.as_str())
-            .unwrap_or_else(|| panic!("{name}: `{n}` missing or out of order: {text}"));
-        at += pos + n.len();
-    }
+    // `pdftotext` reads the strips of two columns in an order of its own (clause 15 before clause 11, in Chrome's PDF as well), so the
+    // order is the reference's: the headings come in the same sequence in both, the signature last.
+    let order = |text: &str| -> Vec<usize> {
+        let mut at: Vec<(usize, usize)> = needles
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                (
+                    text.find(n.as_str())
+                        .unwrap_or_else(|| panic!("{name}: `{n}` is missing: {text}")),
+                    i,
+                )
+            })
+            .collect();
+        at.sort_unstable();
+        at.into_iter().map(|(_, i)| i).collect()
+    };
+    assert_eq!(
+        order(&text),
+        order(&chrome),
+        "{name}: the headings and the signature come in Chrome's order"
+    );
+    assert_eq!(
+        order(&text).last(),
+        Some(&20),
+        "{name}: the signature comes last"
+    );
     assert_eq!(
         text.split(' ').count(),
         chrome.split(' ').count(),
