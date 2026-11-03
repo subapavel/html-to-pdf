@@ -1858,6 +1858,112 @@ fn qr_inline_block_invoice_moves_the_whole_payment_line_to_page_two() {
 }
 
 #[test]
+fn signature_box_invoice_moves_the_whole_box_to_page_two() {
+    // F213d. Page 1 ends with the thank-you line, about 160 px above the bottom of the content box. The last element is
+    // `<p class="mt-8 text-right">` holding a 70 mm tall `inline-block` (stamp box: a caption, a 72 px `<svg>`, a name,
+    // free space below) alone on its line. The box does not fit the room, so Chrome moves it whole to page 2 (caption
+    // "RAZÍTKO" at 55.8 pt, name at 140.5 pt). Before the fix the fragmenter entered the paragraph (the caption row fits),
+    // left it on page 1 and painted the box seated on the line's baseline: its top part is on page 1 without a bottom
+    // border, the name is painted below the page edge and printed nowhere, and the renderer says nothing. Page 2 does not
+    // exist.
+    let name = "44-signature-box-page-bottom";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-44.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (page, yMin, yMax, word) in reading order.
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+    let attr = |attrs: &str, key: &str| -> f32 {
+        let start = attrs.find(&format!("{key}=\"")).unwrap() + key.len() + 2;
+        attrs[start..start + attrs[start..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    let mut page = 0;
+    let mut ours: Vec<(usize, f32, f32, String)> = Vec::new();
+    for line in xml.lines() {
+        if line.contains("<page ") {
+            page += 1;
+        } else if let Some(rest) = line.trim().strip_prefix("<word ")
+            && let Some((attrs, word)) = rest.split_once('>')
+            && let Some(word) = word.strip_suffix("</word>")
+        {
+            ours.push((
+                page,
+                attr(attrs, "yMin"),
+                attr(attrs, "yMax"),
+                word.to_string(),
+            ));
+        }
+    }
+    assert_eq!(
+        ours.iter().map(|w| w.0).max(),
+        Some(2),
+        "two pages like Chrome"
+    );
+    // Content box bottom: A4 height 841.89 pt minus the 15 mm margin.
+    let content_bottom = 841.89 - 15.0 / 25.4 * 72.0;
+    // `uppercase` prints the caption as "RAZÍTKO A PODPIS DODAVATELE"; the name is "Ing. Jana Nováková, jednatelka".
+    for (word, want_page) in [
+        ("RAZÍTKO", 2),
+        ("PODPIS", 2),
+        ("DODAVATELE", 2),
+        ("Ing.", 2),
+        ("Nováková,", 2),
+        ("jednatelka", 2),
+        ("Děkujeme", 1),
+    ] {
+        let hits: Vec<_> = ours.iter().filter(|w| w.3 == word).collect();
+        assert_eq!(
+            hits.len(),
+            1,
+            "`{word}` is printed {} times, expected once",
+            hits.len()
+        );
+        assert_eq!(
+            hits[0].0, want_page,
+            "`{word}` is on page {}, Chrome has it on page {want_page}",
+            hits[0].0
+        );
+    }
+    for w in &ours {
+        assert!(
+            w.2 <= content_bottom + 5.0,
+            "`{}` on page {} ends at {:.1} pt, below the content box",
+            w.3,
+            w.0,
+            w.2
+        );
+    }
+    // Page 1 ends with the thank-you line, with the box nowhere on it; page 2 holds the box and nothing else.
+    let last_on_1 = ours
+        .iter()
+        .rposition(|w| w.0 == 1)
+        .map(|i| ours[i].3.clone());
+    assert_eq!(
+        last_on_1.as_deref(),
+        Some("spolupráci."),
+        "last word of page 1"
+    );
+}
+
+#[test]
 fn letterhead_invoice_moves_whole_to_page_two() {
     // F213e. `body { margin-top: 70mm }` (pre-printed letterhead paper), then the whole invoice in one `inline-block w-full
     // break-inside-avoid` box of 843 px and the thank-you line. Page 1 has 744.6 px of room, a fresh page 1009 px. Chrome
