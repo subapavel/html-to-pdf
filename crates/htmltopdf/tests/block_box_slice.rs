@@ -512,6 +512,34 @@ fn nested_boxes_are_both_open_at_the_break() {
     }
 }
 
+/// The frame of a box that is not on its last page ends at the page's content bottom (css-break-3 §5.3), not in the bottom
+/// margin. Before F96 the frame of the first page of a box whose nested box split a paragraph ran to the page's bottom
+/// edge (row 1122, 56 rows into the margin: the `fresh()`-tall frame). P4 and fixture 42 are both such shapes. Chrome: the
+/// side borders end at row 1065 of 1123.
+#[test]
+fn outer_frame_ends_at_the_content_bottom_not_in_the_margin() {
+    for (what, pdf) in [
+        ("P4", render(&shape_p4())),
+        ("42", render_fixture("42-terms-card-clauses")),
+    ] {
+        let p1 = Raster::of(&pdf, 1);
+        // Non-white, because the border of 42 is light grey. The left edges of the card and of the nested box are 56.7 and
+        // 73.7 px in both shapes.
+        let inked = |x: usize, y: usize| p1.grey(x, y).min(p1.grey(x + 1, y)) < 250;
+        assert!(
+            (LAST_ROW - 3..=LAST_ROW).any(|y| inked(56, y)),
+            "{what}: the card's side border reaches the content bottom"
+        );
+        // One pixel of slack for the antialiased last row.
+        for y in LAST_ROW + 2..p1.h {
+            assert!(
+                !inked(56, y) && !inked(73, y),
+                "{what}: a side border runs into the bottom margin (row {y}, content bottom {LAST_ROW})"
+            );
+        }
+    }
+}
+
 // ---- test 6: paint only for the cards that split by lines -----------------------------------------------------------------
 
 /// The text layer of the cards that already split by lines (P1, 06, 08, 16) is what it was before F96: the change moves
