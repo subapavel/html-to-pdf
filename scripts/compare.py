@@ -56,10 +56,13 @@ THRESHOLDS = {
     "05-fancy": 0.044,
     # 06: new in F30 (a paragraph taller than a page inside a bordered box). 15.9 / 12.5 %: one dense paragraph, so
     #     the diff is the line-wrapping drift against Chrome's text metrics over ~100 lines, not layout; the page
-    #     break itself matches (page 1 filled, 2 pages like Chrome). Chrome also leaves the box open at the break,
-    #     we draw a border there (box-decoration-break is not implemented).
+    #     break itself matches (page 1 filled, 2 pages like Chrome). Chrome also leaves the box open at the break;
+    #     ours drew a border there until F96.
     #     F33 (outside bullets painted; the fixture uses the default outside disc again): p2 12.5 -> 11.8 %, p1 15.9 % unchanged,
     #     so the worst page and the threshold stay.
+    #     F96 (a block box split across pages is sliced, `box-decoration-break: slice`): no top border and radius on page 2, no
+    #     bottom border on page 1; p1 10.7 -> 10.6 %, p2 11.80 -> 11.80 % (the worst page is dense text drift, the frame is a
+    #     few hundred pixels). The threshold stays.
     "06-long-notes": 0.129,
     # 07: new in F29 (page 0 starts 32 px down because the first child's `mt-8` collapses through <body>). 7.2 / 7.1 %:
     #     page 1 holds 21 rows to Chrome's 20 (row heights drift by well under a pixel and add up over 20 rows); without
@@ -68,7 +71,9 @@ THRESHOLDS = {
     # 08: new in F30b (a paragraph taller than a page that is a grid item, `grid gap-4` card, and a flex-row footer).
     #     13.2 / 12.1 %: same cause as 06, one dense paragraph whose line wrapping drifts against Chrome's over ~100
     #     lines; the page break matches (2 pages like Chrome, main printed 3 pages and cut the paragraph after clause 21). Ours also draws the
-    #     card's top border again on page 2 (box-decoration-break is not implemented). Worst page + 1 point.
+    #     card's top border again on page 2 (until F96). Worst page + 1 point.
+    #     F96: the card is sliced at the break like Chrome's. 8.2 / 12.1 % -> 8.2 / 12.1 % (the frame lines are light grey, under
+    #     the 32/255 tolerance of the metric; the PNG shows the open edges). The threshold stays.
     "08-terms-grid": 0.132,
     # 09: new in F48 (`h-12` on every `td`, four descriptions wrapping to 3 lines). 5.1 / 4.9 / 0.7 %: the rest is text
     #     drift and the `<tr>` row rules Chrome paints and we do not (Blitz #386, F22); the page count and every row's
@@ -123,7 +128,9 @@ THRESHOLDS = {
     #     F30f-d (step 4) slices the paragraph inside the card at its break: page 2's lines start at the content top like
     #     Chrome's. 9.5 / 20.8 -> 9.5 / 12.9 %; worst page + 1 point. What is left is the drift every fixture has (a word
     #     moves between lines a few lines into page 2) and the frame of the `<section>` itself, which the block fragmenter still
-    #     closes on both pages (bottom border and radius on page 1, top border and radius on page 2: F96, block boxes).
+    #     closed on both pages (bottom border and radius on page 1, top border and radius on page 2) until F96.
+    #     F96 slices the card at its break like Chrome's: 9.53 / 12.90 -> 9.45 / 12.90 %. The worst page is the drift; the
+    #     threshold stays.
     "16-terms-card": 0.139,
     # 17: new in F102 (a running footer, `position: running(paticka)` in an inline `<style>`, printed by `@bottom-center` on
     #     both pages; Chrome ignores `running()`, so its reference prints the same two halves from `@bottom-left` /
@@ -275,6 +282,12 @@ THRESHOLDS = {
     #     `avoid` as `auto` and left the heading alone at the bottom of page 1 ("Obchodní" at 757.6 pt), the terms 21 pt too high on
     #     page 2: 3.9 / 13.8 %. Worst page + 1 point.
     "41-terms-heading-keep": 0.055,
+    # 42: new in F96 (a `rounded-lg border bg-gray-50` card with 21 kept-together clauses and a nested `rounded-md border bg-white`
+    #     box, both split across the page break; Chrome slices both: open edges at the break, sides and backgrounds to the content
+    #     bottom, bottom inset on the last fragment only; 2 pages like Chrome). 5.7 / 5.9 %: the text drift every fixture has.
+    #     On the binary before F96 both frames were closed on each page, the backgrounds stopped at the last clause and the
+    #     payment block stood 43.7 pt too high: 5.7 / 12.1 %. Worst page + 1 point.
+    "42-terms-card-clauses": 0.069,
     # 43: new in F213 (a two-page Czech invoice: sixteen items and the total, then ONE one-line `<p>` "Zaplaťte QR kódem [box] nebo
     #     převodem na účet ..." whose `inline-block` (label, 112 px QR `<svg>`, amount: 186 px) does not fit the 100 px left on page 1;
     #     Chrome moves the whole line to page 2, "Zaplaťte" at 156.3 pt, 2 pages; ours the same page, with the line and its box 14 pt lower
