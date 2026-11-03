@@ -916,6 +916,19 @@ const SHAPES: &[Shape] = &[
     ("clipheight", shape_clip_height),
     ("abspos", shape_abspos),
     ("float", shape_float),
+    ("relstrips", shape_rel_strips),
+    ("relstrips_flat", shape_rel_strips_flat),
+    ("relshift", shape_rel_shift),
+    ("relshift_flat", shape_rel_shift_flat),
+    ("relplain", shape_rel_plain),
+    ("negmargin", shape_neg_margin),
+    ("fullbleed", shape_full_bleed),
+    ("pulledup", shape_pulled_up),
+    ("im1200_pl", shape_tall_image_card),
+    ("im1200_cl", shape_tall_image_clip_card),
+    ("edge1008", shape_edge_1008),
+    ("edge1010", shape_edge_1010),
+    ("edge1012", shape_edge_1012),
 ];
 
 #[test]
@@ -1451,4 +1464,509 @@ fn guard_absolutely_positioned_and_floating_children_keep_the_old_path() {
     assert_eq!(words_printed(&pdf), 361, "abspos child");
     let pdf = render(&shape_float());
     assert_eq!(words_printed(&pdf), 344, "float child");
+}
+
+// ── F198j: a child with a relative offset or a negative margin, and a line taller than a page ───────────────────
+//
+// F198 and F198b cut a box taller than a page between its lines, but the planner refuses a box whose children it cannot
+// describe and places it whole in one column, where everything below the page edge is lost (with a warning). Three shapes
+// were still refused: a child shifted by `position: relative` with an inset (Taffy puts the shift into the child's
+// position, so the next sibling's gap is negative), a child with a negative margin (a real overlap), and a line taller than
+// a page (an inline box as tall as its line). Plan: `docs/plans/2026-11-02-f198j-multicol-shifted-children-and-tall-lines.md`.
+//
+// Chrome's numbers below are for the HTML of `dump_chrome_inputs` (the Chrome of the committed references): the first word
+// of every column of every page, and where `AFTER` lands.
+
+const CLIP_CARD: &str = "border:1px solid #888;border-radius:12px;overflow:hidden;";
+/// A blue header strip with a word of its own (`S000`) so that its position can be compared.
+const STRIP: &str = "background:#3b82f6;color:#fff;padding:6px 12px;";
+
+/// `r_rel`: a clip card of 25 strips (`S000` …), each followed by a padded paragraph of 84 words (2100 words). `shift` is
+/// the strips' extra style.
+fn shape_rel_strips_with(shift: &str) -> String {
+    let body: String = (0..25)
+        .map(|i| {
+            format!(
+                "<div style='{STRIP}{shift}'>S{i:03}</div><p style='padding:4px 12px'>{}</p>",
+                words(i * 84, i * 84 + 84)
+            )
+        })
+        .collect();
+    two_columns(&format!("<div style='{CLIP_CARD}'>{body}</div>"))
+}
+
+/// Every strip nudged 3 px down: `position: relative; top: 3px`.
+fn shape_rel_strips() -> String {
+    shape_rel_strips_with("position:relative;top:3px;")
+}
+
+/// The same card without the offset.
+fn shape_rel_strips_flat() -> String {
+    shape_rel_strips_with("")
+}
+
+/// `x_relshift` and `x_negmargin`: a clip card with one strip and 25 padded paragraphs of 100 words (2500 words);
+/// `p_extra` is the paragraphs' extra style.
+fn shape_rel_shift_with(p_extra: &str) -> String {
+    let body: String = (0..25)
+        .map(|i| {
+            format!(
+                "<p style='padding:4px 12px;{p_extra}'>{}</p>",
+                words(i * 100, i * 100 + 100)
+            )
+        })
+        .collect();
+    two_columns(&format!(
+        "<div style='{CLIP_CARD}'><div style='{STRIP}'>S000</div>{body}</div>"
+    ))
+}
+
+/// Every paragraph drawn 12 px up: `position: relative; top: -12px`.
+fn shape_rel_shift() -> String {
+    shape_rel_shift_with("position:relative;top:-12px;")
+}
+
+fn shape_rel_shift_flat() -> String {
+    shape_rel_shift_with("")
+}
+
+/// `position: relative` without an inset moves nothing.
+fn shape_rel_plain() -> String {
+    shape_rel_shift_with("position:relative;")
+}
+
+/// `x_negmargin`: every paragraph `margin-top: -6px`.
+fn shape_neg_margin() -> String {
+    shape_rel_shift_with("margin-top:-6px;")
+}
+
+/// A header that is Tailwind's `-mx-4 -mt-4` full-bleed strip (`margin: -16px -16px 12px`) in a clip card with `p-4`, then 25
+/// paragraphs of 100 words.
+fn shape_full_bleed() -> String {
+    let body: String = (0..25)
+        .map(|i| format!("<p>{}</p>", words(i * 100, i * 100 + 100)))
+        .collect();
+    two_columns(&format!(
+        "<div style='{CLIP_CARD}padding:16px'>\
+         <div style='{STRIP}margin:-16px -16px 12px;padding:8px 16px'>S000</div>{body}</div>"
+    ))
+}
+
+/// A paragraph pulled 40 px up, above the last line of the one before it (and above the strip): an overlap the planner
+/// cannot cut (a line is 16.8 px). It keeps the old path.
+fn shape_pulled_up() -> String {
+    shape_rel_shift_with("margin-top:-40px;")
+}
+
+/// `imNNNN`, `edgeNNNN`: text with `images` inline images `img_w` x `img_h` px, one after every `every` words, then `tail`
+/// words, in a card. A line with an image is as tall as the image.
+fn shape_tall_line(
+    card: &str,
+    img_w: u32,
+    img_h: u32,
+    every: usize,
+    images: usize,
+    tail: usize,
+) -> String {
+    let img = format!("<img src='red60.png' style='width:{img_w}px;height:{img_h}px'>");
+    let text: String = (0..images)
+        .map(|k| format!("{} {img} ", words(k * every, (k + 1) * every)))
+        .collect();
+    two_columns(&format!(
+        "<div style='{card}'>{text}{}</div>",
+        words(images * every, images * every + tail)
+    ))
+}
+
+const CLIP_PADDED: &str = "border:1px solid #888;border-radius:12px;overflow:hidden;padding:10px;";
+
+/// Six 60 x 1200 px images in a padded card: 1810 words. A line is taller than the 1009 px page.
+fn shape_tall_image_card() -> String {
+    shape_tall_line(CARD, 60, 1200, 300, 6, 10)
+}
+
+fn shape_tall_image_clip_card() -> String {
+    shape_tall_line(CLIP_PADDED, 60, 1200, 300, 6, 10)
+}
+
+/// Five 40 px wide images just over the page: the line is taller than a page by a few px (1200 words).
+fn shape_edge(h: u32) -> String {
+    shape_tall_line(CARD, 40, h, 238, 5, 10)
+}
+
+fn shape_edge_1008() -> String {
+    shape_edge(1008)
+}
+
+fn shape_edge_1010() -> String {
+    shape_edge(1010)
+}
+
+fn shape_edge_1012() -> String {
+    shape_edge(1012)
+}
+
+// Chrome's first words per column, pages and `AFTER` for the shapes above (the same HTML as `dump_chrome_inputs` writes).
+
+const CHROME_REL_STRIPS: Chrome = Chrome {
+    first: &[
+        &[Some(0), Some(306)],
+        &[Some(612), Some(924)],
+        &[Some(1240), Some(1543)],
+        &[Some(1848), Some(1974)],
+    ],
+    after_page: 4,
+    after_y: 338.6,
+};
+const CHROME_REL_SHIFT: Chrome = Chrome {
+    first: &[
+        &[Some(0), Some(330)],
+        &[Some(672), Some(1012)],
+        &[Some(1367), Some(1700)],
+        &[Some(2042), Some(2272)],
+    ],
+    after_page: 4,
+    after_y: 549.3,
+};
+const CHROME_NEG_MARGIN: Chrome = Chrome {
+    first: &[
+        &[Some(0), Some(342)],
+        &[Some(690), Some(1036)],
+        &[Some(1391), Some(1737)],
+        &[Some(2084), Some(2290)],
+    ],
+    after_page: 4,
+    after_y: 502.8,
+};
+const CHROME_FULL_BLEED: Chrome = Chrome {
+    first: &[
+        &[Some(0), Some(330)],
+        &[Some(671), Some(1012)],
+        &[Some(1366), Some(1718)],
+        &[Some(2071), Some(2290)],
+    ],
+    after_page: 4,
+    after_y: 508.8,
+};
+/// Pages Chrome prints for the tall-line shapes (`im1200_*`: 7, `edge1008` to `edge1012`: 6).
+const CHROME_TALL_IM_PAGES: usize = 7;
+const CHROME_TALL_EDGE_PAGES: usize = 6;
+
+/// The printed words by their text (every word of these shapes is unique).
+fn by_text(found: &[Word]) -> std::collections::BTreeMap<String, Word> {
+    let mut m = std::collections::BTreeMap::new();
+    for w in found {
+        assert!(
+            m.insert(w.text.clone(), w.clone()).is_none(),
+            "{} is printed twice",
+            w.text
+        );
+    }
+    m
+}
+
+/// Oracle (b), as in F209: `shifted` prints every word of `flat` on the same page and at the same x, and at the same y
+/// except for the words `dy_of` names, which are `dy_of(text)` pt lower (±0.01). A relative offset does not move the
+/// layout (CSS 2.1 §9.4.3), so the static layout is the flat one.
+fn assert_shift_oracle(what: &str, flat: &[Word], shifted: &[Word], dy_of: impl Fn(&str) -> f32) {
+    let (flat, shifted) = (by_text(flat), by_text(shifted));
+    assert_eq!(
+        flat.len(),
+        shifted.len(),
+        "{what}: {} words printed, {} without the offsets",
+        shifted.len(),
+        flat.len()
+    );
+    for (text, f) in &flat {
+        let s = shifted
+            .get(text)
+            .unwrap_or_else(|| panic!("{what}: {text} is printed without the offset, not with it"));
+        let dy = dy_of(text);
+        assert_eq!(s.page, f.page, "{what}: {text} is on another page");
+        assert!(
+            (s.x_min - f.x_min).abs() <= 0.01,
+            "{what}: {text} at x {:.2}pt, {:.2}pt without the offset",
+            s.x_min,
+            f.x_min
+        );
+        assert!(
+            (s.y_min - f.y_min - dy).abs() <= 0.01,
+            "{what}: {text} at y {:.2}pt, {:.2}pt without the offset: it should move by {dy}pt",
+            s.y_min,
+            f.y_min
+        );
+    }
+}
+
+/// [`check_shape_with`] for a shape whose text is drawn off its static place: every word once in column-major order, no
+/// check against the content box or the first line of a column, which the offset moves. Pages, the first word of every
+/// column and `AFTER` against Chrome's.
+fn check_shifted_shape(what: &str, pdf: &[u8], chrome: &Chrome, total: usize) {
+    let found = printed_words(pdf);
+    let ordered = column_major(&found, 2);
+    let seen: Vec<usize> = ordered.iter().filter_map(Word::index).collect();
+    let first_diff = seen
+        .iter()
+        .enumerate()
+        .position(|(i, w)| *w != i)
+        .or((seen.len() != total).then_some(seen.len().min(total)));
+    assert!(
+        first_diff.is_none(),
+        "{what}: every word exactly once, column-major: printed {} of {total}, first difference at index {first_diff:?}",
+        seen.len()
+    );
+    assert_eq!(
+        page_count(pdf),
+        chrome.first.len().max(chrome.after_page),
+        "{what}: pages like Chrome"
+    );
+    for (p, cols) in chrome.first.iter().enumerate() {
+        for (c, want) in cols.iter().enumerate() {
+            let got = ordered
+                .iter()
+                .find(|w| w.page == p + 1 && column(w, 2) == c)
+                .and_then(Word::index);
+            match (want, got) {
+                (Some(want), Some(got)) => assert!(
+                    want.abs_diff(got) <= ONE_LINE.col_words,
+                    "{what}: page {} column {} starts with w{got:04}, Chrome w{want:04}",
+                    p + 1,
+                    c + 1
+                ),
+                (None, None) => {}
+                _ => panic!(
+                    "{what}: page {} column {}: ours {got:?}, Chrome {want:?}",
+                    p + 1,
+                    c + 1
+                ),
+            }
+        }
+    }
+    let after: Vec<&Word> = found.iter().filter(|w| w.text == "AFTER").collect();
+    assert_eq!(after.len(), 1, "{what}: AFTER printed once");
+    assert_eq!(
+        after[0].page, chrome.after_page,
+        "{what}: AFTER on Chrome's page"
+    );
+    assert!(
+        (after[0].y_min - chrome.after_y).abs() <= ONE_LINE.after_pt,
+        "{what}: AFTER at {:.1}pt, Chrome {:.1}pt",
+        after[0].y_min,
+        chrome.after_y
+    );
+}
+
+/// The blue of the strips: `#3b82f6`.
+fn is_blue(r: u8, _g: u8, b: u8) -> bool {
+    b > 200 && r < 120 && b as i32 - r as i32 > 120
+}
+
+/// Raster scale of the 288 dpi page of [`blue_top_pt`]: px per pt.
+const FINE: f32 = 4.0;
+
+/// Where the blue strip under `x_pt` begins on page `page`, scanning down from `from_pt`, at 288 dpi (a pixel is 0.25 pt:
+/// poppler snaps the edge of a filled rectangle to the pixel grid, so the answer is good to a pixel, not a fraction of one).
+fn blue_top_pt(pdf: &[u8], page: usize, x_pt: f32, from_pt: f32) -> f32 {
+    let (w, h, px) = rgb_page(pdf, page, 288);
+    let x = (x_pt * FINE) as usize;
+    for y in (from_pt * FINE) as usize..h {
+        let i = 3 * (y * w + x);
+        let cov = ((px[i + 2] as f32 - px[i] as f32) / 187.0).clamp(0.0, 1.0);
+        if cov > 0.02 {
+            return (y as f32 + (1.0 - cov)) / FINE;
+        }
+    }
+    panic!("no blue below {from_pt}pt at x {x_pt}pt on page {page}");
+}
+
+#[test]
+fn a_relatively_offset_child_keeps_its_offset_and_every_word() {
+    // L. `r_rel`: the strips of a clip card shifted 3 px down. Main: 330 of 2100 words (the card is placed whole, warned).
+    let flat = render(&shape_rel_strips_flat());
+    let pdf = render(&shape_rel_strips());
+    check_shifted_shape("r_rel", &pdf, &CHROME_REL_STRIPS, 2100);
+    // Oracle (b): the words of the paragraphs stay where the flat layout put them, the strips' 2.25 pt (3 px) lower.
+    assert_shift_oracle("r_rel", &printed_words(&flat), &printed_words(&pdf), |t| {
+        if t.starts_with('S') { 2.25 } else { 0.0 }
+    });
+    // The first strip's background is 2.25 pt (3 px) lower than without the offset, like its text (Chrome: 2.0 pt at 144 dpi).
+    let x = MARGIN_PT + 100.0;
+    let top = |pdf: &[u8]| blue_top_pt(pdf, 1, x, MARGIN_PT);
+    let dy = top(&pdf) - top(&flat);
+    assert!(
+        (dy - 2.25).abs() <= 0.3,
+        "r_rel: the first strip is {dy:.2}pt lower, expected 2.25pt (±0.3: one pixel at 288 dpi)"
+    );
+
+    // `x_relshift`: 25 paragraphs drawn 12 px (9 pt) up. They overlap the strip and the line above them; a line that
+    // crosses a column edge is drawn once, where it falls.
+    let flat = render(&shape_rel_shift_flat());
+    let pdf = render(&shape_rel_shift());
+    check_shifted_shape("x_relshift", &pdf, &CHROME_REL_SHIFT, 2500);
+    assert_shift_oracle(
+        "x_relshift",
+        &printed_words(&flat),
+        &printed_words(&pdf),
+        |t| if t.starts_with('w') { -9.0 } else { 0.0 },
+    );
+}
+
+/// The strip of a clip card in column 1 of page 1 runs from the card's inner left border edge to its inner right one and its
+/// top sits on the card's top border (1 px = 0.75 pt), and there is no other blue anywhere (±1 pt).
+fn assert_strip_spans_the_card(what: &str, pdf: &[u8]) {
+    let col_w = (PAGE_W_PT - 2.0 * MARGIN_PT - GAP_PT) / 2.0;
+    let blobs = blobs_in_pt(pdf, is_blue, 3);
+    assert_eq!(
+        blobs.len(),
+        1,
+        "{what}: one strip, in column 1 of page 1 only: {blobs:?}"
+    );
+    let (page, [x0, y0, x1, _]) = blobs[0];
+    assert_eq!(page, 1, "{what}: the strip is on page 1");
+    assert!(
+        (x0 - (MARGIN_PT + 0.75)).abs() <= 1.0 && (x1 - (MARGIN_PT + col_w - 0.75)).abs() <= 1.0,
+        "{what}: the strip spans x {x0:.1}..{x1:.1}pt, the card's inner edges are {:.1}..{:.1}pt",
+        MARGIN_PT + 0.75,
+        MARGIN_PT + col_w - 0.75
+    );
+    assert!(
+        (y0 - (MARGIN_PT + 0.75)).abs() <= 1.0,
+        "{what}: the strip's top is at {y0:.1}pt, the card's top border ends at {:.1}pt",
+        MARGIN_PT + 0.75
+    );
+}
+
+#[test]
+fn a_child_with_a_negative_margin_is_cut_like_the_others() {
+    // M. `x_negmargin`: every paragraph pulled 6 px up over the one before it. Main: 360 of 2500 words.
+    let pdf = render(&shape_neg_margin());
+    check_shifted_shape("x_negmargin", &pdf, &CHROME_NEG_MARGIN, 2500);
+    assert_strip_spans_the_card("x_negmargin", &pdf);
+    // Tailwind's full-bleed card header, `-mx-4 -mt-4`: a negative top margin and negative inline margins on the first
+    // child of a padded clip card. Main: 281 of 2500 words.
+    let pdf = render(&shape_full_bleed());
+    check_shifted_shape("full-bleed header card", &pdf, &CHROME_FULL_BLEED, 2500);
+    assert_strip_spans_the_card("full-bleed header card", &pdf);
+}
+
+/// `w<from> … w<to-1>` once each, in column-major order, except the words `lost` names; they are the words of a tall line,
+/// whose text sits on the baseline at the bottom of the image, below the page edge. Nothing below the page; the other words
+/// are inside the content box. `lost` words missing: `max_lost` per window of `windows`.
+fn assert_words_once_but_tall_lines(
+    what: &str,
+    found: &[Word],
+    total: usize,
+    windows: &[std::ops::RangeInclusive<usize>],
+    max_lost: usize,
+) {
+    let ordered = column_major(found, 2);
+    let seen: Vec<usize> = ordered.iter().filter_map(Word::index).collect();
+    assert!(
+        seen.windows(2).all(|p| p[0] < p[1]),
+        "{what}: every printed word once, in order: {:?}",
+        seen.windows(2).find(|p| p[0] >= p[1])
+    );
+    let in_a_window = |i: usize| windows.iter().any(|w| w.contains(&i));
+    let missing: Vec<usize> = (0..total).filter(|i| !seen.contains(i)).collect();
+    let not_on_a_tall_line: Vec<usize> = missing
+        .iter()
+        .copied()
+        .filter(|i| !in_a_window(*i))
+        .collect();
+    assert!(
+        not_on_a_tall_line.is_empty(),
+        "{what}: {} words missing, {} of them not on a tall line: {:?}",
+        missing.len(),
+        not_on_a_tall_line.len(),
+        &not_on_a_tall_line[..not_on_a_tall_line.len().min(12)]
+    );
+    for w in windows {
+        let n = missing.iter().filter(|i| w.contains(i)).count();
+        assert!(
+            n <= max_lost,
+            "{what}: {n} words lost on the tall line {w:?}, at most {max_lost}"
+        );
+    }
+    for w in found {
+        let limit = if w.index().is_some_and(in_a_window) {
+            PAGE_H_PT
+        } else {
+            BOTTOM_PT + 0.5
+        };
+        assert!(
+            w.y_max <= limit,
+            "{what}: {} on page {} ends at {:.1}pt, below {limit:.1}pt",
+            w.text,
+            w.page,
+            w.y_max
+        );
+    }
+}
+
+/// The words on the line of the image after `every * (k + 1)` words: a few before it and a few after.
+fn tall_line_windows(every: usize, images: usize) -> Vec<std::ops::RangeInclusive<usize>> {
+    (1..=images)
+        .map(|k| k * every - 7..=k * every + 6)
+        .collect()
+}
+
+#[test]
+fn a_line_taller_than_a_page_is_placed_alone_and_the_rest_flows_on() {
+    // N. `im1200_pl` / `im1200_cl`: six images 1200 px tall in the text of a card. The line with an image is taller than
+    // the page; Chrome slices it over the pages and prints its words on the baseline, 7 pages. We keep a line in one
+    // fragment (ADR-0004): it stands alone at the top of a column and the words on its baseline, below the page edge, are
+    // lost, at most 5 per line (Chrome: 4); everything else is printed once, in order. Main: 298 / 300 of 1810 words.
+    for (what, pdf) in [
+        ("im1200 padded card", render(&shape_tall_image_card())),
+        ("im1200 clip card", render(&shape_tall_image_clip_card())),
+    ] {
+        let found = printed_words(&pdf);
+        assert_words_once_but_tall_lines(what, &found, 1810, &tall_line_windows(300, 6), 5);
+        assert_eq!(
+            page_count(&pdf),
+            CHROME_TALL_IM_PAGES,
+            "{what}: pages like Chrome"
+        );
+        assert_eq!(
+            found.iter().filter(|w| w.text == "AFTER").count(),
+            1,
+            "{what}: AFTER once"
+        );
+    }
+    // `edge1008` … `edge1012`: the line is taller than the page by a few px; its baseline is still on the sheet, so no
+    // word is lost. Main refuses every one of them (it prints 198 of 1200 words); 1006 px works today.
+    for (what, shape) in [
+        ("edge1008", shape_edge_1008()),
+        ("edge1010", shape_edge_1010()),
+        ("edge1012", shape_edge_1012()),
+    ] {
+        let pdf = render(&shape);
+        let found = printed_words(&pdf);
+        assert_words_once_but_tall_lines(what, &found, 1200, &[], 0);
+        assert_eq!(
+            page_count(&pdf),
+            CHROME_TALL_EDGE_PAGES,
+            "{what}: pages like Chrome"
+        );
+    }
+}
+
+// ── G. guards of F198j: what works today stays ───────────────────────────────────────────────────────────────
+
+#[test]
+fn guard_position_relative_without_an_offset_changes_nothing() {
+    // `position: relative` and no inset: the layout is the one without the position, word for word and pt for pt.
+    let flat = printed_words(&render(&shape_rel_shift_flat()));
+    let plain = printed_words(&render(&shape_rel_plain()));
+    assert_eq!(flat.iter().filter(|w| w.index().is_some()).count(), 2500);
+    assert_shift_oracle("relative without an offset", &flat, &plain, |_| 0.0);
+}
+
+#[test]
+fn guard_a_child_pulled_above_the_previous_line_keeps_the_old_path() {
+    // Every paragraph is pulled 40 px up, above the last line (16.8 px) of the one before it: nothing the planner can cut.
+    // The card stays one box placed whole (warned), as on main: 418 of 2500 words, 2 pages (Chrome prints all of them on 4).
+    let pdf = render(&shape_pulled_up());
+    assert_eq!(words_printed(&pdf), 418);
+    assert_eq!(page_count(&pdf), 2);
 }

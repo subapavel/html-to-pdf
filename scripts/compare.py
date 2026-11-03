@@ -288,6 +288,13 @@ THRESHOLDS = {
     #     On the binary before F96 both frames were closed on each page, the backgrounds stopped at the last clause and the
     #     payment block stood 43.7 pt too high: 5.7 / 12.1 %. Worst page + 1 point.
     "42-terms-card-clauses": 0.069,
+    # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
+    #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
+    #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 7.8 / 8.6 % on main's binary (a negative margin and a relative
+    #     offset make the planner leave the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty), so the
+    #     number is a ceiling for the red state, not what the fixture should show: the step that fixes F198j lowers it to the
+    #     number it earns plus 1 point. Worst page + 1 point.
+    "40-terms-card-strips-columns": 0.096,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

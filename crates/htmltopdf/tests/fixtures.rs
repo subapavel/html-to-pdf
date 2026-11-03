@@ -751,6 +751,85 @@ fn terms_clip_card_columns_invoice_prints_every_clause() {
     );
 }
 
+/// F198j: fixture 40's terms are one `overflow-hidden rounded-lg border p-4` card whose twenty clause headings are
+/// full-bleed strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down with `relative top-0.5`), taller than a page in
+/// a single column, in a two-column block. Main refused the card (a negative margin and a relative offset below a
+/// cut box) and placed it whole in column 1: 290 of 945 words. Now it is cut over both columns and both pages like
+/// Chrome's: every heading and the end of every clause is printed once, in order, the signature after the last clause, 2
+/// pages.
+#[test]
+fn terms_card_strips_columns_invoice_prints_every_clause() {
+    let name = "40-terms-card-strips-columns";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let text = pdf_text(&pdf, "40");
+    let chrome = pdf_text(
+        &std::fs::read(dir.join("reference/chrome.pdf")).unwrap(),
+        "40c",
+    );
+    let mut needles: Vec<String> = Vec::new();
+    // Every `<h3` is a clause heading (the card has no header of its own); the paragraph after it is the clause.
+    for part in html.split("<h3").skip(1) {
+        let heading = without_tags(
+            part.split_once('>')
+                .unwrap()
+                .1
+                .split_once("</h3>")
+                .unwrap()
+                .0,
+        );
+        needles.push(heading.clone());
+        // The last two words of the clause's paragraph.
+        let para = part.split("<p ").nth(1).unwrap().split_once('>').unwrap().1;
+        let para = without_tags(para.split_once("</p>").unwrap().0);
+        let words: Vec<&str> = para.split_whitespace().collect();
+        let tail = words[words.len().saturating_sub(2)..].join(" ");
+        assert_eq!(
+            text.matches(&tail).count(),
+            chrome.matches(&tail).count(),
+            "{name}: the end of clause `{heading}` (`{tail}`) must be printed as often as Chrome prints it: {text}"
+        );
+        assert!(
+            text.contains(&tail),
+            "{name}: the end of clause `{heading}` (`{tail}`) is missing: {text}"
+        );
+    }
+    assert_eq!(needles.len(), 20, "{name}: the 20 clauses");
+    needles.push("Fakturu vystavila Jana Nováková".into());
+    let mut at = 0;
+    for n in &needles {
+        let pos = text[at..]
+            .find(n.as_str())
+            .unwrap_or_else(|| panic!("{name}: `{n}` missing or out of order: {text}"));
+        at += pos + n.len();
+    }
+    assert_eq!(
+        text.split(' ').count(),
+        chrome.split(' ').count(),
+        "{name}: as many words as Chrome's reference"
+    );
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-40p.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let info = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("Pages:           2"),
+        "{name}: two pages like Chrome"
+    );
+}
+
 /// F66f: fixture 33 has `pre-line` / `<br>`-terminated address blocks and a note card ending in `<br>`. A forced break at
 /// the end of a block makes no line of its own, so what follows sits where Chrome puts it. On main's binary the items
 /// table was 15 pt too low and "PLATEBNÍ" 30 pt (556.6 pt, Chrome 526.8 pt). Chrome's y (m141, `reference/chrome.pdf`).
