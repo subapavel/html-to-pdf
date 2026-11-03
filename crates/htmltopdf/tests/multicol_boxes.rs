@@ -1608,7 +1608,7 @@ fn shape_edge_1012() -> String {
 
 /// A card of direct paragraphs under a header holds six words (a line) less in column 2 of page 1 than Chrome's, and so does the
 /// same card with margin 0 on main (258 + 266 words, Chrome 258 + 272), so a column of the full-bleed card starts up to 12
-/// words after Chrome's (a line is 7 to 9 words here) and `AFTER` is 13 pt low. Not F198j's: the margins are not the cause
+/// words before Chrome's (a line is 7 to 9 words here) and `AFTER` is 13 pt low. Not F198j's: the margins are not the cause
 /// (F198j-b).
 const FULL_BLEED_TOL: Tol = Tol {
     col_words: 2 * LINE_WORDS,

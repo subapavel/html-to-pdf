@@ -241,3 +241,43 @@ Red on main: `a_relatively_offset_child_keeps_its_offset_and_every_word` (330 of
 
 Fixture `40-terms-card-strips-columns` on main: 2 pages like Chrome's but 290 of 945 words (page 2 holds 9), compare 7.8 / 8.6 %, one warning. Its
 threshold in `scripts/compare.py` is 0.096 (the red state's number + 1 point) and drops to the earned number + 1 point with the fix.
+
+### 8.5 What was built (steps 3 to 5, fork `58c78ae2`, 2026-11-03)
+
+The three causes went in as one fork commit on top of F213's `329b4e43` (the fork branch is shared, one commit at a time), with the code where §4
+puts it. Differences from §4:
+
+- **§4.1.** `mc_line_advances` lost its `fresh` parameter along with the refusal. The warning is in the `Lines` arm of `record_multicol_row`
+  and reads "a line Npx tall inside a multi-column container is taller than a page; it is placed alone at the top of a column and what is below the
+  page edge is not printed" (the `Block` arm's "taller than a page" substring, so one test finds both).
+- **§4.2.** As written, with `above_previous` computed from `items.last()` (the first child: `cy < -0.5`) and `cx < -left - 0.5`. A first child with a
+  negative `margin-top` in a card without a border or padding does not get here (the margin collapses through the parent); the unit test uses a
+  border. At a column top the negative gap is dropped like any other: ours starts the columns of `x_negmargin` at Chrome's first words (0 / 342 / 690 /
+  1036, Chrome the same), so the measurement §6 step 1 asked for ("column-top truncation of a negative margin") agrees with css-break-3 §5.2.
+- **§4.3.** As written: `mc_relative_offset`, `McBoxItem::rel` on all three variants, `McBox::slack` (the sum of absolute offsets down the chain), `McFrame::shift`,
+  `AtomCtx::shift`, `push_box(.., shift)` with `add_shift`, `shifted(v, 0.0) == v` bit for bit, `PaginationGeometry::piece_slack`, the window widened in
+  `draw_under_clip`. The horizontal slack is `min(slack_x, gap / 2)`. The render test `draw_under_clip_paints_a_slice_shifted_above_its_piece_once`
+  is red without the slack (116 of 375 text operators), so the slack is exact for the clip card and §6 step 5's fallback was not needed. A shifted line
+  is clipped at the piece edge (the clip path is the padding box), as Chrome does; the words are in the PDF text once.
+- **Tests added in the fork:** `mc_relative_offset_is_the_offset_taffy_adds_to_a_block_child` (11 insets, including `static` + `top` and `top: 10%` = 0),
+  `mc_box_measures_a_shifted_child_at_its_static_place`, `mc_box_describes_a_full_bleed_first_child_and_a_child_pulled_over_the_one_before`,
+  `plan_paints_a_shifted_atom_at_its_offset_and_plans_it_at_its_static_place`, `plan_places_a_line_taller_than_the_column_alone_at_the_top_of_one`, the flipped
+  tall-line assertion of `mc_box_cuts_an_inline_root_with_inline_boxes_between_its_lines`, the render test above and `render_v2_smoke_multicol_card_with_shifted_children_negative_margins_and_tall_lines_prints_every_word_once`.
+  The fork's `cargo test -p fulgur` is green (2531 lib, 337 `render_smoke`, 45 test binaries) and clippy `-D warnings` is clean.
+
+**Results (release binary, repros and the plan's shapes).** Words printed, main -> now: `r_rel` 330 -> 2100 / 2100, `x_relshift` 354 -> 2500, `x_negmargin` 360 -> 2500,
+full-bleed card 347 -> 2500, `im1200_pl` / `_cl` 298 / 300 -> 1783 of 1810 (27 on the baselines of the six tall lines are lost, 4 to 5 per line; Chrome prints them),
+`edge1007` to `edge1012` 198 -> 1200 / 1200; pages like Chrome's everywhere (4, 4, 4, 4, 7, 6). The words of the shifted shapes are where the unshifted ones are
+(oracle b, ±0.01 pt), the strips 2.25 pt lower. Fixture 40: 290 -> 945 words, compare 7.8 / 8.6 % -> 9.4 / 6.8 %.
+
+**Byte gates** (1 and 4 rayon threads, baseline: the F213 binary, fork `329b4e43`, whose fixtures 01-42 equal main's): fixtures 01-39, 41, 42 and the 7 corpus
+documents are identical, only fixture 40 moves. The sweep (498 files: the 24 F193 `c_mc*` cases of `f183v6/s`, the `f198`, `f198b`, `f198pdf`, `f198v`,
+`f198bv` repros, and this plan's probes): 48 outputs move, every one a shape of §1 or a probe with an inset (`edge*`, `im1200_*`, `r_rel`, `x_relshift`,
+`x_negmargin`, `fb_*`, `p_*`, `s_*`, `t_edge*`), none of the others. 1 and 4 threads give the same bytes.
+
+**Against Chrome (no changed case may end further away).** For each of the 48 outputs, Chrome re-rendered (the committed references' version): words missing
+(of those Chrome prints), page-count difference, distance of the first word of every column. Every case that lost words now has fewer missing and the page
+count of Chrome's; the first-word distance falls from "column empty" to 2 to 60 words (0 to 12 in a column on the shapes that fit). One case moves both ways:
+`p_top_pos12` (`top: 12px` on every paragraph, which main baked into the flow): its columns started 6 words early; they are now the unshifted layout's, six
+words late in three columns where main happened to be exact (the flat layout is 6 words from Chrome there too), in total 18 words from Chrome's against 24.
+No word is lost in either.
