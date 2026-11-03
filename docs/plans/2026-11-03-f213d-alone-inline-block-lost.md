@@ -365,13 +365,13 @@ the corpus did not move; no net warning anywhere. Fork `fulgur-vrt` 35 `.actual.
 **Sweep** (`f213d/sweep.py`, 2464 cases: R {10, 20, 60, 120, 199, 201, 400} x mode {auto; fixed and min-height at h 100, 300, 900, 1000, 1200} x content {1 block, 3 blocks, 15 lines, caption + svg + name} x nesting {body, section,
 card, section after a paragraph} x {inline-block, inline-table}; Chrome rendered from the same HTML; "on Chrome's pages" = every (word, page) Chrome prints is printed on that page):
 
-- **824 cases changed**: **742 are exactly on Chrome's pages now** (578 were farther before, 164 were on already for part of the words), 52 are not closer, 30 are farther. The 82 changed cases that are not exactly on Chrome's pages are
+- **824 cases changed**: **742 are exactly on Chrome's pages now and closer than before**, 52 are no closer (the same distance), 30 are farther. The 82 changed cases that are not exactly on Chrome's pages are
   one family: `card` (a `border p-4 rounded-lg` card, 17 px of top inset) with h = 1000, a box of 1002 px that fits a fresh page but not a fresh page inside the card. Chrome leaves the card's frame empty on page 2 and puts the box on page 3; ours
   moves the box to page 2 (before: split or lost). In 30 of them one more word-page differs from Chrome than before (3 to 4, 15 to 16, 2 to 3; page counts unchanged at 3 against Chrome's 4). **This is a case that moves farther, named and
   not fixed**: F213d-c (the fits-a-page test uses the page height, not the room the ancestors' insets leave).
 - Words lost on no page: 465 on main, **181** now: 168 are the box of 1200 px (taller than a page, F213d-b), 13 are the fixed 100 px box with 15 text lines (F183c-b, silent). No case loses more words than before.
 - Net warnings: 0 on main (silent), 1216 now. All are true partial losses of the box: a box of 900 px and more moved to page 2 hangs below the edge (F183c, 196 cases per height), a box of 1200 px is lost (F213d-b), and 40 cases that
-  Chrome keeps on page 1 and that fit its room (R 400, h 300; R 120, h 100: the box is painted below its line, 8 to 113 pt past the edge, F183c, unchanged by F213d). Warned and not lost words: 432 cases. No warning fires on a case
+  Chrome keeps on page 1 and that fit its room (R 400, h 300; R 120, h 100: the box is painted below its line, 8 to 113 pt past the edge, F183c, unchanged by F213d). 432 of the warned cases have a box shorter than 1000 px and lose no word. No warning fires on a case
   that is fully on Chrome's pages and loses nothing, except the F183c hang.
 - Pages: 546 cases had a different page count from Chrome on main, 376 now.
 
