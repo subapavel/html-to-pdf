@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0045</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  /* Pre-printed letterhead paper: the sender's logo and address are already on the sheet, so the invoice starts 70 mm down. */
+  body { margin-top: 70mm; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<main class="inline-block w-full break-inside-avoid">
+  <header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+      <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0045</span></p>
+    </div>
+    <div class="text-right text-sm">
+      <p><span class="text-gray-500">Vystaveno:</span> 2. 11. 2026</p>
+      <p><span class="text-gray-500">Splatnost:</span> 16. 11. 2026</p>
+    </div>
+  </header>
+
+  <section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+    <div>
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+      <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+    </div>
+    <div>
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+      <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+    </div>
+  </section>
+
+  <table class="w-full border-collapse text-sm">
+    <thead>
+      <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+        <th class="py-2 pr-2 font-semibold">Popis</th>
+        <th class="py-2 px-2 font-semibold text-right">Množství</th>
+        <th class="py-2 px-2 font-semibold text-right">Cena/h</th>
+        <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+        <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+        <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Mapování IDOC → JSON, testovací scénáře</td>
+        <td class="py-2 px-2 text-right tabular-nums">16 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">35 200,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Nasazení do produkce a hypercare</td>
+        <td class="py-2 px-2 text-right tabular-nums">12 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">30 000,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Dokumentace rozhraní a předání provozu</td>
+        <td class="py-2 px-2 text-right tabular-nums">6 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">13 200,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Školení administrátorů zákazníka</td>
+        <td class="py-2 px-2 text-right tabular-nums">4 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 800,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">11 200,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Monitoring a alerting, nastavení dashboardů</td>
+        <td class="py-2 px-2 text-right tabular-nums">10 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">22 000,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Revize bezpečnostního nastavení kanálů</td>
+        <td class="py-2 px-2 text-right tabular-nums">5 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">12 500,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+        <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+        <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Mapování IDOC → JSON, testovací scénáře</td>
+        <td class="py-2 px-2 text-right tabular-nums">16 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">35 200,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Nasazení do produkce a hypercare</td>
+        <td class="py-2 px-2 text-right tabular-nums">12 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 500,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">30 000,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Dokumentace rozhraní a předání provozu</td>
+        <td class="py-2 px-2 text-right tabular-nums">6 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 200,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">13 200,00</td>
+      </tr>
+      <tr class="border-b border-gray-200">
+        <td class="py-2 pr-2">Školení administrátorů zákazníka</td>
+        <td class="py-2 px-2 text-right tabular-nums">4 h</td>
+        <td class="py-2 px-2 text-right tabular-nums">2 800,00</td>
+        <td class="py-2 pl-2 text-right tabular-nums">11 200,00</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="flex justify-end mt-4 text-sm">
+    <dl class="w-72">
+      <div class="flex justify-between py-1"><dt class="text-gray-500">Základ daně</dt><dd class="tabular-nums">359 300,00 Kč</dd></div>
+      <div class="flex justify-between py-1"><dt class="text-gray-500">DPH 21 %</dt><dd class="tabular-nums">75 453,00 Kč</dd></div>
+      <div class="flex justify-between border-t-2 border-gray-900 pt-2 mt-1 text-lg font-bold"><dt>Celkem</dt><dd class="tabular-nums">434 753,00 Kč</dd></div>
+    </dl>
+  </div>
+</main>
+
+<p class="mt-6 text-xs text-gray-500">Děkujeme za spolupráci.</p>
+
+</body>
+</html>

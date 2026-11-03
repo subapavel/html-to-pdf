@@ -312,6 +312,15 @@ THRESHOLDS = {
     #     a relative offset left the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty, 7.8 / 8.6 %; page 1
     #     grew 7.8 -> 9.4 because the words that were missing are printed now. Worst page + 1 point.
     "40-terms-card-strips-columns": 0.104,
+    # 45: new in F213e (a Czech invoice for pre-printed letterhead paper: `body { margin-top: 70mm }`, then the whole invoice as ONE
+    #     `inline-block w-full break-inside-avoid` box of 843 px, then the thank-you line; Chrome moves the monolithic box to page 2
+    #     because it does not fit the 744.6 px of page 1, so page 1 is empty and page 2 holds the invoice, 2 pages). 0.0 / 9.2 %: page 1 is
+    #     empty like Chrome's; page 2 is Chrome's page with the box 5.8 pt (7.7 px) low (F183c: ours seats an inline box bottom-on-baseline
+    #     and Blitz aligns its last line there; the thank-you line below it is within 0.2 pt of Chrome's), which every text line of the
+    #     invoice pays for. On the binary before the fix (fork 8d4d8e7d) the fragmenter entered the box and split it (page 1: header and
+    #     13 rows, page 2: the 14th row, the totals and the thank-you line): 4.3 / 5.5 %. The worst page GREW 5.5 -> 9.2 because the
+    #     content that was wrongly on page 1 is now on page 2 where the F183c offset shows; the F183c finding brings it down. Worst page + 1 point.
+    "45-letterhead-keep-together": 0.102,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

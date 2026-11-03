@@ -13,6 +13,9 @@
 
 use htmltopdf::{RenderOptions, Renderer};
 
+/// The 60 px red square the F213e cases stretch to a tall `<img>` (registered as `red60.png`).
+const RED60: &[u8] = include_bytes!("data/red60.png");
+
 /// A4 height in pt and the default 15 mm page margin the renderer applies.
 const PAGE_H_PT: f32 = 841.89;
 const MARGIN_PT: f32 = 15.0 / 25.4 * 72.0;
@@ -51,6 +54,8 @@ fn render(name: &str, extra_css: &str, body: &str) -> Vec<u8> {
         .expect("write dump");
     }
     Renderer::builder()
+        .image("red60.png", RED60.to_vec())
+        .strict_images(true)
         .build()
         .render(&html, &RenderOptions::default())
         .expect("render")
@@ -419,4 +424,306 @@ fn without_an_offset_a_page_holds_its_full_height() {
     let pages = page_count(&pdf);
     assert_eq!(pages, 3, "Chrome: 3 pages");
     assert_eq!(per_page(&found, "Line", pages), vec![50, 50, 50]);
+}
+
+// --- F213e: the first block of the body does not fit page 1, which starts below the content top ----------------------
+//
+// Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md. The fragmenter moved a box whole to the next page
+// only when something precedes it (`cursor_y > 0`); for the first child of the body the offset of page 0 (body margin,
+// a margin collapsed through `<body>`, `html` padding or border) did not count, so a first block that does not fit
+// page 1 but fits a fresh one hung below the content box or was lost. Chrome (m153) numbers are in each comment; the
+// `f213e_*` tests are red before the fix, `f213e_g*` are guards that hold before and after.
+//
+// What Chrome does, measured (plan section 7), and what the cases below therefore assert:
+// - a monolithic first block (`<img>`, `inline-block`) that does not fit moves to page 2 whole (C4, C10, C11);
+// - a *breakable* first block, even one with `break-inside: avoid`, is NOT moved: with no sibling before it there is no
+//   Class A break point in front of it (css-break-3 section 4.1), so the avoid is not honoured and it splits in place,
+//   40 lines / 5 lines (C5, C6). With any sibling before it, even a zero-height one, it moves whole.
+
+/// The pages (1-based) that hold a drawing of an image, from `pdfimages -list`.
+fn image_pages(pdf: &[u8]) -> Vec<usize> {
+    let path = temp(pdf);
+    let out = std::process::Command::new("pdfimages")
+        .arg("-list")
+        .arg(&path)
+        .output()
+        .expect("pdfimages (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .skip(2)
+        .filter_map(|l| l.split_whitespace().next()?.parse().ok())
+        .collect()
+}
+
+/// A block `<img>` of `h` px (and 100 px wide) of the bundled red square.
+fn img(h: u32) -> String {
+    format!("<img src=\"red60.png\" style=\"display:block;width:100px;height:{h}px\">")
+}
+
+/// A `break-inside: avoid` box of 45 lines (900 px) of inline text; `extra_style` is more style.
+fn card(extra_style: &str) -> String {
+    format!(
+        "<div style=\"break-inside:avoid;border:1px solid #000;{extra_style}\">{}</div>",
+        lines(1..=45)
+    )
+}
+
+/// The same 45 lines as one block child (`<p>`, 20 px) per line.
+fn card_of_blocks() -> String {
+    let rows: String = (1..=45).map(|i| format!("<p>Line{i:04}</p>")).collect();
+    format!("<div style=\"break-inside:avoid;border:1px solid #000\">{rows}</div>")
+}
+
+/// An image first in the body, then `AFTER`, under `css`: Chrome puts page 1 empty, the image on page 2 and `AFTER` below it.
+fn assert_first_image_on_page_two(name: &str, css: &str, h: u32) {
+    let pdf = render(name, css, &format!("{}<p>AFTER</p>", img(h)));
+    let found = words(&pdf);
+    assert_eq!(
+        image_pages(&pdf),
+        vec![2],
+        "{name}: the image is on page 2 in Chrome (page 1 empty)"
+    );
+    assert_eq!(page_of(&found, "AFTER"), 2, "{name}: AFTER");
+    assert_inside(&found);
+    assert_eq!(page_count(&pdf), 2, "{name}: Chrome: 2 pages");
+}
+
+#[test]
+fn f213e_c4_a_first_tall_image_under_a_body_margin_moves_to_page_two() {
+    // C4: `body { margin-top: M }`, a 950 px block `<img>`, `AFTER`. Chrome (M = 100 and 200): page 1 empty, the image at
+    // 42 pt on page 2, AFTER at 753.4 pt. Before F213e: the image hung below the content box on page 1 (M = 100: from
+    // 117 pt to 830 pt, the box ends at 800 pt) and AFTER was alone on page 2.
+    for m in [100, 200] {
+        assert_first_image_on_page_two(
+            &format!("f213e-c4-m{m}"),
+            &format!("body {{ margin-top: {m}px }}"),
+            950,
+        );
+    }
+}
+
+#[test]
+fn f213e_c11_a_first_tall_image_under_html_padding_or_border_moves_to_page_two() {
+    // C11: the offset is `html { padding-top: 100px }` (or `border-top: 100px solid`, which is the same to the
+    // fragmenter). Chrome: page 1 empty, the image and AFTER on page 2.
+    assert_first_image_on_page_two("f213e-c11-html-padding", "html { padding-top: 100px }", 950);
+    assert_first_image_on_page_two(
+        "f213e-c11-html-border",
+        "html { border-top: 100px solid #ccc }",
+        950,
+    );
+}
+
+#[test]
+fn f213e_c6_a_first_tall_image_whose_margin_collapses_through_body_moves_to_page_two() {
+    // C6 (image): no body margin; the image's own `margin-top: 100px` collapses through `<body>` and is page 0's offset.
+    // Chrome: page 1 empty, the image on page 2.
+    let pdf = render(
+        "f213e-c6-collapsed-image",
+        "",
+        &format!(
+            "{}<p>AFTER</p>",
+            img(950).replace("display:block", "display:block;margin-top:100px")
+        ),
+    );
+    assert_eq!(image_pages(&pdf), vec![2], "image on page 2");
+    assert_eq!(page_of(&words(&pdf), "AFTER"), 2);
+    assert_eq!(page_count(&pdf), 2, "Chrome: 2 pages");
+}
+
+#[test]
+fn f213e_c8_a_first_image_that_overflows_page_one_only_by_the_ua_body_margin_moves() {
+    // C8: `body { margin: 8px }` (the UA default, which every fulgur test and golden has). The room on page 1 is
+    // 1001.13 px; Chrome's fragmentainer is 1010 px (F30f-b), so its images of 1001 and 1002 px stay on page 1 (guards
+    // below) and one of 1003 px or more moves to page 2 and leaves page 1 empty; AFTER (20 px) then does not fit under
+    // it and goes to page 3. Chrome, 1003 / 1004 / 1008 px: image on page 2, AFTER on page 3, 3 pages. Before F213e the
+    // image stayed on page 1, 2 to 7 px below the content box.
+    for h in [1003, 1004, 1008] {
+        let name = format!("f213e-c8-img{h}");
+        let pdf = render(
+            &name,
+            "body { margin: 8px }",
+            &format!("{}<p>AFTER</p>", img(h)),
+        );
+        assert_eq!(image_pages(&pdf), vec![2], "{name}: image on page 2");
+        assert_eq!(page_of(&words(&pdf), "AFTER"), 3, "{name}: AFTER on page 3");
+        assert_eq!(page_count(&pdf), 3, "{name}: Chrome: 3 pages");
+    }
+}
+
+#[test]
+fn f213e_g_c8_a_first_image_within_chromes_1010px_fragmentainer_stays_on_page_one() {
+    // C8 guard: 8 + 1001 and 8 + 1002 px are within Chrome's 1010 px (`chrome_bottom(0)`): image on page 1, AFTER on
+    // page 2 at 40.9 pt, 2 pages. A fix that compares with `bottom(0)` = 1001.13 px moves the 1002 px image: wrong.
+    for h in [1001, 1002] {
+        let name = format!("f213e-gc8-img{h}");
+        let pdf = render(
+            &name,
+            "body { margin: 8px }",
+            &format!("{}<p>AFTER</p>", img(h)),
+        );
+        assert_eq!(image_pages(&pdf), vec![1], "{name}: image on page 1");
+        assert_eq!(page_of(&words(&pdf), "AFTER"), 2, "{name}: AFTER on page 2");
+        assert_eq!(page_count(&pdf), 2, "{name}: Chrome: 2 pages");
+    }
+}
+
+/// Chrome's split of the 45-line avoid card (900 px) that has nothing before it, with the offset 200 px: 40 lines fit the
+/// 809 px of page 1 (first line at 191.7 pt), 5 go to page 2 with `AFTER`. 2 pages.
+fn assert_card_splits_40_5(name: &str, css: &str, card_html: &str) {
+    let pdf = render(name, css, &format!("{card_html}<p>AFTER</p>"));
+    let found = words(&pdf);
+    assert_paginated(&found, "Line", &names("Line", 4, 1..=45));
+    assert_eq!(page_count(&pdf), 2, "{name}: Chrome: 2 pages");
+    assert_eq!(
+        per_page(&found, "Line", 2),
+        vec![40, 5],
+        "{name}: Chrome splits the card 40 / 5 (an avoid box with nothing before it is not moved)"
+    );
+    assert_eq!(page_of(&found, "AFTER"), 2, "{name}: AFTER");
+}
+
+#[test]
+#[ignore = "F213e-b: a first avoid card of inline text only hangs below the content box and loses lines"]
+fn f213e_c5_a_first_avoid_card_of_text_lines_under_a_body_margin_splits_in_place() {
+    // C5: `body { margin-top: 200px }`, `<div style="break-inside:avoid">` of 45 `<br>`-separated lines, AFTER. Chrome does not
+    // move the card (nothing precedes it, so no break point is in front of it; css-break-3 section 4.1): page 1 holds
+    // lines 1-40, page 2 lines 41-45 and AFTER. Before F213e: lines 1-43 on page 1, the last 3 below the content box
+    // and the last 2 below the page edge, printed on no page ("content extends 22.6 pt past the bottom page edge").
+    // The plan predicted "moved whole" here; Chrome does not, and a card moved whole is a different page 1 than Chrome's.
+    assert_card_splits_40_5("f213e-c5-card", "body { margin-top: 200px }", &card(""));
+}
+
+#[test]
+#[ignore = "F213e-b: a first avoid card of inline text only hangs below the content box and loses lines"]
+fn f213e_c6_a_first_avoid_card_whose_margin_collapses_through_body_splits_in_place() {
+    // C6: no body margin; the card's own `margin-top: 200px` collapses through `<body>`. Chrome: the same 40 / 5 split.
+    assert_card_splits_40_5("f213e-c6-card", "", &card("margin-top:200px"));
+}
+
+#[test]
+#[ignore = "F213e-c: a zero-height sibling before an avoid card leaves cursor_y at 0, the card hangs"]
+fn f213e_c5z_an_avoid_card_after_a_zero_height_box_moves_whole() {
+    // C5z: a zero-height `<div>` before the card. It is a sibling, so the break in front of the card is a real Class A
+    // break point and Chrome honours the avoid: page 1 empty, the whole card from the content top (first line at 41.7
+    // pt) and AFTER on page 2. Before F213e: the same hang as C5 (43 lines, 2 lost); `cursor_y` is still 0 after the
+    // empty box. With a 2 px box before it, `cursor_y > 0` and the card already moves (guard below).
+    let pdf = render(
+        "f213e-c5z-zero-before",
+        "body { margin-top: 200px }",
+        &format!("<div style=\"height:0\"></div>{}<p>AFTER</p>", card("")),
+    );
+    let found = words(&pdf);
+    assert_paginated(&found, "Line", &names("Line", 4, 1..=45));
+    assert_eq!(page_count(&pdf), 2, "Chrome: 2 pages");
+    assert_eq!(per_page(&found, "Line", 2), vec![0, 45]);
+    assert_eq!(page_of(&found, "AFTER"), 2);
+}
+
+#[test]
+fn f213e_g_c5_a_card_after_a_2px_box_moves_whole() {
+    // Guard: with something (2 px) before the card, `cursor_y > 0` and the card moves whole, as in Chrome (page 1 empty).
+    let pdf = render(
+        "f213e-gc5-2px-before",
+        "body { margin-top: 200px }",
+        &format!("<div style=\"height:2px\"></div>{}<p>AFTER</p>", card("")),
+    );
+    let found = words(&pdf);
+    assert_paginated(&found, "Line", &names("Line", 4, 1..=45));
+    assert_eq!(page_count(&pdf), 2, "Chrome: 2 pages");
+    assert_eq!(per_page(&found, "Line", 2), vec![0, 45]);
+}
+
+#[test]
+fn f213e_g_c5_a_first_avoid_card_of_blocks_splits_in_place_like_chrome() {
+    // Guard (green before): the card of 45 block children, bare and in a `<section>`. Chrome splits both 40 / 5; they
+    // already do. A fix that moves every first avoid box whole when page 0 has an offset (the plan's `keeps_whole_at`
+    // change) breaks this: page 1 would be empty, Chrome's is not.
+    assert_card_splits_40_5(
+        "f213e-gc5-blocks",
+        "body { margin-top: 200px }",
+        &card_of_blocks(),
+    );
+    assert_card_splits_40_5(
+        "f213e-gc5-section",
+        "body { margin-top: 200px }",
+        &format!("<section>{}</section>", card_of_blocks()),
+    );
+}
+
+#[test]
+fn f213e_g_a_first_paragraph_taller_than_the_room_splits_under_every_offset_source() {
+    // Guard: a 60-line paragraph, offset 200 px from each source (body margin, collapsed child margin, html padding, html
+    // border, body margin + body border): Chrome puts 40 lines on page 1 (809 px) for all of them; so do we.
+    for (name, css, style) in [
+        ("margin", "body { margin-top: 200px }", ""),
+        ("collapsed", "", "margin-top:200px"),
+        ("html-padding", "html { padding-top: 200px }", ""),
+        ("html-border", "html { border-top: 200px solid #ccc }", ""),
+        (
+            "margin-border",
+            "body { margin-top: 195px; border-top: 5px solid #00f }",
+            "",
+        ),
+    ] {
+        let pdf = render(
+            &format!("f213e-gpar-{name}"),
+            css,
+            &format!("<p style=\"{style}\">{}</p>", lines(1..=60)),
+        );
+        let found = words(&pdf);
+        assert_paginated(&found, "Line", &names("Line", 4, 1..=60));
+        assert_eq!(per_page(&found, "Line", 2), vec![40, 20], "{name}");
+    }
+}
+
+#[test]
+fn f213e_g_a_first_image_that_fits_stays_on_page_one() {
+    // Guard: M = 100, a 300 px image. Chrome: one page, the image at 117 pt, AFTER at 340.9 pt.
+    let pdf = render(
+        "f213e-g-fits",
+        "body { margin-top: 100px }",
+        &format!("{}<p>AFTER</p>", img(300)),
+    );
+    assert_eq!(image_pages(&pdf), vec![1]);
+    assert_eq!(page_count(&pdf), 1, "Chrome: 1 page");
+}
+
+#[test]
+fn f213e_g_body_padding_and_border_already_count_as_content_above() {
+    // Guard (green before): the offset is inside the body (`padding-top`, `border-top`), so the first child starts below
+    // the body's content top and the gap makes `cursor_y > 0`. Chrome, same as for a body margin: page 1 empty, image on
+    // page 2, 2 pages (C9: the body's border and background are on page 1).
+    assert_first_image_on_page_two(
+        "f213e-g-body-padding",
+        "body { margin-top: 100px; padding-top: 100px }",
+        950,
+    );
+    assert_first_image_on_page_two(
+        "f213e-g-body-border",
+        "body { margin-top: 95px; border-top: 5px solid #00f }",
+        950,
+    );
+}
+
+#[test]
+#[ignore = "F213b / F29b: a first image taller than a page"]
+fn f213e_c12_a_first_image_taller_than_a_page_under_a_body_margin_starts_on_page_two() {
+    // C12: `body { margin-top: 100px }` and a 1200 px image. Unlike the plan's guess (a block taller than a page is not
+    // moved), Chrome moves it: page 1 empty, the image from the content top of page 2 over to page 3 (42 pt to the page
+    // bottom, then 42-185 pt), AFTER at 183.4 pt on page 3, 3 pages. With no body margin it starts on page 1 and
+    // splits. We draw it on pages 1 and 2 (clipped) and print 2 pages. Splitting images is F213b / F29b.
+    let pdf = render(
+        "f213e-c12-img1200",
+        "body { margin-top: 100px }",
+        &format!("{}<p>AFTER</p>", img(1200)),
+    );
+    assert_eq!(
+        image_pages(&pdf),
+        vec![2, 3],
+        "Chrome: the image is on pages 2 and 3"
+    );
+    assert_eq!(page_of(&words(&pdf), "AFTER"), 3);
+    assert_eq!(page_count(&pdf), 3, "Chrome: 3 pages");
 }

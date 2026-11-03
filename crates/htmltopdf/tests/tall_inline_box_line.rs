@@ -19,6 +19,10 @@
 //! its top in Chrome.
 //!
 //! The `p1*` / `p5*` tests are red before the fix; the `g*` tests are guards that hold before and after.
+//!
+//! F213e (plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md): the same line as the first block of the
+//! body, on a page that starts below the content top (`body { margin-top }`). The `f213e_*` tests are red before F213e
+//! and the `f213e_g*` ones are guards. Chrome numbers are m153 (plan section 7).
 
 use htmltopdf::{RenderOptions, Renderer};
 
@@ -36,6 +40,11 @@ fn inter() -> Vec<u8> {
 }
 
 fn render(body: &str) -> Vec<u8> {
+    render_css("", body)
+}
+
+/// `render` with `css` after the page rules (it wins over `HEAD`).
+fn render_css(css: &str, body: &str) -> Vec<u8> {
     Renderer::builder()
         .font_bytes(inter())
         .unwrap()
@@ -45,7 +54,7 @@ fn render(body: &str) -> Vec<u8> {
         .build()
         .render(
             &format!(
-                "<!doctype html><html><head><style>{HEAD}</style></head><body>{body}</body></html>"
+                "<!doctype html><html><head><style>{HEAD}{css}</style></head><body>{body}</body></html>"
             ),
             &RenderOptions::default(),
         )
@@ -338,4 +347,130 @@ fn g5_a_tall_box_on_the_last_of_three_lines_moves_the_whole_paragraph() {
     ));
     let words = printed_words(&pdf);
     assert_on_page(&words, 2, &["L1", "L2", "START", "BOXTOP", "TAIL", "AFTER"]);
+}
+
+// --- F213e: the first block of the body, page 1 starting below the content top --------------------------------------
+
+/// `<p>START B(h) TAIL</p><p>AFTER</p>` as the whole body, `css` after `HEAD`.
+fn first_line(css: &str, h: u32, wrap: bool) -> Vec<Word> {
+    let line = format!("<p>START {} TAIL</p>", b(h, ""));
+    let line = if wrap {
+        format!("<section>{line}</section>")
+    } else {
+        line
+    };
+    let pdf = render_css(css, &format!("{line}<p>AFTER</p>"));
+    let words = printed_words(&pdf);
+    // Chrome: page 1 stays empty, the line and its box start page 2.
+    assert_eq!(page_count(&pdf), 2, "two pages like Chrome (page 1 empty)");
+    words
+}
+
+#[test]
+fn f213e_q1_a_first_line_under_a_body_margin_moves_to_page_two() {
+    // Q1: `body { margin-top: M }`, `<p>START B(950) TAIL</p><p>AFTER</p>`. The room is 1009 - M px, the box 952 px: it does
+    // not fit page 1 and fits a fresh page. Chrome: page 1 empty; START, BOXTOP, TAIL at 41.7 pt and AFTER at 754.9 pt on
+    // page 2, for M = 100 and 200. Before F213e (main efdd02a): M = 100 left the line on page 1 with START at 819.8 pt,
+    // 33 pt below the content box; M = 200 printed it on no page ("content extends 63.1 pt past the bottom page edge").
+    for m in [100, 200] {
+        let words = first_line(&format!("body{{margin-top:{m}px}}"), 950, false);
+        assert_on_page(&words, 2, &["START", "BOXTOP", "TAIL", "AFTER"]);
+    }
+}
+
+#[test]
+fn f213e_q1b_the_f213_box_under_a_body_margin_instead_of_a_spacer() {
+    // Q1b: the shape of P1 with the 809 px as `body { margin-top }` instead of a spacer block: room 200 px, box 302 px.
+    // Chrome: page 1 empty; START, BOXTOP, TAIL at 41.7 pt, AFTER at 267.4 pt on page 2. Before: printed on no page
+    // ("content extends 32.4 pt past the bottom page edge").
+    let words = first_line("body{margin-top:809px}", 300, false);
+    assert_on_page(&words, 2, &["START", "BOXTOP", "TAIL", "AFTER"]);
+}
+
+#[test]
+fn f213e_c10_the_same_in_a_section() {
+    // C10: `<section>` around the paragraph. Chrome: the same as Q1, page 1 empty, everything on page 2, for M = 100 and 200.
+    for m in [100, 200] {
+        let words = first_line(&format!("body{{margin-top:{m}px}}"), 950, true);
+        assert_on_page(&words, 2, &["START", "BOXTOP", "TAIL", "AFTER"]);
+    }
+}
+
+#[test]
+fn f213e_g1_a_first_line_that_fits_stays_on_page_one() {
+    // Q1fit: M = 100, B(300): 302 px in a room of 909. Chrome: one page, START at 116.7 pt (ours seats the box
+    // bottom-on-baseline, F183c: y is not compared).
+    let pdf = render_css(
+        "body{margin-top:100px}",
+        &format!("<p>START {} TAIL</p><p>AFTER</p>", b(300, "")),
+    );
+    let words = printed_words(&pdf);
+    assert_on_page(&words, 1, &["START", "BOXTOP", "TAIL", "AFTER"]);
+    assert_eq!(page_count(&pdf), 1, "one page like Chrome");
+}
+
+#[test]
+fn f213e_g2_a_first_forced_break_gives_no_blank_page() {
+    // C7: `body { margin-top: 100px }` and `<p style="break-before:page">START</p>` as the first child. Chrome ignores a forced
+    // break with nothing before it: one page, START at 115.9 pt, no blank page. (The fix must not add one.)
+    let pdf = render_css(
+        "body{margin-top:100px}",
+        "<p style=\"break-before:page\">START</p><p>AFTER</p>",
+    );
+    let words = printed_words(&pdf);
+    assert_on_page(&words, 1, &["START", "AFTER"]);
+    assert_eq!(page_count(&pdf), 1, "one page like Chrome, no blank page");
+}
+
+#[test]
+fn f213e_g3_without_an_offset_the_first_line_is_where_it_was() {
+    // Q1 with no body margin: the 952 px box fits the 1009 px page. Chrome: one page, START at 41.7 pt.
+    let pdf = render(&format!("<p>START {} TAIL</p><p>AFTER</p>", b(950, "")));
+    let words = printed_words(&pdf);
+    assert_on_page(&words, 1, &["START", "BOXTOP", "TAIL", "AFTER"]);
+    assert_eq!(page_count(&pdf), 1);
+}
+
+#[test]
+#[ignore = "F109: @page :first margins"]
+fn f213e_c3_a_first_line_under_an_at_page_first_margin_is_split_not_moved() {
+    // C3b: `@page :first { margin-top: 100mm }` and `<p>START B(900) TAIL</p><p>AFTER</p>` as the whole body. The offset is a
+    // page margin, not content above the box, so Chrome has no break point in front of it and does not move it: START,
+    // BOXTOP and TAIL at 282.4 pt on page 1, the box continues on page 2, AFTER at 201.4 pt there. We paginate every page
+    // against page 1's box and print nothing of the line ("content extends 116.6 pt past the bottom page edge"). Not an F213e
+    // offset: page 1's height, and the slicing of a box taller than its room (F109, F213b).
+    let pdf = render_css(
+        "@page:first{margin-top:100mm}",
+        &format!("<p>START {} TAIL</p><p>AFTER</p>", b(900, "")),
+    );
+    let words = printed_words(&pdf);
+    assert_on_page(&words, 1, &["START", "BOXTOP", "TAIL"]);
+    assert_on_page(&words, 2, &["AFTER"]);
+}
+
+#[test]
+fn f213e_alone_box_under_a_body_margin_moves_to_page_two() {
+    // An `inline-block` alone on its line (a block child `BOXTOP`) as the first block of the body, `<p>[box]</p><p>AFTER</p>`,
+    // under `body { margin-top: M }`: 300 px under 809, 600 px under 500, 843 px under 265 (fixture 45's shape). Each box fits a
+    // fresh page and not page 1. Chrome: page 1 empty, BOXTOP at 41.7 pt and AFTER at 267.4 / 492.4 / 674.7 pt on page 2, 2 pages.
+    // Before (fork b81c6782, F213d HIGH-1b): `ancestor_insets` counted the body margin, the box "did not fit its page" and kept the
+    // F30f split: it hung below the content box and was printed on no page ("content extends 248 / 467 / 655 pt past the bottom
+    // page edge"). The y of BOXTOP is not compared (F183c). Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
+    for (m, h) in [(809, 300), (500, 600), (265, 843)] {
+        let pdf = render_css(
+            &format!("body{{margin-top:{m}px}}"),
+            &format!(
+                "<p><span style=\"display:inline-block;width:150px;height:{h}px;border:1px solid #000\">\
+                 <span style=\"display:block\">BOXTOP</span></span></p><p>AFTER</p>"
+            ),
+        );
+        let words = printed_words(&pdf);
+        assert_eq!(
+            words.len(),
+            2,
+            "M {m}, box {h}: BOXTOP and AFTER printed once each: {words:?}"
+        );
+        assert_on_page(&words, 2, &["BOXTOP", "AFTER"]);
+        assert_eq!(page_count(&pdf), 2, "M {m}, box {h}: two pages like Chrome");
+    }
 }
