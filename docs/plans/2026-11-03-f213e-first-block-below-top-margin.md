@@ -1,0 +1,183 @@
+# F213e: the first block on page 1 is not moved when page 1 starts below the content top
+
+Date: 2026-11-03. Finding: F213e in `2026-10-15-m0-findings.md` (medium: content below the content box, or lost; pre-existing, main and F213 byte-identical). Fork: `subapavel/fulgur` `htmltopdf/srgb-colours`, carried by the existing `[patch.crates-io]`; build on F213d's head once it is pushed. Line numbers were read from the fork's working tree on 2026-11-03 while F213d was being committed (not from `cca17235`); re-read them at the build commit.
+
+## 1. Problem
+
+The fragmenter works in body coordinates. `y = 0` is the top of the body's content, and the cursor starts there (`pagination_layout.rs` `fragment_pagination_root`, `:3380`). F29 handles the body's own offset on page 0 (its margin, a first-child margin collapsed through it, html's padding and border: `body_origin_in_px`, `:10958`) only by moving page 0's bottom up (`PageStrips::bottom(0) = page_h - first_offset`, `:2783-2833`). But every rule that moves a box whole to the next page asks whether something precedes it with `cursor_y > 0.0` or `content_above` (`cursor_y - gap > 0.5`). For the first child on page 0 both are false whatever the offset. So a first block that does not fit `bottom(0)` but fits a fresh page stays where it is. It hangs up to `first_offset` px below the content box, or below the page edge, where it is lost with the "content extends N pt past the bottom page edge" warning.
+
+Body `padding-top` / `border-top` work because they are inside the body: the first child's `location.y` is greater than 0, so the gap at `:3607-3609` makes `cursor_y > 0`. The validator's files are lost. Its numbers (`margin-top: 100px` → line at 832.6 pt, 33 pt below the content box, no warning; `200px` → lost, warning 63 pt) fit a one-line carrier about 950 px tall that is the first child. They do not fit the brief's 300 px box, which fits the 909 px of room. Step 1 rebuilds both shapes.
+
+Today's shapes:
+
+| Shape | Our result | Chrome |
+|---|---|---|
+| Q1 `body{margin-top:Mpx}` + `<p>START B(950) TAIL</p><p>AFTER</p>`, M = 100 / 200 | hangs / lost | page 2 |
+| Q1b M = 809 + `B(300)` (room 200, as F213 P1) | lost | page 2 (predicted) |
+| C4 `<img src=red60.png style="display:block;width:100px;height:950px">` first, M = 100 | hangs 41 px below | page 2 (predicted) |
+| C5 `break-inside:avoid` card, 45 lines × 20 px, first, M = 200 | entered and split | moved whole (predicted) |
+
+So the defect is not specific to inline-block carriers.
+
+## 2. Spec
+
+css-spec-researcher was not run. The wording and section numbers below are cited from memory and are **unverified**; confirm them in step 1.
+
+- **css-break-3 §4.1.** Class A break points lie between siblings, Class B between line boxes, Class C between a content edge and its child content only if there is a non-zero gap. A margin collapsed through `<body>` is not such a gap, so read strictly there is no break point before the first box.
+- **css-break-3 §4.4.** When the rules leave no break that avoids overflow, they are relaxed in order, and in the end the UA "may break anywhere" so that content is not lost off the fragmentainer's edge. We take the break in front of the first box under that rule. It is also Chrome's behaviour: Blink allows a break before a child when there is "container separation", meaning a non-zero offset from the fragmentainer start (from memory).
+- **css-break-3 §5.2.** Margins adjoining an unforced break truncate to zero. A margin at the start of the fragmentation context adjoins no break and is kept. So page 1 keeps the offset (as F29 does), and the moved box starts page 2 at the content top with its collapsed margin truncated. That is exactly our existing move (`cursor_y = 0` on page ≥ 1).
+- **CSS 2.1 §13.3.3.** The allowed breaks are listed there; rules A, B and D are dropped when the list gives too few break points. An unforced break sets the adjoining margins to 0.
+- **CSS 2.1 §8.3.1.** The body's top margin collapses with its first in-flow child's when the body has no border, padding or clearance. The root's margins do not collapse. So `first_offset` may be partly the child's own margin.
+- **css-page-3, page model.** Each page's page area is that page's fragmentainer, and `@page :first` margins shrink only page 1's. This is the basis of F109: we paginate every page against page 1's box (`engine.rs:258-305`; warning at `render.rs:199-266`).
+
+**Chrome probes** (step 1; `render.mjs` settings; `pdftotext -bbox`: page of each word, yMin, page count):
+
+- Q1 and Q1b.
+- C3: `@page :first{margin-top:100mm}` with `B(300)` after a spacer, and with `B(900)` first.
+- C4, C5.
+- C6: C5 with no body margin, but the card has `margin-top:200px` collapsing through body.
+- C7: M = 100 with `break-before:page` on the first child. Does Chrome print a blank page?
+- C8: `body{margin:8px}` with a first `<img>` 1001 / 1002 / 1003 px tall (Chrome's 1010 px fragmentainer, F30f-b).
+- C9: body `border-top:5px` plus M = 100 plus C4: is the body frame on page 1?
+- C10: `<section>` around Q1's `<p>`.
+- C11: `html{padding-top:100px}` plus C4.
+- C12: M = 100 plus a first `<img>` 1200 px tall (taller than a page).
+
+## 3. Where it belongs: cause and design
+
+This is fulgur fragmenter behaviour, so the fix goes in the fork (`pagination_layout.rs` only). htmltopdf only bumps `Cargo.lock` and updates `docs/upstream.md`. No upstream PR or issue.
+
+**Hypotheses, ranked:**
+
+1. **H1 (read from the code): the move rules ignore the offset.** There are five body-level rules that move a box whole, all gated on `cursor_y > 0.0`:
+   - multicol F28, `:3731`;
+   - the leading move of a split paragraph, `:3860`;
+   - the paragraph move-whole, `:3978`;
+   - the F28 wrapper move, `:4226`;
+   - the plain advance, `:4312` (carriers since F213, images, kept-whole avoid boxes).
+
+   In addition, `content_above` (`:4116`) feeds `keeps_whole_at` (`:4143` → `avoid_keeps_whole` `:1753`, `above = false` → the avoid card is not kept and the gate enters it) and the F28 leading filters (`:4236`, `:4241`).
+2. **H2 (`:first`): F109, not the guard.** `page_h` is page 1's content height for every page. A first block taller than page 1's box but within page 2's counts as "taller than a page" (`monolithic_line_carrier` needs ≤ fresh + 1, and F28 needs `leading <= fresh`), so it is entered in place and lost (the F213b shape). Treating `:first` as an offset is not a guard fix: it changes the height of every later page, the render strip phase (`render.rs:317`), the F184 canvas and the F109 warning. It moves to F109.
+3. **H3: `first_offset` is 0** (clamped, or not read). Step 1 checks with a lib dump.
+
+**Design.** Page 0 with an offset behaves like a page with content above, except for a box that would not fit a fresh page either.
+
+```rust
+impl PageStrips {
+    /// html-to-pdf F213e: page 0 starts `first_offset` below the page area's top (body margin, collapsed child margin,
+    /// html padding/border), so something precedes the first box there (css-break-3 §5.2 keeps that margin).
+    pub(crate) fn offset_above(self, page: u32) -> bool;
+    /// Whether the class A break in front of a box of `size` at `cursor` may be taken to move it whole: `cursor > 0`
+    /// (unchanged), or `offset_above(page)` and `size <= fresh() + 1.0` (on a fresh page it fits; otherwise moving
+    /// only leaves page 0 empty).
+    pub(crate) fn may_move(self, page: u32, cursor: f32, size: f32) -> bool;
+}
+```
+
+- **The five rules** call `may_move` instead of `cursor_y > 0.0`. They pass the size each rule already compares with the room: `leading`, `para_total_h.max(keep_size)` or `child_h.max(keep_size)`. Reason: with no offset, `may_move` is `cursor > 0`, which keeps every document without an offset byte-identical.
+- **`keeps_whole_at` and the F28 leading filters** take `content_above || offset_above(page_index)`. Reason: the avoid card has to be kept whole and moved by `:4312`, and a wrapper has to be counted with its leading avoid box or keep chain.
+- **Unchanged on purpose:**
+  - the forced-break guards `:3566` and `:3659`. Reason: we must not add a blank page before a `break-before:page` first child. C7 decides; if Chrome differs, file it as F213e-b.
+  - `starts_with_relaxed_avoid` (`:4117`, avoid boxes taller than a page);
+  - `keep_size` (`:3703`) and `member` (`:3950`), which are F215;
+  - the `content_above` that is passed to `fragment_block_subtree` (`:4273`). Reason: nested forced breaks (`:6159-6178`, F83b Z1_234). The body-level F28 already moves a wrapper whose first row does not fit.
+- **Determinism:** no new map and no change to float arithmetic. A moved box gets `cursor_y = 0.0` as on the existing paths.
+
+## 4. Acceptance
+
+**Fixture `45-letterhead-keep-together`** (Czech invoice for pre-printed letterhead paper).
+
+- **Page and body:** `@page { size: A4; margin: 15mm }` and `body { margin-top: 70mm }` in the fixture's `<style>` (as 26 sets its body margin). Page 1 has 744.6 px of room.
+- **First block:** `<main class="break-inside-avoid">` with:
+  - a header as in 13 (`flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6`);
+  - parties (`grid grid-cols-2 gap-8`);
+  - an items table (`w-full border-collapse text-sm`, rows `border-b border-gray-200`, cells `py-2`, amounts `text-right tabular-nums`);
+  - totals (`flex justify-end`, `w-72`).
+- **After it:** `<p class="mt-6 text-xs text-gray-500">Děkujeme za spolupráci.</p>`.
+- **Classes:** every one was checked in the committed `tailwind.css`. There are no `mt-[…]` classes, which is why the margin is in `<style>`.
+- **Sizing:** in step 2, tune the row count so that `main` is 820–900 px tall in both Chrome and ours (between 744.6 and 1009).
+- **The PNG must show:** page 1 empty, as in Chrome; page 2 the whole invoice from the content top, then the thank-you line. Today page 1 holds the header and the first rows, because the avoid box is split.
+- **Asserts** (`fixtures.rs`):
+  - 2 pages;
+  - no word on page 1;
+  - `Faktura`, the first and last row, `Celkem` and `Děkujeme` once each, all on page 2;
+  - `Faktura` yMin within 2 pt of Chrome's;
+  - no yMax past the content bottom.
+- **Compare:** record main's per-page numbers in §7 (page 1 is expected to be large). Set the threshold to the worst page after the fix plus 1 point.
+
+**Ours, red first.** Each test names Chrome's number from step 1.
+
+- `tall_inline_box_line.rs`:
+  - `f213e_q1_a_first_line_under_a_body_margin_moves_to_page_two`, M = 100 and 200;
+  - `…_q1b` (M = 809, `B(300)`);
+  - `…_c10_in_a_section`.
+- `body_offset.rs`:
+  - `a_first_tall_image_under_a_body_margin_moves_to_page_two` (C4) and its `html{padding-top}` twin (C11);
+  - `a_first_avoid_card_under_a_body_margin_moves_whole` (C5);
+  - `…_when_the_offset_is_its_own_collapsed_margin` (C6).
+- Guards, green on main:
+  - a first block that fits stays on page 1;
+  - a block taller than a page is not moved (C12);
+  - `break-before:page` on the first child gives no blank page (C7);
+  - the C8 sizes;
+  - body padding unchanged.
+- `#[ignore = "F109"]`: C3 with `B(900)`.
+- `page_bottom_warning.rs`: Q1 with M = 200 joins the "must not warn" list.
+
+**Fork:**
+
+- Lib tests with `run_pass` and `fragments_of`:
+  - `page_strips_offset_above_and_may_move`;
+  - `a_first_monolithic_block_under_a_body_margin_moves_to_page_one`;
+  - `a_first_avoid_box_under_a_body_margin_moves_whole`;
+  - `a_first_wrapper_whose_first_row_does_not_fit_moves`;
+  - `a_first_box_taller_than_a_page_stays_on_page_zero`;
+  - `a_forced_break_before_the_first_child_stays_collapsed`.
+- One `render_smoke` case.
+
+**Byte gates** (`RAYON_NUM_THREADS` 1 and 4; any unexpected change stops the work and a postmortem is written):
+
+- Fixtures 01–43 plus 45: byte-identical except 45.
+  - Tailwind preflight gives every fixture a body margin of 0. Only 07 (`h1.mt-8`) and 26 (`body{margin:15mm}`) have an offset, and their first child is small.
+  - Step 1 confirms which fixtures have an offset (including 15, 27 and 37).
+- The 7 corpus documents.
+- `cargo test -p fulgur` and fulgur-vrt: the same failing set and identical `.actual.pdf` files, except cases listed and checked against Chrome.
+- The F213 1440-case sweep: identical.
+- `bench.py --check`.
+
+**Sweep** (`out/scratch/f213e/sweep.py`):
+
+- grid: offset source {body margin, collapsed child margin, html padding, margin + body border} × offset {8, 100, 200, 809} × first block {carrier 300/950, img 950, avoid card, 40-line `<p>`, 40-row table, section + carrier, img 1200} × before it {nothing, zero-height `counter-reset` div};
+- every changed case must be on Chrome's pages, and none may move farther from Chrome.
+
+## 5. Steps
+
+1. **Rebuild and measure (no code).** Build the §2 probes in Chrome and on main, plus a throwaway fork lib dump of `first_offset` for Q1 and the fixtures. Record which hypothesis holds in §7. If Q1 does not reproduce, stop and re-plan.
+2. **Red tests and fixture.** Our red tests and guards; fixture 45 with its `render.mjs` reference and README; commit.
+3. **Fork, rules.** `offset_above` / `may_move` with their unit test; the five rules and the `keeps_whole` / leading `above`; lib tests; clippy, fmt.
+4. **Fork, full suite.** `cargo test -p fulgur` and fulgur-vrt. Re-bless only the goldens Chrome confirms, and name each; `render_smoke`.
+5. **Bump and gate.** Bump `Cargo.lock`; our tests; byte gates; sweep; bench.
+6. **Finish.**
+   - `render-fixtures.sh` and `compare.py`; look at 45's side-by-side.
+   - Run `vrt-validator`. No `pdf-reviewer`: this is layout only.
+   - Findings: F213e done, its `:first` bullet moved to F109 with C3, follow-ups filed. Update `docs/upstream.md`; write §7.
+
+## 6. Risks and non-goals
+
+- **fulgur's UA `body{margin:8px}`.** Every fork test and golden has `first_offset = 8`. A first block between `bottom(0)` and `fresh + 1` tall now moves and leaves page 0 blank. Example: the `gcpm_snapshot` 294 px spacer on a 293.33 px page, if it is body's first child. C8 tells whether Chrome agrees. If Chrome keeps such blocks in place, compare against `chrome_bottom(0)` in the offset-only branch, and do not loosen the slack.
+- **A blank first page** is Chrome's output, and it is better than lost content. Fixture 45's README says so. Margin boxes, `counter(page)`, link and bookmark targets move to page 2 as in Chrome. Check with C9 that the body's frame and background on the blank page match Chrome (F37 slices).
+- **A small offset** (07, 26) can now move a first block that it pushes past the page bottom. That is intended.
+- **Non-goals:**
+  - `@page :first` / `:left` / `:right` page heights (F109; sketch: `PageStrips{first_h, rest_h}`);
+  - body as the inline root (F111 `fragment_body_inline_root`);
+  - first blocks taller than a page (F213b, F29b);
+  - keep-with-next of a first heading (F215, `keep_size`);
+  - relaxed avoid boxes;
+  - nested first-child moves inside a wrapper that is not moved;
+  - forced breaks at the start (C7 → F213e-b if Chrome differs);
+  - flex rows (F213f);
+  - `vertical-align` (F183c).
+
+## 7. Evidence
+
+To be written by the implementer: §2 probe table (Chrome / main / after), fixture offsets, hypothesis held, gates, sweep, compare numbers.
