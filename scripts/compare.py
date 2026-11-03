@@ -288,6 +288,14 @@ THRESHOLDS = {
     #     On the binary before F96 both frames were closed on each page, the backgrounds stopped at the last clause and the
     #     payment block stood 43.7 pt too high: 5.7 / 12.1 %. Worst page + 1 point.
     "42-terms-card-clauses": 0.069,
+    # 43: new in F213 (a two-page Czech invoice: sixteen items and the total, then ONE one-line `<p>` "Zaplaťte QR kódem [box] nebo
+    #     převodem na účet ..." whose `inline-block` (label, 112 px QR `<svg>`, amount: 186 px) does not fit the 100 px left on page 1;
+    #     Chrome moves the whole line to page 2, "Zaplaťte" at 156.3 pt, 2 pages; ours the same page, with the line and its box 14 pt lower
+    #     (F183c: ours seats an inline box bottom-on-baseline and Blitz places a box with in-flow content by its last line, so the box
+    #     hangs 18.7 px below where Chrome has it; "Děkujeme" is at 200.3 pt against Chrome's 200.5). 3.7 / 1.4 %: the text drift every
+    #     fixture has. On the binary before F213 the line was painted below the edge of page 1 and printed on no page, the box was cut
+    #     (its label on page 1, the QR on page 2): 3.8 / 1.3 %, a number that hardly moves because the lost line is small. Worst page + 1 point.
+    "43-qr-inline-block-page-bottom": 0.047,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

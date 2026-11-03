@@ -56,6 +56,13 @@ fn prose(n: usize) -> String {
 const BASE_CSS: &str = "body { margin: 0; font-family: Inter; line-height: 20px } p { margin: 0 } \
     table { border-collapse: collapse; width: 100% } td { padding: 4px 8px; border-bottom: 1px solid #ccc }";
 
+/// F213: the page of the probes (A4, 15 mm margins: content box 1009.13 px), the block that leaves 200 px below it and a
+/// 300 px inline-block with a one-line block child.
+const F213_PAGE: &str = "@page { size: A4; margin: 15mm }";
+const F213_ROOM: &str = "<div style=\"height:809px\"></div>";
+const F213_BOX: &str = "<span style=\"display:inline-block;width:150px;height:300px;border:1px solid #000\">\
+    <span style=\"display:block\">BOXTOP</span></span>";
+
 /// The pagination warnings of one render: the new bottom-edge one and the F30 "placed whole" one.
 fn page_warnings(extra_css: &str, body: &str) -> Vec<String> {
     let r = Renderer::builder()
@@ -130,6 +137,18 @@ fn warns_about_content_below_the_page_only() {
                 prose(4000)
             ),
         ),
+        // F213: a line with an inline-block taller than the room moves to the next page whole; it used to be left on
+        // page 1 with its baseline below the edge (plan docs/plans/2026-11-03-f213-text-beside-tall-inline-block.md).
+        (
+            "F213 P1: text, a tall inline-block with a block child, text",
+            F213_PAGE.into(),
+            format!("{F213_ROOM}<p>START {F213_BOX} TAIL</p><p>AFTER</p>"),
+        ),
+        (
+            "F213 P5: the same in a <section>",
+            F213_PAGE.into(),
+            format!("{F213_ROOM}<section><p>START {F213_BOX} TAIL</p></section><p>AFTER</p>"),
+        ),
     ];
     for (name, css, body) in &silent {
         let w = page_warnings(css, body);
@@ -163,6 +182,22 @@ fn warns_about_content_below_the_page_only() {
         w.iter()
             .any(|m| m.contains("in an inline-flex or inline-grid box is placed whole")),
         "inline-flex around 4000 words: {w:?}"
+    );
+
+    // F213b, a known residual loss: a line taller than a page (the inline-block is 1200 px) is not split, so its baseline
+    // words are painted below the edge of page 1. Chrome slices the box over pages 2 and 3 and prints the words on page 2.
+    // Slicing a line shared with text is an ADR-0004 decision that is still open; the net says so until it is made.
+    let w = page_warnings(
+        F213_PAGE,
+        &format!(
+            "{F213_ROOM}<p>START <span style=\"display:inline-block;width:150px;height:1200px;border:1px solid #000\">\
+             <span style=\"display:block\">BOXTOP</span></span> TAIL</p><p>AFTER</p>"
+        ),
+    );
+    assert!(
+        w.iter()
+            .any(|m| m.contains("past the bottom page edge on page 1")),
+        "F213b, a line taller than a page: {w:?}"
     );
 
     // A transformed body is a split barrier: kept whole, and the pagination warning names the box.
