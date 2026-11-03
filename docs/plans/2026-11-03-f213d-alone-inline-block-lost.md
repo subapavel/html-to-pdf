@@ -328,3 +328,58 @@ page-count mismatch (FAIL: no `PAGE_COUNT_MAY_DIFFER` entry and no threshold; no
 | the other 22 tests of `fixtures.rs` | green |
 
 `cargo fmt --all -- --check` and `cargo clippy --release --locked --offline -p htmltopdf --tests -- -D warnings` pass.
+
+### 7.4 Steps 3 to 7: the fix, the net and their gates
+
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: `7d620b3a` (step 3, the net; on `cca17235`, which has F198j) and `62216d9a` (step 4, the fix). Re-located by name at `cca17235`: `monolithic_line_carrier`, `alone_on_its_line`,
+`leading_block_size_with`, `clip_hides_nothing`, `paragraph_lines_for_page`, `draw_paragraph_inner_paint`. Differences from the plan:
+
+- **D3 (a)**, `paragraph.rs` `InlineBox` arm: the box's bottom (`oy + content_frag.height`) is noted before `enter_local`, and the box is recorded in the ledger.
+- **D3 (b)**, `render.rs`: `paragraph_line_range_for_page` returns `(range, rebase)`; `paragraph_lines_for_page` is the copy of it (test-only now). `draw_paragraph_inner_paint` and `draw_paragraph_v2` /
+  `draw_block_with_inner_content` take the node id and record the range at the one call site. `paint_inline_box_continuation` records its box. `report_unpainted` runs after the page loop. `unpainted_report` skips: a paragraph
+  that is not visible (F209), has opacity 0 or sits in a block with opacity 0 (`draw_with_opacity` skips it), an inline box with opacity 0 and its subtree, the hidden tail of a clip box (ADR-0009), a paragraph the multicol plan
+  paints (`paragraph_slices`, F198b), a node without geometry or without a fragment; an inline box whose carrier is not planned, not visible or hides a tail. Cap 20 plus one count line. Warnings only, no strict error (F213g).
+- **D1**: `content_ends_inside` is the body of `clip_hides_nothing`, which calls it (output-neutral). In `monolithic_line_carrier` the alone exclusion became `alone_on_its_line(..) && !content_ends_inside(..)`. Both gates
+  and `leading_block_size_with` already ask the predicate, so no new call site.
+- **D2** was not needed. Q10 (a box taller than a page) is not a split-carrier-without-slices case: its carrier is one fragment and the box is painted below the edge (H1), so D2 would not change it. Filed F213d-b; D3 warns.
+- **The F183c-b above-the-top check** was not done (needs one more fork commit and a rerun of every gate; filed in F183c-b).
+
+**Fork tests.** Red first (5 of 6 red with `content_ends_inside` a stub returning `false`): `an_alone_inline_block_that_fits_a_page_moves_whole` (the carrier was one fragment on page 0 at y 140),
+`..._in_a_wrapper`, `an_alone_inline_block_of_auto_height_moves_whole_where_it_fits_a_page`, `content_ends_inside_reads_the_block_axis_of_an_inline_box` (7 cases), the `monolithic_line_carrier` cases (now 13),
+`an_alone_inline_block_taller_than_a_page_is_still_entered` (green on both); net: `paragraph_line_range_for_page_matches_paragraph_lines_for_page`, `a_split_carrier_without_slices_is_reported`,
+`the_unpainted_report_leaves_out_what_is_not_painted_by_design`, `an_unpainted_inline_box_is_reported_once_painted_it_is_not`, `an_inline_box_painted_below_the_edge_extends_the_paint_extent` (red with the note turned off:
+"painted down to 0 pt"); `render_smoke::test_render_fixed_height_inline_block_alone_moves_whole_smoke` (red with the check off: `BOXTOP` not printed). Fork: lib 2542 and every integration test pass (`render_smoke` 339),
+`cargo clippy -p fulgur --all-targets -- -D warnings` and `cargo fmt --check` clean.
+
+**Step 3 byte gate** (base = fork `cca17235` binary; RAYON 1 and 4): 44 fixtures and 7 corpus documents identical (51 PDFs; 1 thread equals 4 threads); the only warning is fixture 44's ("content extends 129.9 pt past
+the bottom page edge on page 1": the net sees the box). Fork `fulgur-vrt` (35 `.actual.pdf`) and the 21 examples (`fulgur render`, 4 threads): identical to the base. Ours with D3 only: the Q1 probe of `page_bottom_warning.rs`
+warns ("content extends 307.6 pt", the red the plan expects at step 3) and `no_unpainted_content.rs` is red at fixture 44.
+
+**Step 4 byte gate** (fork `62216d9a`, base `cca17235`, after merging main with F198j and fixture 40): 44 fixtures and 7 corpus documents, 51 PDFs, RAYON 1 and 4: identical **except fixture 44**; fixtures 16 and 40 and
+the corpus did not move; no net warning anywhere. Fork `fulgur-vrt` 35 `.actual.pdf` and the 21 examples: identical.
+
+**Ours, on main + fork `62216d9a`:** `cargo test --release --locked --no-fail-fast`: **1049 passed, 0 failed, 9 ignored** after one test fix: `page_bottom_warning.rs` "Q2, a 600 px box, room 120" was in "must not warn" and warns on page 2
+(the moved fixed box hangs 90.9 pt below the edge: F183c, a true loss of the box's bottom), so the silent entry is now a 400 px box and the 600 px box is a "must warn" case naming F183c. `cargo fmt --all -- --check` and
+`cargo clippy --release --locked --all-targets -- -D warnings` clean. The six red tests of `alone_inline_block_line.rs`, the fixture-44 test, Q10 of `page_bottom_warning.rs` and the sentinel of `no_unpainted_content.rs` are green.
+
+**Sweep** (`f213d/sweep.py`, 2464 cases: R {10, 20, 60, 120, 199, 201, 400} x mode {auto; fixed and min-height at h 100, 300, 900, 1000, 1200} x content {1 block, 3 blocks, 15 lines, caption + svg + name} x nesting {body, section,
+card, section after a paragraph} x {inline-block, inline-table}; Chrome rendered from the same HTML; "on Chrome's pages" = every (word, page) Chrome prints is printed on that page):
+
+- **824 cases changed**: **742 are exactly on Chrome's pages now** (578 were farther before, 164 were on already for part of the words), 52 are not closer, 30 are farther. The 82 changed cases that are not exactly on Chrome's pages are
+  one family: `card` (a `border p-4 rounded-lg` card, 17 px of top inset) with h = 1000, a box of 1002 px that fits a fresh page but not a fresh page inside the card. Chrome leaves the card's frame empty on page 2 and puts the box on page 3; ours
+  moves the box to page 2 (before: split or lost). In 30 of them one more word-page differs from Chrome than before (3 to 4, 15 to 16, 2 to 3; page counts unchanged at 3 against Chrome's 4). **This is a case that moves farther, named and
+  not fixed**: F213d-c (the fits-a-page test uses the page height, not the room the ancestors' insets leave).
+- Words lost on no page: 465 on main, **181** now: 168 are the box of 1200 px (taller than a page, F213d-b), 13 are the fixed 100 px box with 15 text lines (F183c-b, silent). No case loses more words than before.
+- Net warnings: 0 on main (silent), 1216 now. All are true partial losses of the box: a box of 900 px and more moved to page 2 hangs below the edge (F183c, 196 cases per height), a box of 1200 px is lost (F213d-b), and 40 cases that
+  Chrome keeps on page 1 and that fit its room (R 400, h 300; R 120, h 100: the box is painted below its line, 8 to 113 pt past the edge, F183c, unchanged by F213d). Warned and not lost words: 432 cases. No warning fires on a case
+  that is fully on Chrome's pages and loses nothing, except the F183c hang.
+- Pages: 546 cases had a different page count from Chrome on main, 376 now.
+
+**Fixture 44** (`render-fixtures.sh` with the fork `62216d9a` binary, `compare.py`): **2 pages like Chrome, 3.3 % / 0.8 %** (before 1 page, 3.5 % / 0.4 %); threshold set to 4.3 % (worst page + 1 point). I looked at both pages
+of the side-by-side: page 1 ends with "Děkujeme za spolupráci." and a gap; page 2 holds the whole box (border, caption, stamp, name, free space), 91.3 pt (121.7 px) lower than Chrome's (F183c). Every other fixture's pixel diff is unchanged
+(their PDFs are byte-identical), all `ok`.
+
+**bench.py --check**: ok. b200-items 1480 ms (over the 1250 ms exception on this machine, as the unchanged binary: 1365 / 1404 ms base against 1395 / 1467 ms new in two alternating runs of seven; b200-text 811 / 819 ms
+against 890 / 840 ms: the ledger's cost is inside the noise of this machine), scaling r = 4.18.
+
+**Not run**: `vrt-validator` and `pdf-reviewer` (the coordinator's), the Ruby / Python bindings of the fork, the fork's wasm demo.
