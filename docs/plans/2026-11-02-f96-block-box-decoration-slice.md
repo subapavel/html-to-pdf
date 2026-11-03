@@ -404,3 +404,17 @@ Run with `cargo test --release --locked --offline -p htmltopdf --test block_box_
 The other 19 tests of `fixtures.rs` pass with fixture 42 added. The assertions of tests 1-5 and of the fixture test were checked
 against Chrome's own PDFs and pass there. Not run: the fork tests of the plan (step 3), the rest of the suite, `fulgur-vrt`,
 the byte gate.
+
+### Fork notes for step 3 (read from `git show d5b4a994:<path>`, nothing edited)
+
+Every function the plan names exists at `d5b4a994` under that name: `fragment_block_subtree` (`pagination_layout.rs:5090`),
+`lines_split_below` (declared 5159, set 5938), `closing` (computed 6447, used 6500 and 6516-6523), `block_size_constrained`
+(7223, takes one node), `frame_fragment` (`render.rs:3745`), `PageStrips::chrome_bottom` (2536) and `fresh` (2528), `line_split_insets`
+and `box_slices` on `PaginationGeometry` (2426, 2448). `is_cell_of_table(parent, child)` (7929) takes two nodes, not one.
+
+The fork branch `htmltopdf/srgb-colours` already contains F215 (`7a79be15`, on top of `d5b4a994`). Its diff against `d5b4a994`
+touches `fragment_block_subtree` at 5257, 5757-5769, 5876, 5908, 5930 and 5986 (pre-F215 numbering) and adds
+`pagination_layout/keep_with_next.rs`, 24 lines in `draw_primitives.rs` and 2 in `render.rs`. The `closing` block (6446-6523)
+and the end of the function come after F215's last hunk there, so the plan's edits (entry, before `closing`, after the final push)
+should not conflict textually; the function's line numbers move by about 130. Re-read the function on top of `7a79be15` before
+step 3 and add fixture 41 to the gates when it is in `main`.
