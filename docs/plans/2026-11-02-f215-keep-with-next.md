@@ -322,4 +322,6 @@ Fork `subapavel/fulgur` `htmltopdf/srgb-colours`, append-only: `d5b4a994` -> `e4
 
 **bench.py --check** ok: fixtures 9-40 ms (41: 16.6 ms median), `b200-items` 1,064 ms (≤ 1,552), `b200-text` 751, `b200-mixed` 740, scaling r = 4.05 (≤ 6.0). Stress probe, 4,000 one-line `p{break-after:avoid}`: 78 ms against 78 ms for the twin without the declaration (1.0×, limit 1.3×, no sliding window needed); 1,500 heading + 3-line paragraph pairs: 229 ms against 227 ms.
 
+**Full suite:** `cargo test --release --locked --no-fail-fast` at `bc6b80f` (fork `967e8d7b`): 83 test binaries, 1,002 tests passed, 0 failed, 9 ignored (none of them new). The head (fork `7a79be15`) differs by one doc comment: rebuilt, gates repeated (fixtures and corpus at 1 and 4 threads: the same 45 of 47 identical).
+
 **Not verified:** `vrt-validator` was not run (this session cannot start a subagent); Chrome numbers for the new tests' later assertions are Chrome's probes of step 1, but the red tests were not re-run against Chrome after the fix (only against ours); PDF/A, tagged output and the writer path are untouched; Windows and macOS were not tried; fixtures 40 does not exist.
