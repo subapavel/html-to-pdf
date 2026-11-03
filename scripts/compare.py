@@ -296,6 +296,14 @@ THRESHOLDS = {
     #     fixture has. On the binary before F213 the line was painted below the edge of page 1 and printed on no page, the box was cut
     #     (its label on page 1, the QR on page 2): 3.8 / 1.3 %, a number that hardly moves because the lost line is small. Worst page + 1 point.
     "43-qr-inline-block-page-bottom": 0.047,
+    # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
+    #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
+    #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 9.4 / 6.8 %: the text drift every fixture has over two pages of
+    #     small text in columns (a column of ours holds one line less than Chrome's on page 1; the strips run border to border in both
+    #     columns, the first sits on the top border and is clipped to the corner in column 1 only). On main's binary a negative margin and
+    #     a relative offset left the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty, 7.8 / 8.6 %; page 1
+    #     grew 7.8 -> 9.4 because the words that were missing are printed now. Worst page + 1 point.
+    "40-terms-card-strips-columns": 0.104,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
