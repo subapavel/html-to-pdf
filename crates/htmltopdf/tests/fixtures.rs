@@ -1962,3 +1962,117 @@ fn signature_box_invoice_moves_the_whole_box_to_page_two() {
         "last word of page 1"
     );
 }
+
+#[test]
+fn letterhead_invoice_moves_whole_to_page_two() {
+    // F213e. `body { margin-top: 70mm }` (pre-printed letterhead paper), then the whole invoice in one `inline-block w-full
+    // break-inside-avoid` box of 843 px and the thank-you line. Page 1 has 744.6 px of room, a fresh page 1009 px. Chrome
+    // (m153) moves the box, which is monolithic, to page 2: page 1 is empty, "Faktura" at 43.3 pt, "Děkujeme" at 693.3 pt,
+    // 2 pages. (A plain `<main class="break-inside-avoid">` is not kept together by Chrome: an avoid box with nothing
+    // before it is split in place, 207 words on page 1.) Before F213e we entered the box and split it (page 1: the
+    // header and 13 rows, page 2: the 14th row and the totals) like that plain box.
+    let name = "45-letterhead-keep-together";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-45.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+    let attr = |attrs: &str, key: &str| -> f32 {
+        let start = attrs.find(&format!("{key}=\"")).unwrap() + key.len() + 2;
+        attrs[start..start + attrs[start..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    // (page, yMin, yMax, word)
+    let mut ours: Vec<(usize, f32, f32, String)> = Vec::new();
+    let mut pages = 0;
+    for line in xml.lines() {
+        if line.contains("<page ") {
+            pages += 1;
+        } else if let Some(rest) = line.trim().strip_prefix("<word ")
+            && let Some((attrs, word)) = rest.split_once('>')
+            && let Some(word) = word.strip_suffix("</word>")
+        {
+            ours.push((pages, attr(attrs, "yMin"), attr(attrs, "yMax"), word.into()));
+        }
+    }
+    assert_eq!(pages, 2, "two pages like Chrome");
+    let on_page_1: Vec<&str> = ours
+        .iter()
+        .filter(|w| w.0 == 1)
+        .map(|w| w.3.as_str())
+        .collect();
+    assert!(
+        on_page_1.is_empty(),
+        "page 1 is empty in Chrome, ours prints {} words ({:?} ...)",
+        on_page_1.len(),
+        &on_page_1[..on_page_1.len().min(4)]
+    );
+    // Content box bottom: A4 height 841.89 pt minus the 15 mm margin.
+    let content_bottom = 841.89 - 15.0 / 25.4 * 72.0;
+    // Each word of interest is printed the stated number of times, all on page 2, inside the content box. Rows 1-8 repeat
+    // from row 9, so the first and the last row's words are printed twice; the thead is upper-cased by `uppercase`.
+    for (word, times) in [
+        ("Faktura", 1),
+        ("Konzultace", 2),
+        ("Školení", 2),
+        ("CELKEM", 1),
+        ("Celkem", 1),
+        ("Děkujeme", 1),
+    ] {
+        let hits: Vec<_> = ours.iter().filter(|w| w.3 == word).collect();
+        assert_eq!(
+            hits.len(),
+            times,
+            "`{word}` is printed {} times, expected {times}",
+            hits.len()
+        );
+        for h in hits {
+            assert_eq!(
+                h.0, 2,
+                "`{word}` is on page {}, Chrome has it on page 2",
+                h.0
+            );
+            assert!(
+                h.2 <= content_bottom + 5.0,
+                "`{word}` ends at {:.1} pt, below the content box",
+                h.2
+            );
+        }
+    }
+    // The invoice starts at the content top of page 2 like Chrome's (43.3 pt); the thank-you line ends it.
+    let y = |word: &str| ours.iter().find(|w| w.3 == word).unwrap().1;
+    // F183c: ours seats the 843 px box bottom-on-baseline and Blitz aligns its last line there, so the box (and "Faktura")
+    // is painted 5.8 pt (7.7 px) lower than in Chrome (49.1 pt, Chrome 43.3 pt) while the thank-you line, below the carrier,
+    // is where Chrome has it (693.1 pt, Chrome 693.3 pt). The bound is that offset, not a tolerance for a wrong page.
+    assert!(
+        (y("Faktura") - 43.3).abs() <= 7.0,
+        "`Faktura` at {:.1} pt, Chrome puts it at 43.3 pt (F183c allows 5.8 pt lower)",
+        y("Faktura")
+    );
+    assert!(
+        (y("Děkujeme") - 693.3).abs() <= 2.0,
+        "`Děkujeme` at {:.1} pt, Chrome puts it at 693.3 pt",
+        y("Děkujeme")
+    );
+    assert!(
+        y("Děkujeme") > y("Celkem"),
+        "`Děkujeme` is below the totals"
+    );
+}
