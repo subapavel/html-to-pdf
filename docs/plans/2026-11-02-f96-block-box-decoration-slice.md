@@ -470,7 +470,7 @@ under 35 ms; start-up 2.8 ms; scaling r = 3.98. Interleaved 9-run medians, base 
 **`fulgur-vrt`** (`f183-vrt.sh`, base `7a79be15` against `ffdf0c49`, the host's goldens): 35 of 64 fixtures differ from their goldens on both, and they are the same 35. Of those, two
 outputs changed between the base and F96: `bugs/grid-row-promote-background` and `gcpm/string-set`. Text layers identical; the pixel difference is only the cut rows of the card
 that crosses the break (bottom of page 1, top of page 2). Neither golden is re-blessed here: both already differ from their golden on this host for font reasons, and a golden
-written on this host would pin the host's bytes (see `docs/upstream.md`, "Fork VRT goldens"). No golden that passes on this host moved (examples/break-inside, mo-006 and mo-008 are unchanged).
+written on this host would pin the host's bytes (see `docs/upstream.md`, "Fork VRT goldens"). No golden that passes on this host moved: the failing set is identical, so the plan's guesses (`examples/break-inside`, mo-006 / mo-008) did not move in these goldens.
 
 **For `pdf-reviewer`: what changes in frame painting.** No new operator, font, metadata or structure. The same paint calls run with different edges and heights:
 1. `render.rs::frame_fragment`: a new branch for `geom.block_slice && geom.is_split()` returns `FrameEdges { top_open: !is_first, bottom_open: !is_last }` (judged by page index). The frame
