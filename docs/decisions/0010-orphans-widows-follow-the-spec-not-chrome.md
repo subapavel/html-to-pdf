@@ -73,3 +73,17 @@ Other engines:
 - F30c-o3 keeps the cases where the spec does allow relaxing (tall paragraphs, keep-the-orphans in the nested splitter)
   and `orphans` larger than a page.
 - Revisit this decision if Chrome changes its behaviour, or if the CSSWG changes Rule 3 or §3.3.
+
+## Clarification (2026-11-02, F215 keep-with-next)
+
+Item 2c ("a paragraph whose preceding break is forbidden by `break-before` / `break-after: avoid` ...") is read together with
+its lead-in sentence: Rule 3 is relaxed only where the allowed breaks cannot keep the content from overflowing, **and no
+earlier allowed break (for example the break before the chain's head) keeps the content inside the fragmentainer**. A heading
+with `break-after: avoid` that has content above it on the page always has an allowed Class A break in front of it, so when
+heading and the box after it fit a page the pair moves together and nothing is relaxed: a 5-line paragraph with
+`orphans: 3; widows: 3` stays whole (0 / 5 with the heading on page 2), where Chrome keeps the orphans (3 / 2). The relaxation does start
+where no earlier break helps: the heading is first on its page, or the chain is taller than a page. There Rule 3 gives way first, in Chrome's
+order (Blink ranks a break that violates `break-avoid` below one that violates orphans and widows): 1 / 4, 2 / 3, 3 / 2 and 3 / 2 for room for
+1 to 4 lines after a heading that fills the page, and 60 three-line paragraphs with `break-after: avoid` page 47 / 48 / 48 / 37 lines.
+`avoid-column` constrains no page break (css-break-3 §3.1). Plan `docs/plans/2026-11-02-f215-keep-with-next.md`; tests
+`keep_with_next.rs`, `orphans_widows::a_short_paragraph_after_an_avoid_break_moves_with_its_heading`.
