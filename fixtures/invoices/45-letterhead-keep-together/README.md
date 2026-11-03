@@ -28,3 +28,9 @@ A blank first page is Chrome's output here and is better than the invoice printe
 plain box: page 1 has the header, the parties and 13 rows ("Faktura" at 241.8 pt), page 2 the 14th row, the totals and the thank-you line. 2 pages; pixel diff 4.3 / 5.5 % (worst page 5.5 %).
 
 The test is `letterhead_invoice_moves_whole_to_page_two` in `crates/htmltopdf/tests/fixtures.rs`.
+
+**After F213e:** page 1 is empty and the whole invoice is on page 2 with the thank-you line, like Chrome: 0.0 / 9.2 % (worst page 9.2 %, threshold 10.2 %).
+Page 1 went from 4.3 % to 0; page 2 from 5.5 % to 9.2 %, because the invoice that used to be split is now complete on page 2 and ours paints its box 5.8 pt
+(7.7 px) lower than Chrome: it seats an inline box bottom-on-baseline and Blitz aligns the box's last line there (F183c, not part of F213e; "Faktura" at 49.1 pt,
+Chrome 43.3 pt, while "Děkujeme" is at 693.1 pt, Chrome 693.3 pt). `align-top` does not change ours, and `overflow-hidden` (which gives Chrome a
+bottom-edge baseline) makes the box a clip box that ours then cuts differently, so neither is used.

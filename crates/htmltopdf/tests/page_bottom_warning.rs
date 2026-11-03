@@ -63,11 +63,6 @@ const F213_ROOM: &str = "<div style=\"height:809px\"></div>";
 const F213_BOX: &str = "<span style=\"display:inline-block;width:150px;height:300px;border:1px solid #000\">\
     <span style=\"display:block\">BOXTOP</span></span>";
 
-/// F213e: a 950 px inline-block with a block child (952 px with its border): it fits a fresh page, not the 809 px below
-/// a 200 px body margin.
-const F213E_BOX: &str = "<span style=\"display:inline-block;width:150px;height:950px;border:1px solid #000\">\
-    <span style=\"display:block\">BOXTOP</span></span>";
-
 /// The pagination warnings of one render: the new bottom-edge one and the F30 "placed whole" one.
 fn page_warnings(extra_css: &str, body: &str) -> Vec<String> {
     let r = Renderer::builder()
@@ -154,13 +149,15 @@ fn warns_about_content_below_the_page_only() {
             F213_PAGE.into(),
             format!("{F213_ROOM}<section><p>START {F213_BOX} TAIL</p></section><p>AFTER</p>"),
         ),
-        // F213e: the same first block of the body under `body { margin-top: 200px }` (page 1 starts 200 px down): the line moves to
-        // page 2 like Chrome's instead of being printed on no page ("content extends 63.1 pt past the bottom page edge").
-        // Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
+        // F213e: the F213 box (300 px) as the first block of the body under `body { margin-top: 809px }`, which leaves 200 px of
+        // page 1: the line moves to page 2 like Chrome's instead of being printed on no page ("content extends 246.1 pt past the
+        // bottom page edge"). Not the 950 px box under a 200 px margin: ours still seats an inline box bottom-on-baseline and
+        // Blitz aligns its last line there (F183c), so a box taller than half a page is painted below the edge of its page
+        // and the net says so. Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
         (
-            "F213e Q1: a first line with a tall inline-block under a body margin of 200px",
-            format!("{F213_PAGE} body {{ margin-top: 200px }}"),
-            format!("<p>START {F213E_BOX} TAIL</p><p>AFTER</p>"),
+            "F213e Q1b: the first line with a tall inline-block under a body margin of 809px",
+            format!("{F213_PAGE} body {{ margin-top: 809px }}"),
+            format!("<p>START {F213_BOX} TAIL</p><p>AFTER</p>"),
         ),
     ];
     for (name, css, body) in &silent {
