@@ -63,15 +63,24 @@ const RED60: &[u8] = include_bytes!("data/red60.png");
 
 /// The document of `body`: A4 with 15 mm margins (the engine's default; `@page` says it for Chrome), Inter 14px / 1.2.
 fn document(body: &str) -> String {
+    document_on("size:A4;margin:15mm", body)
+}
+
+/// [`document`] with the `@page` rule `page_css` (F198j-f: the sheet decides where an offset line leaves it).
+fn document_on(page_css: &str, body: &str) -> String {
     format!(
         "<!doctype html><html><head><meta charset=utf-8><style>\
-         @page{{size:A4;margin:15mm}}body{{margin:0;font:14px/1.2 Inter}}p{{margin:0}}\
+         @page{{{page_css}}}body{{margin:0;font:14px/1.2 Inter}}p{{margin:0}}\
          </style></head><body>{body}</body></html>"
     )
 }
 
 fn render(body: &str) -> Vec<u8> {
-    let html = document(body);
+    render_page("size:A4;margin:15mm", body)
+}
+
+fn render_page(page_css: &str, body: &str) -> Vec<u8> {
+    let html = document_on(page_css, body);
     Renderer::builder()
         .font_bytes(inter())
         .unwrap()
@@ -898,6 +907,32 @@ fn assert_boxes_beside_their_words(
     }
 }
 
+/// The shapes of F198j-f with the `@page` rule of their own: name, `@page` body, and the shape's body (dumped like [`SHAPES`]).
+type PageShape = (&'static str, &'static str, fn() -> String);
+
+const PAGE_SHAPES: &[PageShape] = &[
+    ("off_r1", "size:A4;margin:0", || {
+        shape_offset_card(-8, false, 1)
+    }),
+    ("off_r2", "size:A5;margin:10mm", || {
+        shape_offset_card(-40, false, 1)
+    }),
+    ("off_r3", "size:A4;margin:5mm", || {
+        shape_offset_card(-20, false, 1)
+    }),
+    ("off_r4", "size:A4;margin:15mm", || {
+        shape_offset_card(60, false, 5)
+    }),
+    ("off_r5", "size:A4;margin:15mm", || shape_offset_wrapper(20)),
+    ("off_g1", "size:A4;margin:15mm", || {
+        shape_offset_card(100, false, 1)
+    }),
+    ("off_g2", "size:A4;margin:15mm", shape_two_offset_cards),
+    ("off_flat", "size:A4;margin:15mm", || {
+        shape_offset_card(0, false, 1)
+    }),
+];
+
 /// The HTML of every shape of this section (`cargo test --test multicol_boxes -- --ignored dump_chrome_inputs` with
 /// `MCB_DUMP=<dir>` writes them as `<name>.html`, so Chrome can print the same documents the numbers below come from).
 /// A shape's name and the body of its document.
@@ -947,6 +982,15 @@ fn dump_chrome_inputs() {
     // The images are next to the HTML.
     for (name, shape) in SHAPES {
         let html = document(&shape()).replacen("<style>", &face, 1);
+        std::fs::write(
+            std::path::Path::new(&dir).join(format!("{name}.html")),
+            html,
+        )
+        .unwrap();
+    }
+    // F198j-f: the shapes with a sheet of their own.
+    for (name, page_css, shape) in PAGE_SHAPES {
+        let html = document_on(page_css, &shape()).replacen("<style>", &face, 1);
         std::fs::write(
             std::path::Path::new(&dir).join(format!("{name}.html")),
             html,
@@ -1966,8 +2010,9 @@ fn a_line_taller_than_a_page_is_placed_alone_and_the_rest_flows_on() {
     }
 }
 
-/// `shape_rel_shift_with` with every paragraph `position: relative; top: <top>px`, in a plain card or a clip card.
-fn shape_offset_card(top: u32, clip: bool) -> String {
+/// A card of 25 paragraphs of 100 words (`w<first>` on), of which one in every `every` (the `every / 2`-th of each run:
+/// the 3rd, 8th, … for 5; all for 1) is `position: relative; top: <top>px`, in a plain card or a clip card. `top == 0` shifts nothing: the card without the offsets.
+fn offset_card(top: i32, clip: bool, every: usize, first: usize) -> String {
     let card = if clip {
         CLIP_CARD
     } else {
@@ -1975,13 +2020,24 @@ fn shape_offset_card(top: u32, clip: bool) -> String {
     };
     let body: String = (0..25)
         .map(|i| {
+            let shift = if top != 0 && i % every == every / 2 {
+                format!("position:relative;top:{top}px")
+            } else {
+                String::new()
+            };
             format!(
-                "<p style='padding:4px 12px;position:relative;top:{top}px'>{}</p>",
-                words(i * 100, i * 100 + 100)
+                "<p style='padding:4px 12px;{shift}'>{}</p>",
+                words(first + i * 100, first + i * 100 + 100)
             )
         })
         .collect();
-    two_columns(&format!("<div style='{card}'>{body}</div>"))
+    format!("<div style='{card}'>{body}</div>")
+}
+
+/// `shape_rel_shift_with` with every `every`-th paragraph `position: relative; top: <top>px` (F198j-f: `every` is 1 for
+/// all of them).
+fn shape_offset_card(top: i32, clip: bool, every: usize) -> String {
+    two_columns(&offset_card(top, clip, every, 0))
 }
 
 #[test]
@@ -2000,7 +2056,7 @@ fn an_offset_that_would_paint_a_line_off_the_sheet_keeps_every_word() {
         (150, true),
         (300, true),
     ] {
-        let pdf = render(&shape_offset_card(top, clip));
+        let pdf = render(&shape_offset_card(top, clip, 1));
         let found = printed_words(&pdf);
         let mut seen: Vec<usize> = found.iter().filter_map(Word::index).collect();
         seen.sort_unstable();
@@ -2012,6 +2068,251 @@ fn an_offset_that_would_paint_a_line_off_the_sheet_keeps_every_word() {
             "top {top}px, clip card {clip}: every word, once"
         );
     }
+}
+
+// ── F198j-f: the off-sheet fallback bakes only the boxes it can cut ─────────────────────────────────────────
+
+/// A sheet: its width and `@page` margin in pt.
+#[derive(Clone, Copy)]
+struct Sheet {
+    w: f32,
+    margin: f32,
+}
+
+const A4_M15: Sheet = Sheet {
+    w: PAGE_W_PT,
+    margin: MARGIN_PT,
+};
+
+/// Column `0..n` of a word on `sheet`, by its left edge against the middle of the gutters.
+fn column_on(w: &Word, n: usize, sheet: Sheet) -> usize {
+    let col_w = (sheet.w - 2.0 * sheet.margin - (n - 1) as f32 * GAP_PT) / n as f32;
+    let c = ((w.x_min - sheet.margin + GAP_PT / 2.0) / (col_w + GAP_PT)).floor();
+    (c.max(0.0) as usize).min(n - 1)
+}
+
+/// The `wNNNN` word at the top of column `col` (0-based) of page `page` (1-based), as the word with the smallest `y_min`.
+fn first_word_of_column(found: &[Word], sheet: Sheet, page: usize, col: usize) -> Option<usize> {
+    found
+        .iter()
+        .filter(|w| w.page == page && w.index().is_some() && column_on(w, 2, sheet) == col)
+        .min_by(|a, b| {
+            a.y_min
+                .total_cmp(&b.y_min)
+                .then(a.x_min.total_cmp(&b.x_min))
+        })
+        .and_then(Word::index)
+}
+
+/// `w0000 … w<total-1>` exactly once each, in any order (an offset line can lie beside the lines of its neighbour, so the
+/// reading order of [`column_major`] is not the order of the text), and nothing else with an index.
+fn assert_each_word_once(what: &str, found: &[Word], total: usize) {
+    let mut seen = vec![0_usize; total];
+    for i in found.iter().filter_map(Word::index) {
+        assert!(i < total, "{what}: w{i:04} is not a word of the shape");
+        seen[i] += 1;
+    }
+    let missing: Vec<usize> = (0..total).filter(|&i| seen[i] == 0).collect();
+    let twice: Vec<usize> = (0..total).filter(|&i| seen[i] > 1).collect();
+    assert!(
+        missing.is_empty() && twice.is_empty(),
+        "{what}: {} of {total} words missing (first {:?}), {} printed twice (first {:?})",
+        missing.len(),
+        &missing[..missing.len().min(8)],
+        twice.len(),
+        &twice[..twice.len().min(8)],
+    );
+}
+
+/// Oracle (b) for the words printed both with and without the offsets: same page, same x, and `dy_of(text)` pt lower
+/// (±0.01). Returns how many words it compared. A relative offset does not move the layout (CSS 2.1 §9.4.3).
+fn assert_shift_oracle_common(
+    what: &str,
+    flat: &[Word],
+    shifted: &[Word],
+    dy_of: impl Fn(&str) -> f32,
+) -> usize {
+    let (flat, shifted) = (by_text(flat), by_text(shifted));
+    let mut compared = 0;
+    for (text, f) in &flat {
+        let Some(s) = shifted.get(text) else { continue };
+        let dy = dy_of(text);
+        assert_eq!(s.page, f.page, "{what}: {text} is on another page");
+        assert!(
+            (s.x_min - f.x_min).abs() <= 0.01,
+            "{what}: {text} at x {:.2}pt, {:.2}pt without the offset",
+            s.x_min,
+            f.x_min
+        );
+        assert!(
+            (s.y_min - f.y_min - dy).abs() <= 0.01,
+            "{what}: {text} at y {:.2}pt, {:.2}pt without the offset: it should move by {dy}pt",
+            s.y_min,
+            f.y_min
+        );
+        compared += 1;
+    }
+    compared
+}
+
+/// The index of a `wNNNN` word.
+fn word_number(text: &str) -> Option<usize> {
+    let t = text.strip_prefix('w')?;
+    (t.len() == 4).then(|| t.parse().ok()).flatten()
+}
+
+/// R1 to R4: the card with the offsets prints every word once, on Chrome's number of pages, each at its static place
+/// plus the offset (oracle b against the same card without the offsets on the same sheet).
+fn check_offset_card(
+    what: &str,
+    page_css: &str,
+    (top, every): (i32, usize),
+    chrome_pages: usize,
+    dy_of: impl Fn(usize) -> f32,
+) {
+    let pdf = render_page(page_css, &shape_offset_card(top, false, every));
+    let found = printed_words(&pdf);
+    assert_each_word_once(what, &found, 2500);
+    assert_eq!(page_count(&pdf), chrome_pages, "{what}: pages like Chrome");
+    let flat = printed_words(&render_page(page_css, &shape_offset_card(0, false, 1)));
+    let compared =
+        assert_shift_oracle_common(what, &flat, &found, |t| word_number(t).map_or(0.0, &dy_of));
+    assert_eq!(compared, 2501, "{what}: 2500 words and AFTER compared");
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn a_negative_offset_at_margin_zero_keeps_its_shift_and_every_word() {
+    // R1. `@page { margin: 0 }`, every paragraph `top: -8px` (6 pt): the first line of a page is painted 6 pt above the sheet.
+    // Words missing of 2500, pages (A4, Inter 14px / 1.2, 25 paragraphs of 100 words; Chrome m153 and the binaries of the F198j-f sweep):
+    // main (before F198j) 2058, 2 pages; F198j (58c78ae2) 0, 3; head (fork b81c6782) 2058, 2; Chrome 0, 3.
+    // Red on head: the fallback removes the card from the cut boxes (no baked description: the first paragraph is above the card's
+    // border) and places it whole.
+    check_offset_card("R1", "size:A4;margin:0", (-8, 1), 3, |_| -6.0);
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn a_large_negative_offset_on_a5_keeps_its_shift_and_every_word() {
+    // R2. A5 with 10 mm margins (28.3 pt), every paragraph `top: -40px` (30 pt): more than the margin.
+    // main 2316, 2 pages; F198j 0, 8; head 2316, 2; Chrome 16 (it drops the lines it moves off the sheet), 8. With 15 mm margins
+    // (42.5 pt) the shift stays on the sheet and head is green; at 10 mm it is not.
+    check_offset_card("R2", "size:A5;margin:10mm", (-40, 1), 8, |_| -30.0);
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn a_negative_offset_with_narrow_margins_keeps_its_shift_and_every_word() {
+    // R3. A4 with 5 mm margins (14.2 pt), every paragraph `top: -20px` (15 pt).
+    // main 2094, 2 pages; F198j 0, 4; head 2094, 2; Chrome 12, 4.
+    check_offset_card("R3", "size:A4;margin:5mm", (-20, 1), 4, |_| -15.0);
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn an_offset_on_every_fifth_paragraph_keeps_its_shift_and_every_word() {
+    // R4. A4 15 mm, paragraphs 3, 8, 13, 18 and 23 (counting from 1) are `top: 60px` (45 pt, more than the 42.5 pt margin).
+    // main 2140, 2 pages; F198j 0, 4; head 2140, 2; Chrome 0, 4. The card has no baked description: a paragraph is above the last
+    // line of the one before it. (Counting the shifted paragraph as the last of each five, 5th, 10th, ..., the shift is painted
+    // and head is green: the lines at a column's foot stay on the sheet.)
+    check_offset_card("R4", "size:A4;margin:15mm", (60, 5), 4, |i| {
+        if (i / 100) % 5 == 2 { 45.0 } else { 0.0 }
+    });
+}
+
+/// R5: a `CARD` that holds a wrapper `position: relative; top: <top>px` with 300 words, one 60 x 1200 px image (a line taller
+/// than a page) and 300 words, then a paragraph of 600 words: 1200 words.
+fn shape_offset_wrapper(top: i32) -> String {
+    let shift = if top != 0 {
+        format!("position:relative;top:{top}px")
+    } else {
+        String::new()
+    };
+    two_columns(&format!(
+        "<div style='{CARD}'><div style='{shift}'>{} <img src='red60.png' style='width:60px;height:1200px'> {}</div>\
+         <p>{}</p></div>",
+        words(0, 300),
+        words(300, 600),
+        words(600, 1200)
+    ))
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn a_shifted_wrapper_around_a_tall_line_keeps_its_shift_and_the_rest_flows_on() {
+    // R5. The wrapper's 600 words are 15 pt lower than in the flat card; the line with the image is taller than a page and
+    // stands alone at the top of a column (ADR-0004: a line is not sliced), so the words on its baseline, below the page edge,
+    // are lost: at most 5 (Chrome: 0, it slices the line). Every other word is printed once.
+    // main 902 of 1200, 2 pages; F198j 4, 3; head 902, 2; Chrome 0, 3.
+    let pdf = render(&shape_offset_wrapper(20));
+    let found = printed_words(&pdf);
+    let window = tall_line_windows(300, 1).remove(0);
+    let missing: Vec<usize> = (0..1200)
+        .filter(|i| !found.iter().any(|w| w.index() == Some(*i)))
+        .collect();
+    assert!(
+        missing.iter().all(|i| window.contains(i)) && missing.len() <= 5,
+        "R5: {} words missing, at most 5 and all on the tall line {window:?}: {:?}",
+        missing.len(),
+        &missing[..missing.len().min(12)]
+    );
+    let mut seen: Vec<usize> = found.iter().filter_map(Word::index).collect();
+    let printed = seen.len();
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), printed, "R5: no word twice");
+    for w in &found {
+        assert!(w.y_max <= PAGE_H_PT, "R5: {} is below the sheet", w.text);
+    }
+    assert_eq!(page_count(&pdf), 3, "R5: pages like Chrome");
+    let flat = printed_words(&render(&shape_offset_wrapper(0)));
+    let compared = assert_shift_oracle_common("R5", &flat, &found, |t| match word_number(t) {
+        Some(i) if i < 600 => 15.0,
+        _ => 0.0,
+    });
+    assert!(compared >= 1200 - 5, "R5: {compared} words compared");
+}
+
+#[test]
+fn guard_a_uniform_offset_that_leaves_the_sheet_is_still_planned_in_the_flow() {
+    // G1. Every paragraph `top: 100px` (75 pt, off the 42.5 pt margin): main's description of the box exists, so the fallback
+    // takes it, as it does today. Missing of 2500: main 0, F198j 85, head 0, Chrome 0 (it prints 6 words twice). Column 2 of
+    // page 1 starts with w0306 on main and head (the offsets are in the flow), w0342 on F198j and in Chrome, as in the card
+    // without offsets. The first of the two is what this test pins.
+    let found = printed_words(&render(&shape_offset_card(100, false, 1)));
+    assert_each_word_once("G1", &found, 2500);
+    let flat = printed_words(&render(&shape_offset_card(0, false, 1)));
+    assert_eq!(
+        first_word_of_column(&flat, A4_M15, 1, 1),
+        Some(342),
+        "G1: the flat card"
+    );
+    assert_eq!(
+        first_word_of_column(&found, A4_M15, 1, 1),
+        Some(306),
+        "G1: page 1, column 2 of the baked card"
+    );
+}
+
+/// G2: G1's card and R4's card in one container, the second numbered on from w2500.
+fn shape_two_offset_cards() -> String {
+    two_columns(&format!(
+        "{}{}",
+        offset_card(100, false, 1, 0),
+        offset_card(60, false, 5, 2500)
+    ))
+}
+
+#[test]
+#[ignore = "F198j-f: red until the fork fix"]
+fn in_one_flow_a_card_main_could_cut_is_baked_and_one_it_could_not_keeps_its_shift() {
+    // G2. One multi-column container, two tall cards: G1's (every paragraph `top: 100px`; it bakes) and R4's (paragraphs
+    // 3, 8, ... `top: 60px`; no baked description), the second numbered on from w2500. Per box: the first is baked, the second
+    // keeps its painted pieces, and every one of the 5000 words is printed once. Missing of 5000: main 2140, F198j 95 (all of the
+    // first card), head 2140 (the second card is placed whole), Chrome 0; pages 6, 8, 6, 8 in that order. An all-or-nothing
+    // rule (bake only when every box can be baked) is F198j's 95 here.
+    let found = printed_words(&render(&shape_two_offset_cards()));
+    assert_each_word_once("G2", &found, 5000);
 }
 
 // ── G. guards of F198j: what works today stays ───────────────────────────────────────────────────────────────
