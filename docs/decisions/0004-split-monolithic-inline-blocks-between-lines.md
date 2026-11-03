@@ -49,8 +49,8 @@ content taller than the fragmentainer is sliced). Measured with Chrome m153 (F21
 `inline-table` alone on its line, auto height with 15 block children, a fixed or `min-height` box, with 120 px of room, is on
 page 2 as a whole; ours (before) split an auto box between its children and left a fixed box with a short child on page 1,
 painted below the edge and printed nowhere. So an `inline-block` / `inline-table` alone on its line is not entered when
-the carrier fits a fresh page (height at most a page plus one pixel) and its content ends inside it
-(`content_ends_inside`, the walk of `clip_hides_nothing`); the split between its lines stays for a box taller than a page and
+the carrier fits a fresh page as its wrappers hold it (its height at most the page less the block-axis padding and border of its ancestors, with no slack: a box in the last pixel of a page does not fit, and a wrapper would place it whole below the page edge) and its content ends inside it
+(`content_ends_inside`, the walk of `clip_hides_nothing`, where the margin below the last child is not content: Blitz's auto height omits it); the split between its lines stays for a box taller than a page and
 for one whose content overflows it visibly (the overflow would stay behind). The box taller than a page with a short child
 (a fixed 1200 px box with one line) is not split either way and is lost, with a warning (F213d-b).
 
