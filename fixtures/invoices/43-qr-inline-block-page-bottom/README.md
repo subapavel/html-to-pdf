@@ -29,3 +29,7 @@ on no page (the renderer warns "content extends 24.9 pt past the bottom page edg
 The test is `qr_inline_block_invoice_moves_the_whole_payment_line_to_page_two` in `crates/htmltopdf/tests/fixtures.rs`; the bare shapes are in
 `tall_inline_box_line.rs`. Every class is in the compiled `fixtures/tailwind/tailwind.css`. Plan:
 `docs/plans/2026-11-03-f213-text-beside-tall-inline-block.md`.
+
+**After F213:** the whole line is on page 2 with its box ("Zaplaťte" at 170.3 pt, Chrome 156.3 pt; "Děkujeme" at 200.3 pt, Chrome 200.5 pt), page 1 ends with the total and a gap
+below it, 2 pages, no warning; 3.7 / 1.4 % (worst 3.7 %, threshold 4.7 %). The line and its box sit 14 pt (18.7 px) lower than Chrome's: ours seats an inline box bottom-on-baseline and
+Blitz places a box with in-flow content by its last line (F183c, not part of F213). The pixel diff hardly moved because the lost line is small; the words test is what changed.
