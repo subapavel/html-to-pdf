@@ -447,3 +447,30 @@ fn f213e_c3_a_first_line_under_an_at_page_first_margin_is_split_not_moved() {
     assert_on_page(&words, 1, &["START", "BOXTOP", "TAIL"]);
     assert_on_page(&words, 2, &["AFTER"]);
 }
+
+#[test]
+fn f213e_alone_box_under_a_body_margin_moves_to_page_two() {
+    // An `inline-block` alone on its line (a block child `BOXTOP`) as the first block of the body, `<p>[box]</p><p>AFTER</p>`,
+    // under `body { margin-top: M }`: 300 px under 809, 600 px under 500, 843 px under 265 (fixture 45's shape). Each box fits a
+    // fresh page and not page 1. Chrome: page 1 empty, BOXTOP at 41.7 pt and AFTER at 267.4 / 492.4 / 674.7 pt on page 2, 2 pages.
+    // Before (fork b81c6782, F213d HIGH-1b): `ancestor_insets` counted the body margin, the box "did not fit its page" and kept the
+    // F30f split: it hung below the content box and was printed on no page ("content extends 248 / 467 / 655 pt past the bottom
+    // page edge"). The y of BOXTOP is not compared (F183c). Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
+    for (m, h) in [(809, 300), (500, 600), (265, 843)] {
+        let pdf = render_css(
+            &format!("body{{margin-top:{m}px}}"),
+            &format!(
+                "<p><span style=\"display:inline-block;width:150px;height:{h}px;border:1px solid #000\">\
+                 <span style=\"display:block\">BOXTOP</span></span></p><p>AFTER</p>"
+            ),
+        );
+        let words = printed_words(&pdf);
+        assert_eq!(
+            words.len(),
+            2,
+            "M {m}, box {h}: BOXTOP and AFTER printed once each: {words:?}"
+        );
+        assert_on_page(&words, 2, &["BOXTOP", "AFTER"]);
+        assert_eq!(page_count(&pdf), 2, "M {m}, box {h}: two pages like Chrome");
+    }
+}
