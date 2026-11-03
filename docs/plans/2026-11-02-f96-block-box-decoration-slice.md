@@ -418,3 +418,70 @@ touches `fragment_block_subtree` at 5257, 5757-5769, 5876, 5908, 5930 and 5986 (
 and the end of the function come after F215's last hunk there, so the plan's edits (entry, before `closing`, after the final push)
 should not conflict textually; the function's line numbers move by about 130. Re-read the function on top of `7a79be15` before
 step 3 and add fixture 41 to the gates when it is in `main`.
+
+### Steps 3-5: fork, byte gates, compare (2026-11-03)
+
+Fork `htmltopdf/srgb-colours`: `abcd5217` (the fragmenter and renderer; on top of F215 `7a79be15`) and `ffdf0c49` (the new helpers had been
+inserted inside `fragment_block_subtree`'s doc comment; moved after `has_page_name_change_below`, no code change). The doc comment
+that sits above `RowState` on `d5b4a994` was already misplaced there and was left as it is. html-to-pdf `Cargo.lock` follows `ffdf0c49`.
+
+**Fork gates:** `cargo test -p fulgur --lib` 2519 passed; `cargo test -p fulgur --tests --no-fail-fast` (44 test binaries, the lib
+included) all passed; `cargo clippy -p fulgur --all-targets -- -D warnings` and `cargo fmt --check` clean. Run with the Blitz / Taffy / Parley fork
+overrides of the html-to-pdf `Cargo.toml`.
+
+**Red to green** (`cargo test --release --locked -p htmltopdf --test block_box_slice --test fixtures`): tests 1-5 of
+`block_box_slice.rs` (P1 `card_around_a_split_paragraph_is_open_at_the_break`, P3 `background_runs_to_the_cut_and_the_shadow_stops_there`,
+`corners_are_square_at_the_cut_and_round_elsewhere`, P2 `what_follows_a_box_split_between_children_starts_below_its_bottom_inset`, P4
+`nested_boxes_are_both_open_at_the_break`) and `terms_card_clauses_invoice_slices_both_cards`. The pinned text-layer test (6) and the four
+guards (F96b-e) stayed green. New in this step: `outer_frame_ends_at_the_content_bottom_not_in_the_margin` (P4 and fixture 42: the side
+borders reach row 1065 and none is inked from row 1067 down; the coordinator's "+-1 px" check). It is red on `7a79be15` (fixture 42 page 1: the card's
+side runs to row 1122) and green now (the side ends at row 1066, as the reference does).
+
+**Byte gate** (`htmltopdf-f215d`, fork `7a79be15`, against `htmltopdf-f96`, fork `ffdf0c49`; 40 fixtures + 7 corpus documents; 1 and 4
+rayon threads: identical to each other for both binaries):
+
+| Moved | Why |
+|---|---|
+| 06, 08, 16 | paint only; `text_layer_of_line_split_cards_does_not_move` pins the text layer |
+| 42 | new (base has no fixture 42 reference run; the base binary renders it with closed frames) |
+| `b200-mixed` | **198 -> 199 pages, which the plan said must not happen, and is the right number**: the first difference is on page 3, where "Bankovní účet" after a clip card that splits stands 1 px (0.75 pt) lower (277.60 -> 278.35 pt), the card's bottom border that `closing` now counts. Chrome 153 prints `b200-mixed` with 199 pages (F30c-n's note said "Chrome 199" too) and puts that line at 278.58 pt. The drift accumulates over the 181 cards and moves the last unit to a new page. Page counts of all 47 documents are otherwise unchanged. |
+
+Identical: 01-05, 07, 09-15 (**15 included**: the relative wrapper with `padding-bottom:2.5rem` did not move), 17-39, `b200-items`,
+`b200-text`, the four `slow-*` documents. No moved document is outside the plan's table.
+
+**compare.py** (`HTMLTOPDF_BIN` = each binary, `scripts/render-fixtures.sh`, then `compare.py`): worst page, before -> after, per page:
+
+| Fixture | Before | After |
+|---|---|---|
+| 06 | 10.69 / 11.80 % | 10.61 / 11.80 % |
+| 08 | 8.20 / 12.10 % | 8.20 / 12.10 % (identical to the digit: the frame lines are light grey, under the metric's tolerance) |
+| 16 | 9.53 / 12.90 % | 9.45 / 12.90 % |
+| 42 | 5.7 / 12.1 % | 5.7 / 5.9 % |
+
+The thresholds of 06, 08 and 16 stay (the worst page did not improve). 42: 0.069 (5.86 + 1 point, comment in `compare.py`). The side-by-side PNGs
+of 06 p1 / p2, 08 p1, 16 p2 and 42 p1 / p2 were looked at: the cut cards are open at the break with the sides to the content bottom, the corners at the cut are
+square, the closing frames on page 2 carry the bottom border and radius like Chrome's, and the payment block of 42 is where Chrome has it.
+`compare.py --threshold-check` passes.
+
+**Bench** (`bench.py --check`, this host, 4x Xeon 2.80 GHz, `htmltopdf-f96`): ok. Median ms: `b200-items` 1265 (210 pages), `b200-text` 744, `b200-mixed` 802 (199 pages); every fixture
+under 35 ms; start-up 2.8 ms; scaling r = 3.98. Interleaved 9-run medians, base against new: `b200-mixed` 830 / 805 against 785 / 794 ms, `02-long` 39.7 / 32.8 against
+32.0 / 33.5 ms, 42 21.7 / 21.7 against 20.0 / 19.9 ms: no slowdown beyond the noise.
+
+**`fulgur-vrt`** (`f183-vrt.sh`, base `7a79be15` against `ffdf0c49`, the host's goldens): 35 of 64 fixtures differ from their goldens on both, and they are the same 35. Of those, two
+outputs changed between the base and F96: `bugs/grid-row-promote-background` and `gcpm/string-set`. Text layers identical; the pixel difference is only the cut rows of the card
+that crosses the break (bottom of page 1, top of page 2). Neither golden is re-blessed here: both already differ from their golden on this host for font reasons, and a golden
+written on this host would pin the host's bytes (see `docs/upstream.md`, "Fork VRT goldens"). No golden that passes on this host moved (examples/break-inside, mo-006 and mo-008 are unchanged).
+
+**For `pdf-reviewer`: what changes in frame painting.** No new operator, font, metadata or structure. The same paint calls run with different edges and heights:
+1. `render.rs::frame_fragment`: a new branch for `geom.block_slice && geom.is_split()` returns `FrameEdges { top_open: !is_first, bottom_open: !is_last }` (judged by page index). The frame
+   rectangle itself is the fragment's, unchanged by the renderer.
+2. Every block paint path already reads `frame_fragment` and `sliced_style` (generic dispatch incl. `<li>`, `draw_under_clip`, `draw_under_opacity`, the transform path): the border is drawn as
+   open segments (`open_rounded_border_segments`, F30f-d), the radius is dropped at open corners (square corners at a cut), the background is clipped to the fragment, and the box shadow
+   uses `draw_sliced_box_shadow` (no shadow past a cut edge). An `overflow` clip is the fragment's padding box.
+3. Fragment heights (fragmenter side): every fragment but the last runs to `PageStrips::chrome_bottom` (up to 0.87 px into the bottom margin, as F30f-d's sliced paragraphs); the page-0 frame that
+   used to run to `fresh()` (row 1122, into the margin) now ends there too; the last fragment includes the bottom padding and border (`closing`).
+4. Boxes outside `block_slices_at_breaks` (block size, float, transform, abspos and what is in it, multicol, table parts, atomic inlines, inline roots, frameless boxes, `<body>`, `<html>`) keep their
+   frames, byte for byte (byte gate and `boxes_outside_f96_keep_their_frames`).
+The moved PDFs are 06, 08, 16, 42 and `b200-mixed` (`gate/new-1` in the session scratch).
+
+**Not verified:** the Chrome pixel agreement of 06 / 08 / 16 beyond the compare numbers above (no new Chrome run of them; `b200-mixed` was re-run in Chrome m153: 199 pages, "Bankovní" 278.58 pt); `box-decoration-break: clone` (not supported by Stylo here); the fork's own VRT job in the pinned font environment; `vrt-validator` and `pdf-reviewer` (run by the coordinator); a merge with F215 (PR #86) and fixture 41 in the gates.
