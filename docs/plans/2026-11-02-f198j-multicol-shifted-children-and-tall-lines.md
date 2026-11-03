@@ -162,4 +162,82 @@ The PNG must show:
   - `sticky` (mirrors Taffy);
   - F198c–i, F198k, F173(f), F174c.
 
-## 8. To be filled in after implementation
+## 8. Step 1 and 2 results, and where the plan does not fit the current fork (2026-11-03)
+
+Measured on main `c8f2e07` (fork `ffdf0c49`, which has F30c-n, F30c-o3, F215 and F96 on top of the plan's `0feb944f`) with Chrome (version of
+the committed references). Probes are not committed; the shapes of the tests are, and `dump_chrome_inputs` writes their HTML.
+The fork was not edited, so the scratch dump of the refusals in `mc_box_at` (step 1) was **not** done: each cause is isolated by a control
+instead (the same HTML with the one property removed prints every word), which shows what the refusal is caused by but not that the
+refusal is the `mc_box_at` check named below.
+
+### 8.1 Repros: Chrome and main
+
+Words per page as column 1 + column 2; "main" is the binary of main with the old path (one box placed whole, warned).
+
+| shape | main | Chrome | the plan said |
+|---|---|---|---|
+| `r_rel` (strips `top:3px`, with icons) | 2 pages, 330 / 2100 | 4 pages, all 2100 | 330, all: as planned |
+| `x_relshift` | 2 pages, 354 / 2500 | 4 pages, 2536 printed (36 words twice: a line cut by a column or page edge shows on both sides), first words 0, 330 / 672, 1012 / 1367, 1700 / 2042, 2272, `AFTER` p. 4 at 549.3 pt | "all (read, pp. 1-2)": it prints some twice, which the plan only noted for the cut line |
+| `x_negmargin` | 2 pages, 360 / 2500 | 4 pages, all 2500 | 360, all: as planned |
+| `im1200_pl` / `_cl` | 298 / 300 of 1810 | 7 pages, all 1810. Page 1 column 2 is empty: the tall line stands alone in it and its words (4 to 6, on the baseline) are printed in column 2 of page 2 | as planned (298, 7 pages) |
+| `edge1006` | 6 pages, all 1200, like Chrome | 6 pages | works: as planned |
+| `edge1007`, `1008`, `1009`, `1010`, `1011`, `1012` | 2 pages, 198 / 1200 (233 for the test's variant), warned | 6 pages, all 1200; 1011 and 1012 print 25 words twice | the plan lists 1008 to 1012; 1007 and 1011 refuse as well, so the threshold is a line taller than `fresh + 1` = 1010.1 px: 1000 px (`t_im1000`) works |
+
+Test shapes (`multicol_boxes.rs`, F198j section): `relstrips` 2100 words (Chrome 4 pages, first words 0, 306 / 612, 924 / 1240, 1543 / 1848, 1974,
+`AFTER` p. 4 at 338.6 pt), `relshift`, `negmargin` (4 pages; 0, 342 / 690, 1036 / 1391, 1737 / 2084, 2290; `AFTER` 502.8 pt), `fullbleed` (4 pages; 0, 330 /
+671, 1012 / 1366, 1718 / 2071, 2290; 508.8 pt), `im1200_*` (7 pages), `edge1008` / `1010` / `1012` (6 pages). Main prints 330, 354, 360, 347, 298 / 300,
+233 words of those.
+
+### 8.2 Does each shape still lose words on main after F96 and F215?
+
+Yes, all three, with the same numbers as before. F96's `block_slices_at_breaks` excludes everything below a multicol container (its doc
+comment names F198's `piece_edges`) and F215 only moves headings; neither touches `mc_box`.
+
+Controls (each prints every word on main, 4 pages for the 2500-word ones): `relshift` without `top` (the same text, 330 / 342 / ...),
+`position: relative` alone, `margin-top: 6px`, the full-bleed card with its margins 0, the 1000 px image.
+
+- Relative offset: `top:3px` on the strips (`s_static3`, `r_rel`), `bottom:3px` (the first child's gap is -3), `left:-8px` (`cx < -0.5`) and
+  `top:-12px` all lose words. Both halves of the full-bleed header refuse on their own: `margin:0 -16px` (cx -16) and `margin-top:-16px`
+  (gap -16): 275 and 281 of 2400 words, both together 281.
+- Negative margin: `margin-top:-6px` refuses (360 words), `-40px` (the "pulled up" guard) too (418).
+- Tall line: refuses above 1010.1 px.
+
+### 8.3 What the plan missed
+
+1. **Positive offsets are not refused today; they are baked into the flow.** `top:12px` on every paragraph passes: the first one's gap grows by
+   12 px, the others keep theirs, so every word is printed, but the column breaks fall 12 px later than Chrome's (first words 324 / 666 / 1006 where Chrome
+   and the flat layout have 330 / 672 / 1012), and `left:8px` is drawn by moving the item's `x` (right, 6 pt like Chrome's). `position:relative; top:4px;
+   bottom:20px` (top wins) and `left:5%` behave the same way, `top:10%` is 0 (also Chrome's). §4.3 changes all of these to "static layout plus a painted
+   shift", which is Chrome's behaviour, so their bytes **move** (6 words per column back to Chrome's). §5's byte gates must list them under "may move"
+   (whether a committed fixture, a corpus document or a sweep file has one was **not** checked here: step 1's scratch dump has to say, and the step
+   that does §4.3 re-checks with the byte gates). The plan's sentence "`position: relative` without an offset adds nothing, which is why it works today" is right and is the
+   guard `guard_position_relative_without_an_offset_changes_nothing`; a uniform offset also "works", wrongly.
+2. **`position: static; top: 3px` is shifted by Blitz**, as §3 suspected: the first word is 2.25 pt low against Chrome's flat layout. In a cut box it
+   refuses like `r_rel` (330 words). Out of scope (non-goal list), but `mc_relative_offset` ("static plus `top` mirrors Taffy") will paint the shift where
+   Chrome draws none; the test for it is not written.
+3. **Chrome prints shifted lines twice at an edge** (2536 words for `x_relshift`; 2506 for `top:12px`): "every word once" is our rule, not Chrome's.
+4. **Line numbers.** The multicol code of `pagination_layout.rs` is untouched between `0feb944f` and `ffdf0c49` except for a shift of +1 line
+   around `mc_box_at` and nothing else in the region: `McBox` 274, `McFrame` 318, `AtomCtx` 343, `lead_trail` 370, `push_box` 464 (call sites 524, 784, 787
+   instead of 523, 783, 786), `mc_box_first_unit` 538, `fill_multicol_columns` 589 (the `McPiece` pushes at 608, 683, 691-694, 727), `mc_line_advances` 1230
+   (the refusal at 1235), `mc_box_at` 1355 (the `lead < -1.5 || cx < -0.5` check at 1415), `record_multicol_row` 2047, `PaginationGeometry` 2419 (it derives
+   `Default`, so a `piece_slack` field needs no new constructor; F96 added `block_slice` next to `piece_edges`). `resolve_viewport_cb_location` moved from 9561
+   to 10644. In `render.rs` the lines the plan names are exact (`draw_under_clip` 2624, the window at 2757-2759, the filters at 2102 and 2918) and
+   `convert_paged_multicol_slices` is at `convert/mod.rs:943` with the slice origin at 1003. F96's `frame_fragment` branch (`block_slice`) does not apply to pieces:
+   `piece_edges` is checked first (`render.rs:3755`).
+5. **Test details that differ from §5.** The oracle needs unique words, so the strips print `S000` ... and the icons of `r_rel` are left out; the strip
+   background is measured at 288 dpi to ±0.3 pt, not ±0.1 pt (poppler snaps the edge of a filled rectangle to the pixel grid: 2.0 pt at 144 dpi for the true
+   2.25), the shifted text itself is held to ±0.01 pt by the oracle; the words on a tall line are checked against the sheet's bottom (841.9 pt), not the
+   content box, because the baseline of an `edge` line is, by arithmetic and not yet measured, 2 to 6 pt below the content box and still on the sheet; the warning guard is its own test file
+   (`multicol_shifted_warning.rs`: the logger is global to the process); the numbers of the older F198b tests in `multicol_boxes.rs` stay Chrome 141's.
+6. **Open claim.** §4.1's "everything after the line is kept" and the `edge1008` to `edge1012` "every word once" are asserted by the red test and not
+   yet shown: if the engine keeps a line alone at a column top the baseline words land at about 798 to 806 pt (estimated: image bottom plus the descent), on the sheet, so they should print.
+
+### 8.4 State after step 2 (red)
+
+Red on main: `a_relatively_offset_child_keeps_its_offset_and_every_word` (330 of 2100), `a_child_with_a_negative_margin_is_cut_like_the_others`
+(360 of 2500), `a_line_taller_than_a_page_is_placed_alone_and_the_rest_flows_on` (1512 missing), `terms_card_strips_columns_invoice_prints_every_clause`
+(fixture 40). Green on main (guards): `guard_position_relative_without_an_offset_changes_nothing`, `guard_a_child_pulled_above_the_previous_line_keeps_the_old_path`
+(418 of 2500, 2 pages), `a_child_pulled_above_the_previous_line_is_warned_about_and_a_plain_card_is_not`, and every older test of the files.
+
+Fixture `40-terms-card-strips-columns` on main: 2 pages like Chrome's but 290 of 945 words (page 2 holds 9), compare 7.8 / 8.6 %, one warning. Its
+threshold in `scripts/compare.py` is 0.096 (the red state's number + 1 point) and drops to the earned number + 1 point with the fix.
