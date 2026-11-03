@@ -33,3 +33,7 @@ check does not follow. Pixel diff 3.5 % (page 1), page 2 absent (0.4 % against C
 The test is `signature_box_invoice_moves_the_whole_box_to_page_two` in `crates/htmltopdf/tests/fixtures.rs`; the bare shapes are in
 `alone_inline_block_line.rs`, the warnings in `page_bottom_warning.rs` and `no_unpainted_content.rs`. Every class is in the compiled
 `fixtures/tailwind/tailwind.css`. Plan: `docs/plans/2026-11-03-f213d-alone-inline-block-lost.md`.
+
+**After F213d (main 5c04d20 + fork 62216d9):** the whole box is on page 2 (border, caption, stamp, name; "RAZÍTKO" at 147.1 pt, Chrome 55.8 pt; the name at 231.8 pt, Chrome 140.5 pt), page 1 ends with the thank-you
+line ("Děkujeme" at 645.8 pt, Chrome 646.0) and a gap below it, 2 pages, no warning. The box sits 91.3 pt (121.7 px) lower than Chrome's: a fixed-height box with in-flow content hangs below its line by about its free
+space (F183c, not part of F213d). 3.3 / 0.8 % (before 3.5 / 0.4 % with one page), threshold 4.3 %.
