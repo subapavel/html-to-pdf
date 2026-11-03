@@ -191,9 +191,9 @@ fn warns_about_content_below_the_page_only() {
             ),
         ),
         (
-            "F213d Q2: a 600 px box, room 120",
+            "F213d Q2: a 400 px box, room 120",
             F213_PAGE.into(),
-            format!("{}{}", f213d_room(120), f213d_box(600, F213_BOXTOP)),
+            format!("{}{}", f213d_room(120), f213d_box(400, F213_BOXTOP)),
         ),
         (
             "F213d Q3: an auto-height box of 15 block children, room 120",
@@ -307,6 +307,20 @@ fn warns_about_content_below_the_page_only() {
             "F213d Q10, a box alone on its line taller than a page, {name}: no warning"
         );
     }
+
+    // F183c, a known residual loss the net now sees: a fixed-height box with in-flow content is painted hanging below its line
+    // by about its free space (ours seats an inline box bottom-on-baseline, Blitz places the box by its last line). A box of 600 px
+    // moved to page 2 by F213d (Chrome: the whole box at the top of page 2) is painted down to 90.9 pt below the edge of page 2,
+    // so the bottom of the box is printed on no page. The fix is F183c, not F213d; the net says so until then.
+    let w = page_warnings(
+        F213_PAGE,
+        &format!("{}{}", f213d_room(120), f213d_box(600, F213_BOXTOP)),
+    );
+    assert!(
+        w.iter()
+            .any(|m| m.contains("past the bottom page edge on page 2")),
+        "F183c, a fixed 600 px box moved to page 2: {w:?}"
+    );
 
     // A transformed body is a split barrier: kept whole, and the pagination warning names the box.
     let w = page_warnings("body { transform: translateX(0) }", &lines(200));
