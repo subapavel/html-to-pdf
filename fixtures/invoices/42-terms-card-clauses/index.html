@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0042</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<header class="flex items-start justify-between border-b-2 border-gray-900 pb-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold tracking-tight">Faktura</h1>
+    <p class="text-sm text-gray-600">Daňový doklad č. <span class="font-semibold text-gray-900">2026-0042</span></p>
+  </div>
+  <div class="text-right text-sm">
+    <p><span class="text-gray-500">Vystaveno:</span> 2. 11. 2026</p>
+    <p><span class="text-gray-500">Splatnost:</span> 16. 11. 2026</p>
+  </div>
+</header>
+
+<section class="grid grid-cols-2 gap-8 mb-6 text-sm">
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dodavatel</h2>
+    <p class="font-semibold">Příkladná integrace s.r.o.</p><p>Krátká 12, 541 01 Trutnov</p><p>IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div>
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Odběratel</h2>
+    <p class="font-semibold">Zákazník a syn, a.s.</p><p>Dlouhá třída 1234/5, 110 00 Praha 1</p><p>IČO 87654321 · DIČ CZ87654321</p>
+  </div>
+</section>
+
+<table class="w-full text-sm mb-4">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace integrace SAP PO → Integration Suite</td>
+      <td class="py-2 px-2 text-right tabular-nums">8 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">20 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Vývoj iFlow – příjem objednávek (EDIFACT ORDERS)</td>
+      <td class="py-2 px-2 text-right tabular-nums">24 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">52 800,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold mb-6">Celkem k úhradě <span class="tabular-nums ml-1">88 000,00 Kč</span></p>
+
+<!-- Obchodní podmínky: bordered, filled card of short clauses (each one stays whole) with a second bordered box nested in it.
+     The page break falls between two clauses of the nested box, so both boxes are split between children. -->
+<section class="rounded-lg border border-gray-300 bg-gray-50 p-4 mb-6 text-sm">
+  <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Obchodní podmínky</h2>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 1</span> Dodavatel poskytuje služby s odbornou péčí, v dohodnutém rozsahu a v termínech podle písemně potvrzeného harmonogramu prací, který tvoří přílohu objednávky.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 2</span> Odběratel poskytne dodavateli včas veškerou součinnost potřebnou k řádnému plnění, zejména přístup do testovacích a produkčních systémů, kontaktní osoby a podklady k rozhraním.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 3</span> Neposkytne-li odběratel součinnost ani po písemné výzvě v přiměřené lhůtě, prodlužují se dohodnuté termíny o dobu, po kterou součinnost chyběla.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 4</span> Cena služeb je sjednána jako cena za odpracovanou hodinu podle vykázaného rozsahu a je uvedena bez daně z přidané hodnoty, která bude účtována podle předpisů platných v den zdanitelného plnění.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 5</span> Podkladem pro vyúčtování je měsíční výkaz práce, který dodavatel předá odběrateli do pátého pracovního dne následujícího měsíce a který odběratel schválí nebo písemně reklamuje do pěti pracovních dnů.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 6</span> Neobdrží-li dodavatel ve lhůtě podle předchozího článku žádnou připomínku, považuje se výkaz práce za schválený a odpovídající skutečně provedeným činnostem.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 7</span> Faktura je splatná ve lhůtě uvedené na jejím prvním listu; za okamžik úhrady se považuje připsání celé fakturované částky na bankovní účet dodavatele pod správným variabilním symbolem.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 8</span> Při prodlení s úhradou je dodavatel oprávněn požadovat zákonný úrok z prodlení a paušální náhradu nákladů spojených s uplatněním pohledávky ve výši stanovené nařízením vlády.</p>
+  <div class="rounded-md border border-gray-200 bg-white p-4 mb-2">
+    <h3 class="font-semibold mb-2">Reklamace a odpovědnost</h3>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 9</span> Dodavatel neodpovídá za škodu, která vznikla v důsledku nesprávných nebo neúplných podkladů předaných odběratelem, ani za škodu způsobenou výpadkem systémů třetích stran.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 10</span> Celková odpovědnost dodavatele za škodu je omezena na výši ceny služeb uhrazené odběratelem za posledních dvanáct měsíců, s výjimkou škody způsobené úmyslně nebo z hrubé nedbalosti.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 11</span> Dodavatel nezpřístupní třetí osobě informace označené jako důvěrné bez předchozího písemného souhlasu odběratele; závazek trvá i po ukončení spolupráce po dobu pěti let.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 12</span> Osobní údaje zpracovává dodavatel výhradně na základě pokynů odběratele a v souladu s nařízením o ochraně osobních údajů; podrobnosti stanoví samostatná smlouva o zpracování.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 13</span> Autorská práva k dílům vytvořeným výhradně pro odběratele přecházejí na odběratele okamžikem úplné úhrady ceny; nástroje a postupy použité již před zahájením spolupráce zůstávají dodavateli.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 14</span> Reklamaci vad uplatní odběratel písemně bez zbytečného odkladu poté, co vadu zjistil, a uvede popis vady a způsob, jakým se projevuje; dodavatel vadu odstraní v dohodnuté lhůtě.</p>
+  </div>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 15</span> Záruční doba činí dvanáct měsíců od předání výstupů; po dobu záruky odstraňuje dodavatel vady bezplatně, pokud nevznikly nesprávným používáním nebo zásahem třetí osoby.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 16</span> Reakční doba na hlášení kritické chyby, která znemožňuje provoz, je čtyři pracovní hodiny; u ostatních chyb zahájí dodavatel řešení nejpozději následující pracovní den.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 17</span> Odběratel zajistí zálohování svých dat a odpovídá za to, že před každým zásahem dodavatele do jeho systémů existuje aktuální záloha, ze které lze původní stav obnovit.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 18</span> Smluvní strany řeší případné spory nejprve jednáním zástupců oprávněných jednat jejich jménem; nedojde-li k dohodě do třiceti dnů, může kterákoli z nich předložit spor příslušnému soudu.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 19</span> Vztahy touto fakturou výslovně neupravené se řídí právním řádem České republiky, zejména občanským zákoníkem; použití úmluvy o mezinárodní koupi zboží strany vylučují.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 20</span> Změny a doplňky těchto podmínek vyžadují písemnou formu a podpis obou smluvních stran; ústní ujednání a obchodní zvyklosti, které se od nich odchylují, strany nezavazují.</p>
+    <p class="mb-2 break-inside-avoid"><span class="font-semibold">Čl. 21</span> Je-li některé ustanovení těchto podmínek neplatné, ostatní ustanovení zůstávají v platnosti a strany nahradí neplatné ustanovení platným, jehož smysl se mu co nejvíce blíží.</p>
+</section>
+
+<section class="text-sm">
+  <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Platební údaje</h2>
+  <ul class="pl-4" style="list-style: disc">
+    <li>Číslo účtu: 123456789/0300, variabilní symbol 20260042.</li>
+    <li>IBAN: CZ65 0300 0000 0001 2345 6789, SWIFT/BIC: CEKOCZPP.</li>
+    <li>Splatnost: 16. 11. 2026; za den úhrady se považuje den připsání na účet dodavatele.</li>
+  </ul>
+  <p class="mt-8 pt-2 border-t border-gray-300 w-72 text-xs text-gray-500">Za dodavatele: Jana Příkladná, jednatelka</p>
+</section>
+
+</body>
+</html>
