@@ -296,6 +296,14 @@ THRESHOLDS = {
     #     fixture has. On the binary before F213 the line was painted below the edge of page 1 and printed on no page, the box was cut
     #     (its label on page 1, the QR on page 2): 3.8 / 1.3 %, a number that hardly moves because the lost line is small. Worst page + 1 point.
     "43-qr-inline-block-page-bottom": 0.047,
+    # 44: new in F213d (a two-page Czech invoice: thirteen items, the total, the thank-you line, then ONE `<p class="mt-8 text-right">` whose
+    #     `inline-block` (70 mm tall, `.podpis`: caption, 72 px stamp `<svg>`, name, free space below) does not fit the 160 px left on page 1;
+    #     Chrome moves the whole box to page 2, caption at 55.8 pt, name at 140.5 pt, 2 pages; ours the same page, with the box and its text 91.3 pt
+    #     (121.7 px) lower (F183c: ours seats an inline box bottom-on-baseline and a fixed-height box with in-flow content hangs below the
+    #     line by about its free space). 3.3 / 0.8 %: the text drift every fixture has plus the displaced box on page 2. On the binary before F213d the
+    #     box was painted below the edge of page 1 (its top part on page 1 without a bottom border, the name on no page), 1 page against Chrome's 2:
+    #     3.5 / 0.4 % (page 2 absent). Worst page + 1 point; goes down with F183c.
+    "44-signature-box-page-bottom": 0.043,
     # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
     #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
     #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 9.4 / 6.8 %: the text drift every fixture has over two pages of

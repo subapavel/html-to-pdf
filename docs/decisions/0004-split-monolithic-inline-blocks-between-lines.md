@@ -1,6 +1,6 @@
 # ADR-0004: Split a tall `inline-block` between its line boxes instead of slicing it at the page edge
 
-Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`) · Amended 2026-10-18 by F30e (`inline-table`, below)
+Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`) · Amended 2026-10-18 by F30e (`inline-table`, below) and 2026-11-03 by F213d (a box that fits a page, below)
 
 ## Context
 
@@ -39,6 +39,20 @@ inside is a table box whose real or anonymous cells are block containers, so the
 through them. What stays whole is now: an `inline-block` or `inline-table` that shares its line, and
 `inline-flex` / `inline-grid` (F30f-b); the warning names them ("an inline-block or inline-table that shares its
 line").
+
+**Amended 2026-11-03 by F213d: an alone box that fits a fresh page is monolithic; the split applies to boxes taller than a page.**
+The reason for splitting an alone box between its lines was that a box taller than a page, kept whole, loses what is
+below the page edge, and Chrome's slice prints a line twice. That reason does not apply to a box that fits a fresh
+page: moving it whole to the next page, through the Class A break in front of its paragraph, prints every line once at
+Chrome's position (css-break-3 §4.4: monolithic content that does not fit the room is pushed to the next fragmentainer; only
+content taller than the fragmentainer is sliced). Measured with Chrome m153 (F213d plan §7): an `inline-block` or
+`inline-table` alone on its line, auto height with 15 block children, a fixed or `min-height` box, with 120 px of room, is on
+page 2 as a whole; ours (before) split an auto box between its children and left a fixed box with a short child on page 1,
+painted below the edge and printed nowhere. So an `inline-block` / `inline-table` alone on its line is not entered when
+the carrier fits a fresh page as its wrappers hold it (its height at most the page less the block-axis padding and border of its ancestors, with no slack: a box in the last pixel of a page does not fit, and a wrapper would place it whole below the page edge) and its content ends inside it
+(`content_ends_inside`, the walk of `clip_hides_nothing`, where the margin below the last child is not content: Blitz's auto height omits it); the split between its lines stays for a box taller than a page and
+for one whose content overflows it visibly (the overflow would stay behind). The box taller than a page with a short child
+(a fixed 1200 px box with one line) is not split either way and is lost, with a warning (F213d-b).
 
 ## Consequences
 
