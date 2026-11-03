@@ -39,7 +39,7 @@ these go before anything that is not on this list.
 | Finding | Why it blocks |
 |---|---|
 | F213e | first page that starts below its content top (letterhead margin) prints the first block below the page |
-| F213f | a flex row taller than the room left loses words |
+| F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it |
 | F30h | rows of several items around a split paragraph |
 | F35 | text of cells next to a split cell (`vertical-align: middle / bottom`) is lost |
 | F38 | first content taller than page 1's room goes off the page |
@@ -58,6 +58,8 @@ these go before anything that is not on this list.
 | F75 | text in a family with no face is dropped |
 | F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 | F17 | non-sRGB colours in SVG logos paint black |
+
+F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
 
 Not on the list on purpose: tagging / PDF/UA (F85, F123, F198k, F200, F42), PDF/A (F62, owner decision 2026-10-26),
 speed of long tables (F45, owner decision 2026-10-27), multi-column edge shapes (F198*, F173, F174*, F193, F30d-*),
