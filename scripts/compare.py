@@ -290,11 +290,12 @@ THRESHOLDS = {
     "42-terms-card-clauses": 0.069,
     # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
     #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
-    #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 7.8 / 8.6 % on main's binary (a negative margin and a relative
-    #     offset make the planner leave the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty), so the
-    #     number is a ceiling for the red state, not what the fixture should show: the step that fixes F198j lowers it to the
-    #     number it earns plus 1 point. Worst page + 1 point.
-    "40-terms-card-strips-columns": 0.096,
+    #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 9.4 / 6.8 %: the text drift every fixture has over two pages of
+    #     small text in columns (a column of ours holds one line less than Chrome's on page 1; the strips run border to border in both
+    #     columns, the first sits on the top border and is clipped to the corner in column 1 only). On main's binary a negative margin and
+    #     a relative offset left the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty, 7.8 / 8.6 %; page 1
+    #     grew 7.8 -> 9.4 because the words that were missing are printed now. Worst page + 1 point.
+    "40-terms-card-strips-columns": 0.104,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

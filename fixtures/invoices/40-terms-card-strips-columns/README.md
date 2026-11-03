@@ -25,7 +25,8 @@ Not exercised: a line taller than a page (F198j's third shape: `multicol_boxes.r
 
 **On main's binary** (fork `ffdf0c49`) the card is placed whole in column 1: its text runs below the page edge, column 2 and
 most of page 2 are empty: 290 of 945 words are printed, 2 pages, compare 7.8 / 8.6 %, and a warning ("a <div> 2994px tall inside a
-multi-column container is taller than a page"). The numbers after the fix are in `scripts/compare.py` and the plan.
+multi-column container is taller than a page"). **With the fix** (fork `58c78ae2`): 945 words, 2 pages, compare 9.4 / 6.8 %: the text
+drift every fixture has (our column 1 of page 1 holds one line less than Chrome's). Page 1 grew from 7.8 % because the missing words are printed.
 
 The test is `terms_card_strips_columns_invoice_prints_every_clause` in `crates/htmltopdf/tests/fixtures.rs`; the bare shapes are in
 `crates/htmltopdf/tests/multicol_boxes.rs`. Plan: `docs/plans/2026-11-02-f198j-multicol-shifted-children-and-tall-lines.md`.
