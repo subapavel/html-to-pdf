@@ -1373,3 +1373,172 @@ fn terms_in_section_invoice_starts_the_long_paragraph_in_place() {
         );
     }
 }
+
+/// Fixture 42 (F96, css-break-3 §5.3 / §5.4): a bordered, filled card of 21 clauses, each `break-inside: avoid`, with a second
+/// bordered box nested in it (clauses 9 to 14). The page break falls between two clauses of the nested box (clause 9 ends page 1,
+/// clause 10 heads page 2 at 43.8 pt), so both boxes are split between whole children. Chrome slices them: the top border and
+/// radius are on page 1 only, the bottom border and radius on page 2 only, the sides and the backgrounds run to the content
+/// bottom of page 1 and start at the content top of page 2. What follows the card starts below its bottom inset ("jednatelka"
+/// at 693.3 pt on page 2). Before F96 both frames were closed on both pages and the payment block stood 44 pt too high.
+#[test]
+fn terms_card_clauses_invoice_slices_both_cards() {
+    const CLAUSES: usize = 21;
+    let name = "42-terms-card-clauses";
+    let dir = root().join("fixtures/invoices").join(name);
+    let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-42.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    // (page, yMin, word) in reading order.
+    let words_of = |pdf: &Path| -> Vec<(usize, f32, String)> {
+        let out = std::process::Command::new("pdftotext")
+            .arg("-bbox")
+            .arg(pdf)
+            .arg("-")
+            .output()
+            .expect(
+                "pdftotext (poppler-utils) is required for this test and was not found in PATH",
+            );
+        let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mut page = 0;
+        let mut found = Vec::new();
+        for line in xml.lines() {
+            if line.contains("<page ") {
+                page += 1;
+            } else if let Some(rest) = line.trim().strip_prefix("<word ")
+                && let Some((attrs, word)) = rest.split_once('>')
+                && let Some(word) = word.strip_suffix("</word>")
+            {
+                let start = attrs.find("yMin=\"").unwrap() + 6;
+                let y = attrs[start..start + attrs[start..].find('"').unwrap()]
+                    .parse()
+                    .unwrap();
+                found.push((page, y, word.to_string()));
+            }
+        }
+        found
+    };
+    let ours = words_of(&path);
+    let chrome = words_of(&dir.join("reference/chrome.pdf"));
+    // "Čl." followed by the clause number: the page of every clause, in order, once.
+    let clause_pages = |words: &[(usize, f32, String)]| -> Vec<usize> {
+        let marks: Vec<(usize, &str)> = words
+            .windows(2)
+            .filter(|w| w[0].2 == "Čl.")
+            .map(|w| (w[0].0, w[1].2.as_str()))
+            .collect();
+        let numbers: Vec<String> = (1..=CLAUSES).map(|n| n.to_string()).collect();
+        assert_eq!(
+            marks.iter().map(|m| m.1).collect::<Vec<_>>(),
+            numbers.iter().map(String::as_str).collect::<Vec<_>>(),
+            "every clause once, in order"
+        );
+        marks.iter().map(|m| m.0).collect()
+    };
+    assert_eq!(
+        ours.iter().map(|w| w.0).max(),
+        Some(2),
+        "two pages like Chrome"
+    );
+    assert_eq!(
+        clause_pages(&ours),
+        clause_pages(&chrome),
+        "every clause is on Chrome's page (the break is between clauses 9 and 10)"
+    );
+    let y_of = |words: &[(usize, f32, String)], word: &str| -> f32 {
+        words
+            .iter()
+            .find(|w| w.2 == word)
+            .unwrap_or_else(|| panic!("`{word}` not found in the PDF text"))
+            .1
+    };
+    let (y, cy) = (y_of(&ours, "jednatelka"), y_of(&chrome, "jednatelka"));
+    assert!(
+        (y - cy).abs() <= 1.5,
+        "the signature line is at {y:.1} pt, Chrome puts it at {cy:.1} pt (what follows the card starts below its bottom inset)"
+    );
+
+    // The frames, on a 96 dpi raster: horizontal rules (the top and the bottom borders of both boxes) over x 100..700.
+    let rules = |page: usize, from: usize| -> Vec<usize> {
+        let dir =
+            std::env::temp_dir().join(format!("htmltopdf-test-{}-42-r{page}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let status = std::process::Command::new("pdftoppm")
+            .args(["-r", "96", "-f", &page.to_string(), "-l", &page.to_string()])
+            .arg(&path)
+            .arg(dir.join("p"))
+            .status()
+            .expect("pdftoppm (poppler-utils) is required for this test");
+        assert!(status.success(), "pdftoppm failed");
+        let file = std::fs::read_dir(&dir)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let bytes = std::fs::read(&file).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        // P6\n<w> <h>\n255\n<data>
+        let mut fields = Vec::new();
+        let mut pos = 0;
+        while fields.len() < 4 {
+            while bytes[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+            let start = pos;
+            while !bytes[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+            fields.push(String::from_utf8_lossy(&bytes[start..pos]).into_owned());
+        }
+        pos += 1;
+        assert_eq!(fields[0], "P6");
+        let (w, h): (usize, usize) = (fields[1].parse().unwrap(), fields[2].parse().unwrap());
+        let data = &bytes[pos..];
+        let grey = |x: usize, y: usize| {
+            let i = (y * w + x) * 3;
+            (u32::from(data[i]) + u32::from(data[i + 1]) + u32::from(data[i + 2])) / 3
+        };
+        // The grey card is 249, the white page 255, the borders 232 (inner) and 213 (outer): a row of which 90 % of the
+        // pixels are darker than 246 is a rule.
+        let rows: Vec<usize> = (from..h)
+            .filter(|&y| (100..700).filter(|&x| grey(x, y) < 246).count() * 10 > 600 * 9)
+            .collect();
+        let mut groups: Vec<usize> = Vec::new();
+        let mut last = usize::MAX - 1;
+        for r in rows {
+            if r != last + 1 {
+                groups.push(r);
+            }
+            last = r;
+        }
+        groups
+    };
+    // Page 1 below the items table (row 400): the top border of the card and of the nested box, no bottom border.
+    let p1 = rules(1, 400);
+    // Page 2: the bottom border of the nested box and of the card, no top border at the content top.
+    let p2 = rules(2, 0);
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        p1.len(),
+        2,
+        "page 1: the top borders of both boxes and no bottom border (rules at rows {p1:?})"
+    );
+    assert_eq!(
+        p2.len(),
+        2,
+        "page 2: the bottom borders of both boxes and no top border (rules at rows {p2:?})"
+    );
+    assert!(
+        p2[0] > 100,
+        "page 2 has no top border at the content top (rules at rows {p2:?})"
+    );
+}

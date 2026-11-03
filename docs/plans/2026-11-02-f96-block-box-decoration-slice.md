@@ -329,4 +329,78 @@ Any other difference is a regression. No page count may change.
 
 ## 10. Evidence
 
-(Filled in by steps 1-6.)
+### Step 1: Chrome and ours (2026-11-03)
+
+Chrome: Google Chrome for Testing 153.0.8010.12 (`Skia/PDF m153`, the version of the committed references), Playwright, A4,
+15 mm. "Ours" is main's binary at `ed60ea2` (fork `d5b4a994`). Probes P1-P9 were run on Tailwind markup (`font-sans`, `text-sm`,
+`rounded-lg border p-4`); the shapes of `block_box_slice.rs` are plain CSS (`font:14px/1.2 Inter`), run through Chrome with the
+Inter TTF of `fixtures/fonts` as `@font-face` (without it Chrome embeds the system Inter as Type 3 and `pdftotext` reports its
+lines 2.7 pt higher, which is an artefact of the font descriptor, not of the layout). Rows are 96 dpi raster rows (1 px = 1 CSS
+px; content box rows 57 to 1065). Probe sources are not committed; the shapes of the tests are, in `block_box_slice.rs`.
+
+**Gate (section 3): passed.** For P1, P2 and P4 (and P3, P5a, P6) Chrome opens the edges at the break, runs the sides and the
+background to the content bottom and puts the bottom inset on the last fragment only. Chrome squares the corners at a cut
+(`(57, 1065)` of page 1 and `(57, 57)` of page 2 are border colour); the unbroken corners keep their radius.
+
+| Probe | Chrome | Ours (before) |
+|---|---|---|
+| P1 (06's card, one paragraph) | p1: top rule 757, sides 762..1065, no bottom rule. p2: sides 57..528, no top rule, bottom rule 533. First line of p2 at 43.8 pt | closed: p1 rules 757 + 1065 (sides 761..1061); p2 rules 57 + 533 (sides 61..529). First line of p2 at 43.6 pt, so page 2 starts at the content top as the plan says (the 0.2 pt difference is font drift) |
+| P2 (20 clauses, split between children; the test shape has 14) | p1 sides to 1065 although the last clause ends at 1032 (rule 757 only). p2 (3-page probe) sides 57..1066, no rules. Last page: sides 57..380, bottom rule 385. `AFTER` at 308.3 pt | p1 closed at 1041 (sides to 1037, rules 757 + 1041); p2 closed (rules 57 + 1060); last page bottom rule 360. `AFTER` at 289.3 pt: **19.0 pt = 25.3 px too high** |
+| P3 (P2 with `bg-gray-50` and `box-shadow`) | background to 1066 on p1 and from 57 on p2; no shadow ink in the margins; the shadow only under the last fragment (385..392) | background ends 1039 on p1; the frame closes with its shadow at 1040-1047; 3 rows of shadow ink in p2's bottom margin (1067..1069) |
+| P4 (nested box across the break) | p1: rules 757 (outer top) and 954 (inner top), both sides to 1065. p2: rules 541 (inner bottom), 878 (outer bottom). `AFTER` 678.1 pt | p1: rules 757, 954 and 1062 (inner closed), outer side runs to **1122** (page bottom, 56 rows into the margin: the `fresh()`-tall page-0 frame); p2: rules 57, 516, 819. `AFTER` 634.3 pt (**43.7 pt = 58 px too high**: the inner box and the card both lose their bottom inset) |
+| P5a (`grid gap-4` card, paragraph taller than a page, 4 pages) | p1 open at the bottom, p2 and p3 open at both ends (sides 57..1066), p4 bottom rule 113 | closed on every page (rules 757 + 1065, 57 + 1065, 57 + 1065, 57 + 133) |
+| P5a with a paragraph shorter than a page | splits the grid item (2 pages) | moves the paragraph to page 2 whole, p1 holds the heading only (`AFTER` 601 pt against 434): a grid item is split only when taller than a page (F30b). **New, not F96**: see below |
+| P5b (flex row: bordered item beside a tall `<p>`) | the bordered item is sliced over 4 pages (sides on every page) | the bordered item is painted on page 1 only (side 761..1122, into the margin) and not on pages 2-4. Text matches Chrome (`AFTER` 343.3 against 343.6). F96e, record only |
+| P6 (`overflow-hidden` card with a header strip) | strip on p1 only (rules 757, 790, bg 758..789); p1 sides to 1065; p2 sides 57..1066; last page bottom rule 385 | strip on p1 only; p1 outer side runs to **1122**; p2 closed (rules 57, 1065). The clip at each fragment's padding box was not measured separately |
+| P7 (first clause does not fit under the top padding) | moves the whole card to page 2 (page 1 holds the spacer only; p2 top rule 57) | the same (first line at 56.3 pt against 56.6). With an `h2` before the first clause both leave the heading alone on page 1. **No start-rule finding** |
+| P8 (`box-decoration-break: clone`) | honoured by m153: p1 closed (rule 1066), p2 top rule at 57, the first line of p2 at 56.6 pt (top inset reserved) | slice-like layout, closed frames (first line of p2 at 43.6 pt). Record only |
+| P9 `td.border.py-4` (paragraph < page) | sliced: p1 rule 757 and sides to 1066; p2 sides 57..437, bottom rule 437, first line at 43.8 pt | moves the row to page 2 whole (page 1 empty) |
+| P9 `td` with 1500 words (guard shape) | 3 pages: p1 rule 757, p2 open, p3 bottom rule 644 | p1 sides 757..1060, p2 open (57..1064), p3 bottom rule 677; the first line of p2 and p3 at 54.1 pt (**the top inset is reserved: F96d confirmed**, text 33 px lower by page 3) |
+| P9 abspos card | sliced; first line of p2 at 43.8 pt | closed frame, first line of p2 at 56.3 pt (reserved inset). F96c |
+| P9 `height:1500px` box | sliced over 3 pages, `AFTER` 178.6 pt on p3 | moves the box to page 2 whole, `AFTER` 411.5 pt on p3. F96b |
+| P9 `height:3000px` box (guard shape, after a 300 px spacer) | 4 pages | 5 pages, closed on pages 2-4 |
+| P9 `inline-block` card | moves the card to page 2 whole (monolithic) | splits it across two pages with a closed frame (ADR-0004); `AFTER` 505 pt against 720 |
+
+**Where the plan's numbers were wrong or missing**
+
+- Defect (c) is **25.3 px** (19.0 pt) on P2, not 17 px: the last clause's 8 px margin, the 16 px padding and the 1 px border.
+  With a nested box (P4, fixture 42) both boxes lose it: 43.7 pt in 42, 58 px in P4.
+- Defect (c) **reproduces**, so it stays in scope.
+- The page-0 frame of a box whose nested box splits (P4, P6, 42, and the flex item of P5b) runs to the page's bottom edge (row
+  1122, 56 rows into the bottom margin), not 0.87 px past the content bottom. The plan's `slice_block_frames` replaces it.
+- The "before" compare numbers of section 6 are stale: on main 06 is 10.7 / 11.8 % (the plan says 15.9 / 11.8), 08 is 8.2 / 12.1
+  (13.2 / 12.1), 16 is 9.5 / 12.9 (as planned). The thresholds are 0.129, 0.132 and 0.139 and the worst pages did not move, so
+  "worst page + 1 point" will still mean the page-2 numbers.
+- Fixtures 40 and 41 do not exist on this branch, and fork `7a79be15` (F215) is not in `d5b4a994`.
+- New divergence, **not F96**: a grid item shorter than a page that straddles the break moves to the next page whole where
+  Chrome splits it (P5a, short paragraph). F30b covers only items taller than a page. File it with the F96b-F96h batch.
+- Our `td` is already open at the breaks (no rules on page 2); what differs is the reserved top inset on page 2 (F96d), as the
+  plan says.
+
+### Step 2: red tests (2026-11-03)
+
+Fixture 42 `42-terms-card-clauses` (21 clauses: 1-8 in the card, 9-14 in the nested box, 15-21 in the card; 2 pages; clause 9
+ends page 1, clause 10 heads page 2 at 43.8 pt; signature line at 693.3 pt on page 2). Reference committed with
+`scripts/reference/render.mjs` (Chrome m153). **Before the fix, compare: 5.7 / 12.1 % (worst 12.1 %).** No threshold is set yet
+(`compare.py` defaults to 10 %, so CI's `--threshold-check` is red on this commit); it is set after the fix. The payment block
+stands 43.7 pt too high (649.6 against 693.3).
+
+Run with `cargo test --release --locked --offline -p htmltopdf --test block_box_slice --test fixtures` on main's sources:
+
+| Test | State | Why |
+|---|---|---|
+| `card_around_a_split_paragraph_is_open_at_the_break` (P1, test 1) | red | p1 has 2 rule groups (top and a bottom border) |
+| `background_runs_to_the_cut_and_the_shadow_stops_there` (P3, test 2) | red | the background is gone 3 px above the content bottom (grey 235). The shadow assertions pass today (the closed frame keeps its shadow inside the page) and guard the fix |
+| `corners_are_square_at_the_cut_and_round_elsewhere` (test 3) | red | the bottom corners of p1 are round. The unbroken-corner assertions pass today |
+| `what_follows_a_box_split_between_children_starts_below_its_bottom_inset` (P2, test 4) | red | `AFTER` at 448.6 pt, Chrome 467.6 |
+| `nested_boxes_are_both_open_at_the_break` (P4, test 5) | red | p1 has 3 rule groups |
+| `text_layer_of_line_split_cards_does_not_move` (test 6) | **green** | pins words per page and a hash of the word positions: P1 [222, 279], 06 [453, 498], 08 [407, 473], 16 [467, 541] |
+| `guard_table_cell_keeps_its_closed_frame` (F96d) | green | |
+| `guard_box_with_a_height_keeps_its_closed_frame` (F96b) | green | |
+| `guard_absolutely_positioned_card_keeps_its_closed_frame` (F96c) | green | |
+| `guard_flex_row_item_keeps_its_closed_frame` (F96e) | green | |
+| `terms_card_clauses_invoice_slices_both_cards` (`fixtures.rs`) | red | the signature line at 649.6 pt, Chrome 693.3. The rule assertions behind it are also red (3 and 3 groups; Chrome's PNG gives 2 and 2) |
+
+The other 19 tests of `fixtures.rs` pass with fixture 42 added. The assertions of tests 1-5 and of the fixture test were checked
+against Chrome's own PDFs and pass there. Not run: the fork tests of the plan (step 3), the rest of the suite, `fulgur-vrt`,
+the byte gate.
