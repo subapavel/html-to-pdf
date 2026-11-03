@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#3cea708f046b0bbf8f45b399386533f91af6f829"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#5305fa4162c5adc5040164f854275b530822b189"
 dependencies = [
  "accesskit",
  "app_units",
@@ -231,7 +231,7 @@ dependencies = [
 [[package]]
 name = "blitz-html"
 version = "0.2.0"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#3cea708f046b0bbf8f45b399386533f91af6f829"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#5305fa4162c5adc5040164f854275b530822b189"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
