@@ -112,6 +112,21 @@ fn find(words: &[Word], text: &str) -> Word {
     hits[0].clone()
 }
 
+fn render_css(page_css: &str, body: &str) -> Vec<u8> {
+    Renderer::builder()
+        .font_bytes(inter())
+        .unwrap()
+        .strict_fonts(true)
+        .build()
+        .render(
+            &format!(
+                "<!doctype html><html><head><style>{page_css}body{{font:14px/20px Inter;margin:0}}p{{margin:0}}</style></head><body>{body}</body></html>"
+            ),
+            &RenderOptions::default(),
+        )
+        .expect("render")
+}
+
 fn render(body: &str) -> Vec<u8> {
     Renderer::builder()
         .font_bytes(inter())
@@ -605,6 +620,54 @@ fn r_an_auto_box_whose_last_child_has_a_bottom_margin_moves_whole() {
                 2,
                 "{name}: `{t}` is on page 1, Chrome moves the box whole to page 2"
             );
+        }
+    }
+}
+
+#[test]
+fn r_a_page_tall_box_behind_a_margined_ancestor_at_the_page_top_loses_no_line() {
+    // Review round 2 (HIGH-1b): an auto-height box about a page tall, first on the page (no room made before it), behind
+    // `ul > li`, `blockquote > p`, a `div` with a margin, a paragraph with `margin-top`, `dl > dd` or `figure`. The margin that
+    // collapses through the body makes the first page's strip smaller; a box that fills a page cannot move off the first page, so it
+    // was placed whole and its last one or two lines were painted below the edge (with a warning). Main splits it and prints
+    // every line. `@page { margin: 0 }`: the content box is the sheet, 1122.5 px. The box is `n` blocks of 20 px and a spacer,
+    // 1 px under the page, 4 px under it and 1 px over it.
+    let page_h = 297.0 / 25.4 * 96.0;
+    let wrappers: [(&str, &str); 6] = [
+        ("ul > li", "<ul><li>{}</li></ul>"),
+        ("blockquote > p", "<blockquote><p>{}</p></blockquote>"),
+        (
+            "div with a margin",
+            "<div style=\"margin:16px 0\"><p>{}</p></div>",
+        ),
+        ("p with margin-top", "<p style=\"margin-top:24px\">{}</p>"),
+        ("dl > dd", "<dl><dd>{}</dd></dl>"),
+        ("figure", "<figure><p>{}</p></figure>"),
+    ];
+    for delta in [-1.0_f32, -4.0, 1.0] {
+        let h = page_h + delta;
+        let n = (h / 20.0).floor() as u32;
+        let pad = h - n as f32 * 20.0 - 2.0;
+        let lines: String = (0..n)
+            .map(|i| format!("<span style=\"display:block\">F{i:02}</span>"))
+            .collect();
+        let bx = format!(
+            "<span style=\"display:inline-block;width:200px;border:1px solid #000\">{lines}<span style=\"display:block;height:{pad:.2}px\"></span></span>"
+        );
+        for (name, wrapper) in wrappers {
+            let pdf = render_css(
+                "@page{size:A4;margin:0}",
+                &format!("{}<p>AFTER</p>", wrapper.replace("{}", &bx)),
+            );
+            let words = printed_words(&pdf);
+            for i in 0..n {
+                let t = format!("F{i:02}");
+                let hits = words.iter().filter(|w| w.text == t).count();
+                assert_eq!(
+                    hits, 1,
+                    "{name}, box {delta:+} px from the page: `{t}` is printed {hits} times"
+                );
+            }
         }
     }
 }
