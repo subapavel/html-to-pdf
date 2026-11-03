@@ -1966,6 +1966,54 @@ fn a_line_taller_than_a_page_is_placed_alone_and_the_rest_flows_on() {
     }
 }
 
+/// `shape_rel_shift_with` with every paragraph `position: relative; top: <top>px`, in a plain card or a clip card.
+fn shape_offset_card(top: u32, clip: bool) -> String {
+    let card = if clip {
+        CLIP_CARD
+    } else {
+        "border:1px solid #888;"
+    };
+    let body: String = (0..25)
+        .map(|i| {
+            format!(
+                "<p style='padding:4px 12px;position:relative;top:{top}px'>{}</p>",
+                words(i * 100, i * 100 + 100)
+            )
+        })
+        .collect();
+    two_columns(&format!("<div style='{card}'>{body}</div>"))
+}
+
+#[test]
+fn an_offset_that_would_paint_a_line_off_the_sheet_keeps_every_word() {
+    // F198j round 1 (vrt-validator MEDIUM-1): every paragraph of a tall card `position: relative; top: N px`. Main baked such offsets
+    // into the flow and printed every word (7 to 20 pt off Chrome's); painting them as a shift put the lines at the bottom of a column
+    // below the page edge for N of 100 and more (85 of 2500 words lost at 100 px, 177 at 150, 495 at 300). An offset that stays
+    // in the margin (20 px = 15 pt of 42 pt) is painted, as Chrome does; one that leaves the sheet is planned as main did.
+    for (top, clip) in [
+        (20, false),
+        (60, false),
+        (100, false),
+        (150, false),
+        (300, false),
+        (100, true),
+        (150, true),
+        (300, true),
+    ] {
+        let pdf = render(&shape_offset_card(top, clip));
+        let found = printed_words(&pdf);
+        let mut seen: Vec<usize> = found.iter().filter_map(Word::index).collect();
+        seen.sort_unstable();
+        let total = seen.len();
+        seen.dedup();
+        assert_eq!(
+            (seen.len(), total),
+            (2500, 2500),
+            "top {top}px, clip card {clip}: every word, once"
+        );
+    }
+}
+
 // ── G. guards of F198j: what works today stays ───────────────────────────────────────────────────────────────
 
 #[test]
