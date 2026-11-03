@@ -289,3 +289,17 @@ compares the order with Chrome's). `compare.py`: fixture 40 9.4 / 6.8 % (thresho
 `bench.py --check` ok (b200-items 1336 ms against 1347 ms of the F213 binary on the same machine, which is slower today than when the 1250 ms exception was
 measured; fixture 40 28 ms). Fork VRT: 35 of 64 goldens differ on this host (the pinned fonts are missing, as before); the 35 `.actual.pdf` are
 byte-identical between fork `329b4e43` and `58c78ae2`.
+
+### 8.6 Round 1 of the review (fork `cca17235`, 2026-11-03)
+
+The vrt-validator found a regression against main in a shape §7 had listed as a risk ("shifted content past an edge ... drawn once, past the column or content edge
+by the offset"), which was wrong where the edge is the sheet's: a card of paragraphs each `position: relative; top: N px` lost 85 / 177 / 495 of 2500 words at 100 / 150 /
+300 px (main, which baked uniform offsets into the flow, none), because a line painted below the sheet is not in the text of the PDF. §4.3's "paint the shift"
+now has a limit: the engine opens `PageEdgesScope` with the page's margins (px), `fill_multicol_columns` reports `McFill::lost` when an atom's painted extent leaves the sheet
+(a shift into the margin is Chrome's and stays), and the fragmenter then plans the boxes that hold an offset with the offsets in the flow, as main described them
+(`McContainer::baked`, built when the box is described: `mc_box_baked`, or left whole when main refused it) and warns once. At 15 mm, 20 px and 40 px are painted, 60 px
+(45 pt, more than the 42.5 pt margin) and more fall back. The plain and clip variants print every word (the validator's table: 0 for 20 to 300 px; Chrome drops 34 / 52 / 100
+of the clip variant). Also, `mc_relative_offset` is zero unless the box is `position: relative` (the validator's MEDIUM-2: `static; top: 3px` was painted 2.25 pt low and `sticky; top: 10px` 7 pt):
+Blitz's own shift of those stays in the flow as on main (`static` matches main to the bit, `sticky` is 7 pt from Chrome's no shift, as on main; F198j-c). Fork tests: `plan_reports_an_offset_that_paints_a_line_off_the_sheet`, the
+truth table with `static` and `sticky`, a `render_smoke` card for 20 / 100 / 300 px (red without the fallback), here `an_offset_that_would_paint_a_line_off_the_sheet_keeps_every_word` (red on `58c78ae2`: 85 missing at 100 px).
+Remaining refusals are in findings F198j-d, the rounding of offsets in F198j-e.
