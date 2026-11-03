@@ -241,3 +241,33 @@ it to the worst page after the fix + 1 point (the default of 10 % holds until th
 
 Sizing: sixteen rows of 41's table. In Chrome the line with a 16 px stand-in for the box starts at 727.2 pt (about 100 px of room), in ours at 729.8 pt (about 97 px); fifteen rows give
 about 60 px more room, seventeen about 37 px less (below the 33 px leading of the box, so the label would not fit and main would already move the line).
+
+### 7.4 Steps 3 to 6: the fix and its gates
+
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours` `329b4e43` (on `ffdf0c49`, F96's head): `monolithic_line_carrier` (one Parley line, an inline box that shares it (an `inline-block`, `inline-table`, `inline-flex`,
+`<img>`, `<svg>`), carrier height <= fresh page + 1 px, no inline-block alone on its line) is asked after `would_split_block_subtree` in both gates (body level: `child_node`; nested walk: `child`), and first in
+`leading_block_size_with` (returns the carrier's own height, so a wrapper whose first child is the carrier moves with it). Three small differences from the plan: the "fits a fresh page" test uses the carrier's
+block size (`final_layout.size.height`) and not the line box, so a padded carrier that is taller than a page keeps main's path; the check sits after the gate's own test so it runs only for a child the gate would enter; it
+reads the line with `lines()` / `items()`, no `Vec`.
+
+- Fork lib tests (red first, 5 of 6 red on the stub that returns `false`): `monolithic_line_carrier_wants_one_line_with_a_box_that_shares_it_and_fits_a_page` (10 cases), `a_one_line_carrier_taller_than_the_room_moves_whole`,
+  `a_one_line_carrier_whose_box_has_several_blocks_moves_whole`, `a_one_line_carrier_in_a_wrapper_moves_the_wrapper`, `a_one_line_carrier_below_a_paragraph_in_a_wrapper_moves_alone`,
+  `a_one_line_carrier_that_fits_the_room_stays` (green on both); `render_smoke::test_render_tall_inline_block_line_moves_whole_smoke` (red with the check turned off). Removing the `leading_block_size_with` line turns
+  only the wrapper test red: that line is needed. `cargo test -p fulgur --no-fail-fast`: 3098 passed, 0 failed; `cargo clippy -p fulgur --all-targets -- -D warnings` and `cargo fmt --check` clean. The F30f carrier tests
+  (`a_paragraph_in_an_inline_block_alone_on_its_line_is_split`, `the_carrier_line_is_on_the_page_where_its_inline_box_starts`, ...) are unchanged and green.
+- Ours, after `cargo update -p fulgur --precise 329b4e43` (one line of `Cargo.lock`): `cargo test --release --locked --offline --no-fail-fast`: **1025 passed, 0 failed, 9 ignored**; the five red tests of
+  `tall_inline_box_line.rs`, the F213 entries of `page_bottom_warning.rs` and the fixture-43 test are green. Probes P1, P1t, P5, P5b: all four words on page 2 like Chrome; P1e, P3, P3s, P4, P4b and P2, P2a: identical to main
+  (P2, P2a still lose their words and warn, F213b).
+- **Byte gate** (`RAYON_NUM_THREADS` 1 and 4; the baseline is the main binary, fork `ffdf0c49`): 42 fixtures and the 7 corpus documents, 49 PDFs: byte-identical except fixture 43, in both thread counts; 1 thread equals 4
+  threads for both binaries. Run on the tree before and after merging main (F96, fixture 42): the same.
+- **Sweep** (`f213/sweep.py`, 1440 cases: room {40, 80, 120, 199, 201} x box height {100, 300, 1000, 1200} x content {empty, block, img, svg} x align {baseline, top} x nesting {body, section, section after `p`} x lines {1, 3, 5};
+  Chrome rendered from the same HTML): **76 cases changed**, all of them one-line carriers (74 with block content, 2 empty boxes in a `<section>` after a paragraph with 120 px of room, a box of 100 px: main left the line on
+  page 1, Chrome moves it, ours now too); **all 76 are on Chrome's pages now, none is farther, none is worse**; 1364 are byte-identical. Warnings: 426 cases warned on main, 360 now; the 360 are exactly the cases with a box of
+  1200 px (taller than a page, F213b), no other case warns. Cases off Chrome's pages: 596 on main, 520 now. The 520 are unchanged by F213: 360 are the 1200 px boxes (F213b, 120 of them one line), 160 are lines of 3 or 5 (ADR-0010
+  for 3, where Chrome splits 2 / 1; 5-line paragraphs with a 1000 px box or a box that fits by 1 px, L4 and L5 on a different page than Chrome's; no word is lost or warned there). F213c was not found: no multi-line carrier loses a word.
+- **fulgur-vrt** (`FONTCONFIG_FILE=examples/.fontconfig/fonts.conf`, debug build): the same failing test and the same 35 `.actual.pdf` files, byte-identical between the fork with the check turned off (equal to `ffdf0c49`) and with it.
+- **compare.py** after the merge: every fixture ok; 43: 3.7 / 1.4 % (before 3.8 / 1.3 %), threshold 4.7 %; the others did not move (their PDFs are byte-identical). I looked at 43's side-by-side: page 1 ends with the total and a gap;
+  page 2 starts with the whole line, box with QR and amount, then "Děkujeme"; the line and its box sit 14 pt lower than Chrome's (F183c, note in the findings).
+- **bench.py --check**: ok (b200-text 745 ms, b200-mixed 906 ms, b200-items 1346 ms: over the 1250 ms exception on this machine under load, as the unchanged binary: b200-items 1.40 to 1.48 s on main, 1.31 to 1.43 s here, five
+  runs each; scaling r = 3.24).
+- Not run: `vrt-validator` and `pdf-reviewer` (layout only; the validator is the coordinator's step), the Ruby / Python bindings of the fork.
