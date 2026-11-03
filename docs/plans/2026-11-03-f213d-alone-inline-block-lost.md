@@ -410,10 +410,42 @@ shapes by `hm.py` (6 of 30 lost; 5 and 3 lines left on page 1), the d2 binary pa
 - **Ours** `cargo test --release --locked --no-fail-fast`: **1051 passed, 0 failed, 9 ignored**; `cargo fmt --all -- --check` and `cargo clippy --release --locked --all-targets -- -D warnings` clean. `compare.py --threshold-check`: every fixture `ok`
   (44: 3.3 / 0.8 %, threshold 4.3 %). `bench.py --check` ok (scaling r = 3.71). A/B on b200-items, alternating, 7 runs: min 1470 / 1374 ms (main) against 1410 / 1375 ms (d2); medians 1506 / 1445 against 1683 / 1563: the minima
   are equal, the medians differ by 8 to 12 % on this shared machine (a second timing run of the same binary moves as much); not resolved.
-- **Sweep** (2464 cases, as 7.4): **742 changed, all 742 exactly on Chrome's pages and closer than main; 0 farther** (was 824 changed, 82 not exact, 30 farther: the `card` / h 1000 family is back on main's path). Lost words: 465 on main, 207 now
+- **Sweep** (2464 cases, as 7.4): **742 changed, all 742 exactly on Chrome's pages and closer than main; 0 farther** (was 824 changed, 82 not exact, 30 farther). *Correction (review round 2):* that is the changed cases only. The `card` / h 1000 family went back to main's split, so it is not among the changed: it is not exact to Chrome and not worse than main (112 `card` / h 1000 cases, 0 exact; see 7.6 and F213d-c). Lost words: 465 on main, 207 now
   (168 h 1200 = F213d-b, warned; 13 F183c-b, silent; 26 `card` h 1000 = main's own loss, unchanged, warned); no case loses more than on main. Page count differs from Chrome's in 546 cases on main, 376 now.
 - **Validator families, d2** (`f213d/v/`): `fam_f` (176 cases, the HIGH-1 window in p, div, section, flex, grid, td, card, body at 8 heights): 0 worse than main (the cells that lose lines at `267mm` in a cell with no room made lose them on main too);
   `fam_w` (22 heights x 7 wrappers around the page height): 0 worse; `fam_c` (480 cases: fixed and auto boxes at 10 heights in 8 wrappers, 3 rooms): 0 worse than main (210 flagged by the net's warnings, F183c hang); `fam_g` (126 cases, other page sizes): 6 worse in
   page count (A5 and landscape at 0.97 of the page height: 3 pages against Chrome's and main's 2, no word lost), filed as F213d-e; `fam_m` (54 probes): 46 ok, 8 as main (F213d-e: Blitz's heights without the margins, or a box in a `<p>`, which the parser splits).
 
 **Filed:** F213d-e (the boundaries, with F183c's share, and the negative-margin box), F213d-f (the net's wording), F213d-g (the thread-local ledger); F213d-c is closed.
+
+### 7.6 Review round 2 (`vrt-validator` HIGH-1b)
+
+**Fork history** (the same dance as round 1): `956c7054` (the F213e re-apply) reverted as `5fcfb8bb`; the fix is `b81c6782`; html-to-pdf's `Cargo.lock` is pinned at `b81c6782`; F213e re-applied as `eade038a` (a cherry-pick of `6815413e`, the same
+two-adjacent-functions conflict, both kept; fork lib 2554 pass).
+
+**HIGH-1b.** An auto-height box about a page tall, first on the page (no room made before it), behind a margined ancestor (`ul > li`, `blockquote > p`, `div { margin: 16px 0 }`, `p { margin-top: 24px }`, `dl > dd`, `figure`) lost its last one or two lines
+with the round-1 fix. Cause: on the first page the margin that collapses through the body is the body offset, the page's strip is that much smaller, and a box that fills a page cannot be moved off the first page (a blank page would come first), so the
+carrier was placed whole at the top and its last lines were painted below the edge. `ancestor_insets` summed padding and border only. It now adds the carrier's own top margin and the top margin of every ancestor. The sum does not collapse the margins again, so it
+can only ask for more room than the unit takes, and a box that does not fit keeps the F30f split. The validator's preferred form (the carrier's offset inside the moved unit on a fresh page) was not done: a carrier's offset in its unit also counts the siblings above it, and
+the fresh-page start is the engine's, not the layout's; the sum is the conservative form the coordinator allowed.
+
+- **Limit of the sum.** A margin that belongs to a sibling above the carrier (a heading's margin collapses through the body into the body's own top margin) is counted too, so a page-tall box behind a margined heading is entered where it would have fitted: 28 of the 1008 `fam_mg`
+  probes (`h_p`) are on main's path where round 1 matched Chrome; never worse than main (F213d-e). A refinement that counts the margins only along the carrier's first-in-flow-child chain passes the fork test I wrote for it
+  (`a_margin_that_belongs_to_a_sibling_above_the_carrier_is_not_counted`), but it was not kept: it would need every gate again.
+- **Tests, red then green.** Fork: `an_alone_box_behind_a_margined_ancestor_at_the_page_top_keeps_the_f30f_split` (four wrappers at 1 px under a 200 px page, plus an unmargined guard placed whole; red without the margin terms: one fragment at y 0). Ours:
+  `r_a_page_tall_box_behind_a_margined_ancestor_at_the_page_top_loses_no_line` (6 wrappers x 3 heights on `@page { margin: 0 }`). With the previous binary (`htmltopdf-d2`) the same shapes (`hm2.py`) lose a line in **12 of 18 cases** (`ul > li` at -4 px: 54 of 55 lines printed, ...);
+  with `htmltopdf-d3b` **0 of 18**, as main.
+
+**Gates** (`htmltopdf-d3b` = main + fork `b81c6782`; base `htmltopdf-main-f198j`):
+
+- **Byte gate**, RAYON 1 and 4: 51 PDFs (44 fixtures + 7 corpus): identical to main except fixture 44; fixture 44 and every other PDF identical to `htmltopdf-d2`'s; 1 thread equals 4; no net warning. (`hm.py`, the round-1 tests as a script: 0 of 30 lost, both MEDIUM-1 boxes moved whole.)
+- **Fork**: lib 2547 and every integration test pass (44 test binaries), clippy `--all-targets -D warnings` and fmt clean.
+- **Ours** `cargo test --release --locked --no-fail-fast`: **1052 passed, 0 failed, 9 ignored**; fmt and `cargo clippy --release --locked --all-targets -- -D warnings` clean; `compare.py --threshold-check` exit 0, every fixture `ok` (44: 3.3 / 0.8 %); `bench.py --check` ok on a
+  quiet machine (b200-items 1382 ms, b200-text 769 ms, b200-mixed 887 ms, scaling r = 3.76).
+- **`fam_mg`** (1008 probes: four page setups x nine margined wrappers x auto and fixed boxes x room none / 30 x seven heights around the page height): new binary lost-words-more-than-main **0**, worse than main **0**; previous fix lost more than main in 58; new loses words in 87 probes, main in
+  101, the previous fix in 136; 60 probes are closer to Chrome than main.
+- **`win.py`** (5616 probes: six page setups x twelve wrappers x three rooms x fixed and auto x thirteen offsets from -2 to +3 px): new binary lost-more-than-main **0** (previous fix: 8); new loses words in 361, main in 406; page count differs from main in 560.
+- **Round 1 families again** (`fam_f` 176, `fam_w` 154, `fam_c` 480, `fam_m` 54): 0 worse than main in `fam_f`, `fam_w` and `fam_c` (210 flagged by the net's warnings); `fam_m` 46 ok, 8 as main.
+- **Sweep** (2464 cases): 742 changed, **all 742 exactly on Chrome's pages and closer than main, 0 farther, 0 worse than main in any case**. Exact to Chrome overall: 1205 on main, 1947 now. 517 unchanged cases are not exact to Chrome: 368 are h 1200 (a box taller than a page, F213d-b), the rest h 100
+  (F183c-b and the hang) and **112 `card` / h 1000**: all on main's path since round 1, none changed, none exact, none worse than main (F213d-c reopened: not exact to Chrome; never worse than main). Lost words: 465 on main, 207 now, none more than main. Warned cases 1192; page count differs from
+  Chrome's in 546 cases on main, 376 now.
