@@ -180,4 +180,85 @@ impl PageStrips {
 
 ## 7. Evidence
 
-To be written by the implementer: §2 probe table (Chrome / main / after), fixture offsets, hypothesis held, gates, sweep, compare numbers.
+### 7.1 Steps 1 and 2: measurements (2026-11-03)
+
+**Method.** Chrome 153.0.8010.12 (m153), Playwright `page.pdf({ preferCSSPageSize: true, printBackground: true })` with print media (the settings of
+`scripts/reference/render.mjs`); ours is main `efdd02a` (the F198j binary). `pdftotext -bbox` for words (yMin in pt, page); `pdftoppm -r 72` red pixels for
+the image. Document: `@page{size:A4;margin:15mm}body{font:14px/20px Inter;margin:0}p{margin:0}`. `B(h)` is the F213 150 px wide `inline-block` of height `h`
+with a block child `BOXTOP`; `IMG(h)` is a block `<img>` of the 60 px red square stretched to 100 x h px; a card is `break-inside:avoid;border:1px solid #000`
+around 45 lines of 20 px (900 px). Probe scripts, HTML and PDFs are in the author's scratch directory (not committed); the committed form of each case is a test.
+`first_offset` was not dumped from the fork (no fork edit this round, no scratch build): it is read from the output instead (below).
+
+**Hypothesis.** H1 holds; H2 is F109 as planned; H3 is refuted. For each offset source (body margin, margin collapsed through body, html padding, html border, UA
+`body{margin:8px}`) a 60-line paragraph puts exactly the lines on page 1 that Chrome does (40 lines for 200 px, 50 for 8 px; `f213e_g_a_first_paragraph…`),
+so `first_offset` is in `bottom(0)` for every source. The same offset does not reach the move rules: a monolithic first block hangs for all four real
+sources, and `body` padding or border (inside the body, `location.y > 0`) already moves it like Chrome (C9, identical page 1 including the body's border and background).
+
+**Chrome / main (efdd02a), page of each thing and yMin:**
+
+| Probe | Chrome | main |
+|---|---|---|
+| Q1 M=100: `<p>START B(950) TAIL</p><p>AFTER</p>` | p1 empty; START, BOXTOP, TAIL 41.7 and AFTER 754.9 on p2 | START at 819.8 on p1 (ends 832.6, the validator's number); AFTER p2. No warning |
+| Q1 M=200 | the same as M=100 | lost, warning "63.1 pt past the bottom page edge"; AFTER p2 |
+| Q1b M=809, B(300) | p1 empty; START 41.7, AFTER 267.4 on p2 | lost, 32.4 pt |
+| Q1 M=0 / M=100 with B(300) (fits) | one page, START 41.7 / 116.7 | one page (F183c y offset) |
+| C4 M=100, IMG(950) first | p1 empty; image 42 pt on p2; AFTER 753.4 | image on p1 from 117 to 830 pt (box ends 800) |
+| C11 `html{padding-top:100px}` / `html{border-top:100px solid}` + C4 | the same as C4 | the same hang |
+| C6 image with `margin-top:100px` collapsing through body | the same as C4 | image on p1 from 192 pt to 841 |
+| C5 M=200, card of 45 `<br>` lines first | **not moved**: lines 1-40 on p1 (first at 191.7), 41-45 + AFTER on p2 | lines 1-43 on p1, 42 and 43 below the content box, 44 and 45 lost (22.6 pt) |
+| C6 card with `margin-top:200px`, no body margin | the same 40 / 5 split | the same hang |
+| card of 45 block children (`div` or `p`), bare or in `<section>`, M=200 | 40 / 5 split | 40 / 5 split (same) |
+| card as `display:flex` / `grid` / `<table>` first | 40 / 5 split | 40 / 5 split (same) |
+| card as `inline-block;width:100%` first | monolithic: p1 empty, all 45 lines on p2 | split in place 40 / 5 (enters it) |
+| a zero-height `div` before the card, M=200 | **moved whole**: p1 empty, all 45 lines on p2 | hang as C5 (`cursor_y` stays 0) |
+| a 2 px `div` before the card | moved whole | moved whole (same) |
+| C7 M=100, `break-before:page` on the first `<p>` | one page, START 115.9, no blank page | one page, START 118.6 (same) |
+| C8 `body{margin:8px}`, IMG 1001 / 1002 px | stays on p1 (image 48 pt), AFTER p2 40.9 | same |
+| C8 IMG 1002.5 / 1003 / 1004 / 1008 px | p1 empty, image on p2, AFTER on p3 (3 pages) | image stays on p1 hanging 2-7 px below the content box, AFTER p2 |
+| C9 body `margin-top:95px;border-top:5px`, IMG(950) | p1 empty but for the body's blue border and background; image p2; AFTER 753.4 | the same (already moves) |
+| C10 `<section>` around Q1, M=100 / 200 | as Q1 | START 819.8 on p1, warning "ends 46px below the content box" / lost |
+| C12 M=100 IMG(1200), and B(1200) M=100 | p1 empty; the box starts at the top of p2 and runs to p3 (3 pages) | image on p1 and p2 (clipped), 2 pages; B(1200) lost (warning) |
+| C12 M=0 IMG(1200) | starts on p1, continues on p2 | on p1 and p2 (clipped) |
+| C3b `@page:first{margin-top:100mm}`, `<p>START B(900) TAIL</p>` | **not moved**: START 282.4 on p1, the box runs on to p2, AFTER 201.4 on p2 | lost (116.6 pt past the edge) |
+| C3a `@page:first{margin-top:100mm}`, 300 px spacer, B(300) | fits: START 507.4 on p1 | START 723.3 (ignores `:first`, F109) |
+| 45 lines paragraph M=200 / 120 lines M=100 / 40 one-row table M=200 | split 40+5 / 45+50+25 / 32 rows + 8 | the same |
+
+**What contradicts the plan.**
+
+1. **C5 and C6 (the avoid card).** The plan predicted "moved whole". Chrome splits a first avoid box in place. css-break-3 §4.1: a Class A break point lies between
+   siblings; with nothing before the box there is none, so the `avoid` has nothing to act on. With any sibling before it (even a zero-height one) Chrome honours the avoid
+   and moves the box. A monolithic box (`<img>`, `inline-block`) is moved because it cannot be split. So the `keeps_whole_at` / F28-leading change in section 3
+   (`content_above || offset_above`) is wrong for a box with nothing before it: it would send block cards, which we already split like Chrome (40 / 5), to page 2.
+   The `offset_above` gate belongs on **monolithic** boxes only (the plain advance `:4312` for carriers and images). What is red for cards is narrower: an avoid box of
+   *inline text only* (a paragraph-like box, `:3978` kept-whole path) hangs and loses lines, where Chrome splits it 40 / 5; and a zero-height sibling before a card
+   (Chrome: moved, ours hangs because `cursor_y` is 0).
+2. **Fixture 45 as planned.** `<main class="break-inside-avoid">` as the first block is not moved by Chrome (207 words stay on page 1, split at the 14th row) and ours splits it
+   the same way, so it would be green. Fixture 45 therefore wraps the invoice in `inline-block w-full` (plus `break-inside-avoid`), which is monolithic: Chrome page 1 empty.
+3. **C12 is not a guard.** A first image (or box) taller than a page under an offset is moved by Chrome (page 1 empty, then sliced on pages 2 and 3). Leaving it in place
+   (`size <= fresh() + 1.0` in `may_move`) is the F213b / F29b non-goal, not Chrome's behaviour. Recorded as an `#[ignore]` test with Chrome's numbers.
+4. **C3 (`@page :first`).** Chrome does not move the box (no content above it) and slices it across pages 1 and 2; it is not an "offset moves it" case at all. Ignored test
+   `f213e_c3_…` (F109, with the F213b slicing).
+5. **C8, the decisive probe.** Chrome keeps a first block in place while its bottom is at most 1010 px (8 + 1002), i.e. `chrome_bottom(0)` = `ceil(bottom(0))` of F30f-b,
+   and moves it from 8 + 1002.5. It does not keep blocks that overflow only because of the UA 8 px margin: a 1003 px image moves and leaves page 1 empty. So the move test for
+   the offset-only branch is `cursor + size > chrome_bottom(0)` (not `bottom(0)`, which would move the 1002 px image). Guard `f213e_g_c8_…` pins this; `f213e_c8_…` (1003, 1004, 1008) is red.
+   The risk in section 6 (a first block between `bottom(0)` and `fresh + 1` leaving page 0 blank) is therefore what Chrome does, for monolithic blocks.
+6. **C7** matches the plan: Chrome ignores a forced break with nothing before it, no blank page; ours is the same. Guard.
+7. **Q1 shape.** The validator's numbers reproduce exactly (819.8 / 832.6 pt, and the 63 pt warning) with the 950 px carrier; the C10 `<section>` shape hangs rather than loses at M=100 and
+   warns "ends 46px below the content box".
+
+**Which fixtures have a non-zero first offset.** Measured in Chrome (body `getBoundingClientRect().top` in print media, 01-45): only **07** (32 px: first child `h1.mt-8` collapsed through body)
+and **26** (56.7 px: `body{margin:15mm}`). 15, 27 and 37 are 0 (preflight or an explicit `margin:0`); 19's first child is inline text, offset 0. Fixture 45 has 264.6 px (70 mm).
+So the byte gate of section 4 holds as planned: 01-43 should be identical, 07 and 26 can only change if their first block does not fit, which it does.
+
+### 7.2 Step 2: tests and fixture 45 on main efdd02a
+
+Fixture `fixtures/invoices/45-letterhead-keep-together/`: `main.inline-block.w-full.break-inside-avoid` of 843 px (header, parties, 14 rows, totals) under `body{margin-top:70mm}`, then the thank-you line;
+Chrome reference by `render.mjs` (2 pages, page 1 empty). **Before: 2 pages, pixel diff 4.3 % / 5.5 % (worst page 5.5 %)**: ours splits the box (page 1: header and 13 rows, "Faktura" at 241.8 pt;
+page 2: the 14th row and the totals). `compare.py` threshold set to 6.5 % (before + 1 point), to be lowered when the fix lands.
+
+Red on main (the fix turns them green): `body_offset.rs` `f213e_c4_…`, `f213e_c11_…`, `f213e_c6_a_first_tall_image_…`, `f213e_c8_…`, `f213e_c5_…`, `f213e_c6_a_first_avoid_card_…`,
+`f213e_c5z_…`; `tall_inline_box_line.rs` `f213e_q1_…`, `f213e_q1b_…`, `f213e_c10_…`; `page_bottom_warning.rs` `warns_about_content_below_the_page_only` (the new Q1 M=200 entry warns 63.1 pt);
+`fixtures.rs` `letterhead_invoice_moves_whole_to_page_two` (page 1 prints 198 words).
+Green on main (guards): `body_offset.rs` `f213e_g_a_first_image_that_fits_…`, `f213e_g_c5_a_card_after_a_2px_box_…`, `f213e_g_c5_a_first_avoid_card_of_blocks_…`, `f213e_g_a_first_paragraph_taller_…`,
+`f213e_g_c8_…`, `f213e_g_body_padding_and_border_…`; `tall_inline_box_line.rs` `f213e_g1_…` (fits), `f213e_g2_…` (C7), `f213e_g3_…` (no offset).
+Ignored (`#[ignore]`, red when run): `f213e_c12_…` (F213b / F29b), `f213e_c3_…` (F109).

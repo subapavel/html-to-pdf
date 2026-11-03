@@ -304,6 +304,13 @@ THRESHOLDS = {
     #     a relative offset left the card whole in column 1: 290 of 945 words, column 2 and most of page 2 empty, 7.8 / 8.6 %; page 1
     #     grew 7.8 -> 9.4 because the words that were missing are printed now. Worst page + 1 point.
     "40-terms-card-strips-columns": 0.104,
+    # 45: new in F213e (a Czech invoice for pre-printed letterhead paper: `body { margin-top: 70mm }`, then the whole invoice as ONE
+    #     `inline-block w-full break-inside-avoid` box of 843 px, then the thank-you line; Chrome moves the monolithic box to page 2
+    #     because it does not fit the 744.6 px of page 1, so page 1 is empty and page 2 holds the invoice, 2 pages). Set on the binary
+    #     BEFORE the fix (main efdd02a), where the fragmenter cannot move a first block and enters the box instead (page 1: header and
+    #     13 rows, page 2: the 14th row, the totals and the thank-you line): 4.3 / 5.5 %, worst page + 1 point.
+    #     F213e brings it down to the text drift every fixture has.
+    "45-letterhead-keep-together": 0.065,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.
