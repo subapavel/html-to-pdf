@@ -383,3 +383,37 @@ of the side-by-side: page 1 ends with "Děkujeme za spolupráci." and a gap; pag
 against 890 / 840 ms: the ledger's cost is inside the noise of this machine), scaling r = 4.18.
 
 **Not run**: `vrt-validator` and `pdf-reviewer` (the coordinator's), the Ruby / Python bindings of the fork, the fork's wasm demo.
+
+### 7.5 Review round 1 (`vrt-validator` HIGH-1, MEDIUM-1; findings for MEDIUM-2 and LOW)
+
+**Fork history.** F213e's `6815413e` had been pushed on top of `62216d9a`; it was reverted (`bc084e7e`) so that this PR's pin does not carry it, the F213d fixes went on as `8d4d8e7d`, html-to-pdf's `Cargo.lock` is pinned at
+`8d4d8e7d`, and F213e was re-applied as `956c7054` (a cherry-pick of `6815413e`; one conflict, two adjacent new functions, resolved by keeping both; fork lib 2553 pass).
+
+**HIGH-1.** Reproduced with the d1 binary: `hm.py` (the two review tests as a script) renders an alone box of `267.1mm`, `267.3mm`, `1010px`, `1011px`, `1009px`, `267mm` (border-box, 30 block lines, 30 px of room) in a body, a
+`<section><p>`, a flex item, a grid item and a cell: **6 of 30 cases lost every line** (section and grid at `267.1mm`, `267.3mm`, `1010px`). Cause as the validator said: `monolithic_line_carrier` let an alone box through with the
+`+ 1.0` slack the strip slicer has for a line; a box in the last pixel does not fit a page, the moved carrier was placed whole by the wrapper and its lines were painted below the edge, where main's F30f split prints them all. A cell
+shifts the window by its padding. Fix (fork `8d4d8e7d`): for an alone box the carrier must fit `fresh - ancestor_insets` (the block-axis padding and border of every ancestor of the carrier), with no slack; shared lines (F213) keep theirs.
+Taffy rounds layout sizes to whole px, so the fork tests use fractional page heights (199.6 / 200 and 199.9 / 201 px: 0.4 and 1.1 px over). Side effect: F213d-c (the padded card) is closed by the same rule.
+
+**MEDIUM-1.** `content_ends_inside_with(doc, node, trailing_margin_counts)`: the alone box asks it with `false` (Blitz's auto height omits the margin below the last child, so a 1 px margin made the content "overflow"; a margin is
+blank space), the clip caller (`clip_hides_nothing`) keeps `true`. With the d1 binary a default `<ul>` of 10 items split 5 / 5 and `p { margin: 0 0 16px }` x 8 split 3 / 5 at 100 px of room; with d2 both move whole to page 2 like Chrome.
+
+**Tests, red then green.** Fork (all four red with the old logic, the margin one red with the margin counted): `an_alone_box_in_the_last_pixel_of_a_page_keeps_the_f30f_split` (body, section, flex, grid, td x 2 heights),
+`an_alone_box_that_fits_the_page_as_its_wrapper_holds_it_moves_whole`, `an_alone_box_in_a_padded_card_that_does_not_fit_its_page_keeps_the_f30f_split`, `an_alone_box_whose_last_child_has_a_bottom_margin_is_monolithic`.
+Ours: `r_a_box_in_the_last_pixel_of_a_page_loses_no_line_in_any_wrapper` (30 cases) and `r_an_auto_box_whose_last_child_has_a_bottom_margin_moves_whole` in `alone_inline_block_line.rs`; the d1 binary fails the same
+shapes by `hm.py` (6 of 30 lost; 5 and 3 lines left on page 1), the d2 binary passes them (0 of 30; 0 and 0).
+
+**Gates on the fix** (`htmltopdf-d2` = main + fork `8d4d8e7d`, base `htmltopdf-main-f198j`):
+
+- **Byte gate**, RAYON 1 and 4: 44 fixtures + 7 corpus documents, 51 PDFs: identical to main except fixture 44, which is byte-identical to the d1 binary's (`15457ba7...`); 1 thread equals 4; d2 equals d1 on every PDF; no net warning.
+- **Fork**: lib 2546 and every integration test pass (`render_smoke` 339), clippy `--all-targets -D warnings` and fmt clean; with F213e re-applied lib 2553.
+- **Ours** `cargo test --release --locked --no-fail-fast`: **1051 passed, 0 failed, 9 ignored**; `cargo fmt --all -- --check` and `cargo clippy --release --locked --all-targets -- -D warnings` clean. `compare.py --threshold-check`: every fixture `ok`
+  (44: 3.3 / 0.8 %, threshold 4.3 %). `bench.py --check` ok (scaling r = 3.71). A/B on b200-items, alternating, 7 runs: min 1470 / 1374 ms (main) against 1410 / 1375 ms (d2); medians 1506 / 1445 against 1683 / 1563: the minima
+  are equal, the medians differ by 8 to 12 % on this shared machine (a second timing run of the same binary moves as much); not resolved.
+- **Sweep** (2464 cases, as 7.4): **742 changed, all 742 exactly on Chrome's pages and closer than main; 0 farther** (was 824 changed, 82 not exact, 30 farther: the `card` / h 1000 family is back on main's path). Lost words: 465 on main, 207 now
+  (168 h 1200 = F213d-b, warned; 13 F183c-b, silent; 26 `card` h 1000 = main's own loss, unchanged, warned); no case loses more than on main. Page count differs from Chrome's in 546 cases on main, 376 now.
+- **Validator families, d2** (`f213d/v/`): `fam_f` (176 cases, the HIGH-1 window in p, div, section, flex, grid, td, card, body at 8 heights): 0 worse than main (the cells that lose lines at `267mm` in a cell with no room made lose them on main too);
+  `fam_w` (22 heights x 7 wrappers around the page height): 0 worse; `fam_c` (480 cases: fixed and auto boxes at 10 heights in 8 wrappers, 3 rooms): 0 worse than main (210 flagged by the net's warnings, F183c hang); `fam_g` (126 cases, other page sizes): 6 worse in
+  page count (A5 and landscape at 0.97 of the page height: 3 pages against Chrome's and main's 2, no word lost), filed as F213d-e; `fam_m` (54 probes): 46 ok, 8 as main (F213d-e: Blitz's heights without the margins, or a box in a `<p>`, which the parser splits).
+
+**Filed:** F213d-e (the boundaries, with F183c's share, and the negative-margin box), F213d-f (the net's wording), F213d-g (the thread-local ledger); F213d-c is closed.
