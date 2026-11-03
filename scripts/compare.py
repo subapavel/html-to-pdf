@@ -275,6 +275,13 @@ THRESHOLDS = {
     #     over two pages of small text. On the binary before F30c-n the paragraph moved to page 2 whole (a wrapper hid it from the
     #     F30c rule): 7.5 / 13.4 %, the page-2 number being a third of a page of text that was too low. Worst page + 1 point.
     "39-terms-in-section": 0.069,
+    # 41: new in F215 (a two-page Czech invoice: seventeen items, then `<h2>` with `@media print { h2, h3 { break-after: avoid } }` and ONE
+    #     24-line `<p>` of terms (initial orphans 2) that cannot start in the 22 pt (1.5 lines) left under the heading block on page 1;
+    #     Chrome moves the heading with the paragraph: page 1 ends with the total, "Obchodní" heads page 2 at 43.8 pt, 2 pages; ours the
+    #     same). 3.8 / 4.5 %: the text drift every fixture has over two pages of small text. On the binary before F215 the fork read
+    #     `avoid` as `auto` and left the heading alone at the bottom of page 1 ("Obchodní" at 757.6 pt), the terms 21 pt too high on
+    #     page 2: 3.9 / 13.8 %. Worst page + 1 point.
+    "41-terms-heading-keep": 0.055,
     # 42: new in F96 (a `rounded-lg border bg-gray-50` card with 21 kept-together clauses and a nested `rounded-md border bg-white`
     #     box, both split across the page break; Chrome slices both: open edges at the break, sides and backgrounds to the content
     #     bottom, bottom inset on the last fragment only; 2 pages like Chrome). 5.7 / 5.9 %: the text drift every fixture has.
