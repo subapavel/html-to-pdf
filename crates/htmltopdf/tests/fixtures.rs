@@ -2060,7 +2060,9 @@ fn letterhead_invoice_moves_whole_to_page_two() {
     let y = |word: &str| ours.iter().find(|w| w.3 == word).unwrap().1;
     // F183c: ours seats the 843 px box bottom-on-baseline and Blitz aligns its last line there, so the box (and "Faktura")
     // is painted 5.8 pt (7.7 px) lower than in Chrome (49.1 pt, Chrome 43.3 pt) while the thank-you line, below the carrier,
-    // is where Chrome has it (693.1 pt, Chrome 693.3 pt). The bound is that offset, not a tolerance for a wrong page.
+    // is where Chrome has it (693.1 pt, Chrome 693.3 pt). The bound is that offset, not a tolerance for a wrong page; the
+    // ignored test `letterhead_invoice_starts_at_chromes_y` below has the bound of 1.5 pt, and replaces this one with step 3
+    // of docs/plans/2026-11-04-f183c-inline-block-baseline.md.
     assert!(
         (y("Faktura") - 43.3).abs() <= 7.0,
         "`Faktura` at {:.1} pt, Chrome puts it at 43.3 pt (F183c allows 5.8 pt lower)",
@@ -2074,5 +2076,60 @@ fn letterhead_invoice_moves_whole_to_page_two() {
     assert!(
         y("Děkujeme") > y("Celkem"),
         "`Děkujeme` is below the totals"
+    );
+}
+
+#[test]
+#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
+fn letterhead_invoice_starts_at_chromes_y() {
+    // Fixture 45 again, with the bound of the finished fix: the 843 px box sits on the baseline of its last line, so
+    // "Faktura" is at Chrome's 43.3 pt (it was 49.1 pt, 5.8 pt low; the old bound of 7.0 pt in
+    // `letterhead_invoice_moves_whole_to_page_two` goes with this one) and the thank-you line stays at 693.3 pt.
+    let name = "45-letterhead-keep-together";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-45b.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout).into_owned();
+    let y = |word: &str| -> f32 {
+        let line = xml
+            .lines()
+            .find(|l| l.trim().starts_with("<word ") && l.contains(&format!(">{word}</word>")))
+            .unwrap_or_else(|| panic!("`{word}` is not printed"));
+        let at = line.find("yMin=\"").unwrap() + 6;
+        line[at..at + line[at..].find('"').unwrap()]
+            .parse()
+            .unwrap()
+    };
+    assert!(
+        (y("Faktura") - 43.3).abs() <= 1.5,
+        "`Faktura` at {:.1} pt, Chrome puts it at 43.3 pt",
+        y("Faktura")
+    );
+    assert!(
+        (y("Děkujeme") - 693.3).abs() <= 2.0,
+        "`Děkujeme` at {:.1} pt, Chrome puts it at 693.3 pt",
+        y("Děkujeme")
     );
 }

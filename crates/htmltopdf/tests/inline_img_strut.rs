@@ -407,7 +407,7 @@ fn g2_vertical_align_top_middle_bottom_keep_the_box_height() {
 }
 
 #[test]
-fn g3_tailwind_preflight_images_are_block_and_inline_blocks_do_not_move() {
+fn g3_tailwind_preflight_images_are_block() {
     // Preflight (`img { display: block }`): no strut, fixtures 01-26 depend on it.
     let pdf = render_with(true, "", &format!("{}{BLK}", img60()));
     let page = raster(&pdf);
@@ -417,19 +417,20 @@ fn g3_tailwind_preflight_images_are_block_and_inline_blocks_do_not_move() {
         80,
         "block after a preflight image",
     );
-    // An empty `inline-block` is not an <img>: unchanged by F183 (Chrome puts it on the baseline: 52, F183b).
+}
+
+#[test]
+#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
+fn g3_empty_inline_block_leaves_the_strut_descent_below_it() {
+    // An empty `inline-block` has its bottom margin edge on the baseline, and the strut's descent stays under it
+    // (CSS 2.1 section 10.8.1): Chrome m153 puts the next block at 52, not 48 (F183b, flipped by F183c).
     let pdf = render_with(
         true,
         "",
         &format!("<span class=\"inline-block h-12 w-12 bg-gray-900\"></span>{BLK}"),
     );
     let blue = bbox(&raster(&pdf), is_blue);
-    rows(
-        &blue,
-        48,
-        68,
-        "block after an empty inline-block (F183b: Chrome 52)",
-    );
+    rows(&blue, 52, 72, "block after an empty inline-block");
 }
 
 #[test]
@@ -487,10 +488,11 @@ fn v1_short_line_height_with_text_and_a_30px_image() {
 }
 
 #[test]
-fn v2_image_inside_an_inline_block_stays_where_it_was_until_f183b() {
-    // The inner line is 64 tall (right), but the outer line puts the bottom of an inline-block on its baseline
-    // instead of its last line's baseline (F183b; Chrome puts the block at 64), so a strut inside drew the image 4 px
-    // low. Until F183b an image inside an atomic inline gets no strut: the positions of the version before F183.
+#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
+fn v2_image_inside_an_inline_block_has_the_strut_under_it() {
+    // The inner line is 64 tall and the box sits on its last line's baseline (CSS 2.1 section 10.8.1), so the strut inside
+    // the box counts and the block after it is at 64, 34 for the 30 px image in a button (Chrome m153; F183b, flipped by
+    // F183c; until then an image inside an atomic inline got no strut and the block was at 60 / 30).
     let ib = ".ib { display: inline-block; background: #0f0 }";
     let cases = [
         (
@@ -498,14 +500,14 @@ fn v2_image_inside_an_inline_block_stays_where_it_was_until_f183b() {
             ib,
             format!("<div><span class=\"ib\">{}</span></div>{BLK}", img60()),
             (0, 60),
-            60,
+            64,
         ),
         (
             "inline-block between text",
             ib,
             format!("<div>a <span class=\"ib\">{}</span> b</div>{BLK}", img60()),
             (0, 60),
-            60,
+            64,
         ),
         (
             "block inside an inline-block",
@@ -515,7 +517,7 @@ fn v2_image_inside_an_inline_block_stays_where_it_was_until_f183b() {
                 img60()
             ),
             (0, 60),
-            60,
+            64,
         ),
         (
             "image in a button",
@@ -525,7 +527,7 @@ fn v2_image_inside_an_inline_block_stays_where_it_was_until_f183b() {
                 img(30, 30, "")
             ),
             (0, 30),
-            30,
+            34,
         ),
     ];
     for (what, css, body, (y0, y1), block) in cases {
@@ -564,8 +566,10 @@ fn v3_unflagged_box_taller_than_a_baseline_image_keeps_the_old_line() {
 }
 
 #[test]
-fn v3_inline_block_taller_than_a_baseline_image_keeps_the_old_line() {
-    // A 100 px inline-block (an unflagged box) and a 20 px baseline image: the old line, 100 (Chrome 104: F183b).
+#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
+fn v3_inline_block_taller_than_a_baseline_image_keeps_the_strut_descent() {
+    // A 100 px empty inline-block and a 20 px baseline image: the box's bottom edge is on the baseline and the strut's
+    // descent stays under it, so the line is 104 (Chrome m153; F183b, flipped by F183c; it was 100).
     let s = shot(
         ".ib { display: inline-block; width: 100px; height: 100px; background: #0f0 }",
         &format!(
@@ -574,7 +578,7 @@ fn v3_inline_block_taller_than_a_baseline_image_keeps_the_old_line() {
         ),
     );
     rows(&s.red(), 80, 100, "image");
-    rows(&s.blue(), 100, 120, "block (F183b: Chrome 104)");
+    rows(&s.blue(), 104, 124, "block after the line");
 }
 
 // --- W. a row that does not fit moves whole (plan section 7.4) -------------------------------------------------

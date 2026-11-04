@@ -474,3 +474,75 @@ fn f213e_alone_box_under_a_body_margin_moves_to_page_two() {
         assert_eq!(page_count(&pdf), 2, "M {m}, box {h}: two pages like Chrome");
     }
 }
+
+#[test]
+#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
+fn f183c_the_y_of_the_moved_lines_is_chromes() {
+    // The y that the tests above leave uncompared "because of F183c", with Chrome m153's numbers measured with the bundled
+    // Inter TTF through `@font-face` (the same font metrics as ours: `pdftotext` reports a `yMin` 2.9 pt smaller for the
+    // host's Inter OTF, which is where the older 41.7 / 267.4 pt in the comments come from). Within 1 px (0.75 pt).
+    // (page, START y or None, BOXTOP y, AFTER y)
+    let mut bad = Vec::new();
+    let mut want = |name: &str, pdf: &[u8], expect: &[(&str, usize, f32)]| {
+        let words = printed_words(pdf);
+        for (t, page, y) in expect {
+            let w = find(&words, t);
+            if w.page != *page || (w.y_min - y).abs() > 0.75 {
+                bad.push(format!(
+                    "{name}: `{t}` at {:.1} pt on page {}, Chrome {y:.1} pt on page {page}",
+                    w.y_min, w.page
+                ));
+            }
+        }
+    };
+    // P1: `S<p>START B(300) TAIL</p><p>AFTER</p>`.
+    let pdf = render(&format!(
+        "{}<p>START {} TAIL</p><p>AFTER</p>",
+        s(),
+        b(300, "")
+    ));
+    want(
+        "P1",
+        &pdf,
+        &[
+            ("START", 2, 44.6),
+            ("BOXTOP", 2, 44.6),
+            ("TAIL", 2, 44.6),
+            ("AFTER", 2, 270.3),
+        ],
+    );
+    // F213e g1: the same under `body { margin-top: 100px }`: it fits page 1.
+    let pdf = render_css(
+        "body{margin-top:100px}",
+        &format!("<p>START {} TAIL</p><p>AFTER</p>", b(300, "")),
+    );
+    want(
+        "F213e g1",
+        &pdf,
+        &[
+            ("START", 1, 119.6),
+            ("BOXTOP", 1, 119.6),
+            ("AFTER", 1, 345.3),
+        ],
+    );
+    // F213e: the alone box under a body margin of 809 / 500 / 265 px.
+    for (m, h, after) in [(809, 300, 270.3), (500, 600, 495.3), (265, 843, 677.6)] {
+        let pdf = render_css(
+            &format!("body{{margin-top:{m}px}}"),
+            &format!(
+                "<p><span style=\"display:inline-block;width:150px;height:{h}px;border:1px solid #000\">\
+                 <span style=\"display:block\">BOXTOP</span></span></p><p>AFTER</p>"
+            ),
+        );
+        want(
+            &format!("F213e M {m}, box {h}"),
+            &pdf,
+            &[("BOXTOP", 2, 44.6), ("AFTER", 2, after)],
+        );
+    }
+    assert!(
+        bad.is_empty(),
+        "differences from Chrome m153:\n{}",
+        bad.join("\n")
+    );
+}

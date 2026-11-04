@@ -321,6 +321,12 @@ THRESHOLDS = {
     #     13 rows, page 2: the 14th row, the totals and the thank-you line): 4.3 / 5.5 %. The worst page GREW 5.5 -> 9.2 because the
     #     content that was wrongly on page 1 is now on page 2 where the F183c offset shows; the F183c finding brings it down. Worst page + 1 point.
     "45-letterhead-keep-together": 0.102,
+    # 48: new in F183c step 1 (a one-page Czech invoice: a `grid grid-cols-2` header with the 140 x 60 "ZAPLACENO" stamp, an `inline-block`, under
+    #     the title in the right column; fifteen items; the payment sentence with a 112 px `inline-block` QR box, which ends the page 13 px above
+    #     the content bottom in Chrome; one page like Chrome's). 4.25 % on main (f550a8e), measured before the fix: the stamp and its text are 9.5 pt
+    #     below Chrome's and the QR box and its line are 71 pt low (the box hangs over the thank-you line and into the bottom margin), F183c.
+    #     Worst page + 1 point; goes down with F183c.
+    "48-paid-stamp-header": 0.053,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

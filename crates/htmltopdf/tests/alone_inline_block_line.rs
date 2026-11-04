@@ -671,3 +671,61 @@ fn r_a_page_tall_box_behind_a_margined_ancestor_at_the_page_top_loses_no_line() 
         }
     }
 }
+
+#[test]
+#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
+fn f183c_the_y_of_the_moved_boxes_is_chromes() {
+    // The y that this file leaves uncompared "because of F183c" (see the header), with Chrome m153's numbers measured with
+    // the bundled Inter TTF through `@font-face`, so that `pdftotext` reports the metrics of our font (plan section 7).
+    // Room 120, box moved to page 2; within 1 px (0.75 pt). `(name, html, [(word, y on page 2)])`.
+    let l15: Vec<(String, f32)> = (1..=15)
+        .map(|i| (format!("L{i:02}"), 44.6 + 15.0 * (i - 1) as f32))
+        .collect();
+    let mut cases: Vec<(&str, String, Vec<(String, f32)>)> = vec![
+        (
+            "Q1: 300 px box, a block child",
+            alone(&boxed("inline-block", Some(300), "", BOXTOP)),
+            vec![("BOXTOP".into(), 44.6), ("AFTER".into(), 270.3)],
+        ),
+        (
+            "Q7: 300 px inline-table",
+            alone(&boxed(
+                "inline-table",
+                Some(300),
+                "",
+                "<span style=\"display:table-row\"><span style=\"display:table-cell\">BOXTOP</span></span>",
+            )),
+            vec![("BOXTOP".into(), 44.6), ("AFTER".into(), 270.3)],
+        ),
+    ];
+    let mut text_lines = l15.clone();
+    text_lines.push(("AFTER".into(), 270.3));
+    cases.push((
+        "Q3: auto box of 15 text lines",
+        alone(&boxed("inline-block", None, "", &br_lines(15))),
+        text_lines.clone(),
+    ));
+    cases.push((
+        "Q4: auto box of 15 block children",
+        alone(&boxed("inline-block", None, "", &blocks(15))),
+        text_lines,
+    ));
+    let mut bad = Vec::new();
+    for (name, html, expect) in cases {
+        let words = printed_words(&render(&format!("{}{html}", room(120))));
+        for (t, y) in expect {
+            let w = find(&words, &t);
+            if w.page != 2 || (w.y_min - y).abs() > 0.75 {
+                bad.push(format!(
+                    "{name}: `{t}` at {:.1} pt on page {}, Chrome {y:.1} pt on page 2",
+                    w.y_min, w.page
+                ));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "differences from Chrome m153:\n{}",
+        bad.join("\n")
+    );
+}

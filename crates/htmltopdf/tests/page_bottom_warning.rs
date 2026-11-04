@@ -318,19 +318,9 @@ fn warns_about_content_below_the_page_only() {
         );
     }
 
-    // F183c, a known residual loss the net now sees: a fixed-height box with in-flow content is painted hanging below its line
-    // by about its free space (ours seats an inline box bottom-on-baseline, Blitz places the box by its last line). A box of 600 px
-    // moved to page 2 by F213d (Chrome: the whole box at the top of page 2) is painted down to 90.9 pt below the edge of page 2,
-    // so the bottom of the box is printed on no page. The fix is F183c, not F213d; the net says so until then.
-    let w = page_warnings(
-        F213_PAGE,
-        &format!("{}{}", f213d_room(120), f213d_box(600, F213_BOXTOP)),
-    );
-    assert!(
-        w.iter()
-            .any(|m| m.contains("past the bottom page edge on page 2")),
-        "F183c, a fixed 600 px box moved to page 2: {w:?}"
-    );
+    // The F183c residual (a fixed 600 px box moved to page 2 and painted hanging below its line) is the ignored test
+    // `a_600px_box_moved_to_page_two_by_f213d_is_printed_whole` in `inline_block_baseline.rs`: the net warned about it on
+    // main (90.9 pt past the edge of page 2); it must stay silent once the box sits where Chrome has it.
 
     // A transformed body is a split barrier: kept whole, and the pagination warning names the box.
     let w = page_warnings("body { transform: translateX(0) }", &lines(200));
