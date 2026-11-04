@@ -20,3 +20,14 @@ Seen in the F213f sweep (2026-11-03); not investigated. A spurious warning, no c
 
 Seen in the F198j-f step 1 sweep (2026-11-03). Part of F198l (a line taller than a page is not sliced).
 
+### B15 — a margin-box item taller than the band is not clipped; the box grows and drops its sibling text  (severity: low, size: unknown — fulgur)
+
+A 200 px image (or a plain 200 px `<div>`, same on main) in `@top-left` with a 56.7 px band: the box grows to 220 px, the sibling text is dropped and the image paints over the body (F107 validator, `f107v/p/tall.html`, `tall-div.html`). F139 territory.
+
+### B16 — `content: element(h) counter(page)` drops the counter  (severity: low, size: unknown — fulgur)
+
+Same on main and after F107 (`f107v/p/c2.html`); an image and the page number in separate boxes work.
+
+### B17 — an unbundled `list-style-image` / `background-image` in a margin box is dropped without a warning; `content: url()` in a margin box does not paint  (severity: low, size: unknown — fulgur)
+
+F107 validator `f107v/p/sidefx.html`. Nothing is read from the host. Goes with F177c.
