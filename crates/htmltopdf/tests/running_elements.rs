@@ -161,10 +161,10 @@ fn images_per_page(pdf: &[u8], pages: usize) -> Vec<usize> {
     let text = String::from_utf8_lossy(&out.stdout);
     let mut per = vec![0; pages];
     for line in text.lines().skip(2) {
-        if let Some(p) = line
-            .split_whitespace()
-            .next()
-            .and_then(|p| p.parse::<usize>().ok())
+        // The soft mask of an image with alpha has its own row (`smask`); an image is one image.
+        let mut cols = line.split_whitespace();
+        if let Some(p) = cols.next().and_then(|p| p.parse::<usize>().ok())
+            && cols.nth(1) == Some("image")
             && (1..=pages).contains(&p)
         {
             per[p - 1] += 1;
@@ -580,11 +580,8 @@ fn r4_footer_with_table_image_and_flex() {
     let x_ref = render(&r4_html(false, rule), &s);
     assert_eq!(pages(&x_ref), 2);
     check("R4", DEFAULT_BAND, &x, &x_ref, &r4_shows(), &[]);
-    // An image in the margin copy is not painted at all today (F107: the margin-box documents are converted
-    // without the image assets), so this is 0 and 0; once F107 is fixed it is 1 and 1. Either way the image is
-    // not painted a second time in the body and both pages agree.
-    let n = images_per_page(&x, 2);
-    assert!(n[0] <= 1 && n[0] == n[1], "images per page {n:?}");
+    // The image of the margin copy is painted once on each page (F107), and not a second time in the body.
+    assert_eq!(images_per_page(&x, 2), vec![1, 1]);
     assert_eq!(images_per_page(&x_ref, 2), vec![0, 0]);
 }
 
@@ -602,11 +599,7 @@ fn r4_author_display_in_the_same_rule() {
         &r4_shows(),
         &[],
     );
-    let n = images_per_page(&x, 2);
-    assert!(
-        n[0] <= 1 && n[0] == n[1],
-        "images per page {n:?} (see F107 above)"
-    );
+    assert_eq!(images_per_page(&x, 2), vec![1, 1]);
 }
 
 /// `display: block !important` beats the engine's `display: none` (an author important declaration wins over a

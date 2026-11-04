@@ -47,7 +47,6 @@ these go before anything that is not on this list.
 | F88 | a paragraph with large vertical padding loses most of its lines, silently |
 | F46 | an inline `<img>` in a split paragraph is dropped and two lines merge |
 | F109 | a `:first` page box different from later pages clips or loses content |
-| F107 | a logo `<img>` in a running header is not painted |
 | F24 | a `width: 100%` table overflows its card's padding |
 | F129 | free table width is split equally, not by content: column positions of most item tables |
 | F130 | columns with an explicit `width` are not stretched |
@@ -60,7 +59,7 @@ these go before anything that is not on this list.
 | F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 | F17 | non-sRGB colours in SVG logos paint black |
 
-F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
+F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
 
 Not on the list on purpose: tagging / PDF/UA (F85, F123, F198k, F200, F42), PDF/A (F62, owner decision 2026-10-26),
 speed of long tables (F45, owner decision 2026-10-27), multi-column edge shapes (F198*, F173, F174*, F193, F30d-*),

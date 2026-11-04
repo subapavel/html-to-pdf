@@ -483,7 +483,9 @@ def render_cmd(doc: Doc, pdf: Path) -> list[str]:
     for f in sorted((ROOT / "fixtures/fonts").glob("Inter-*.ttf")):
         cmd += ["--font", str(f.relative_to(ROOT))]
     if doc.kind == "fixture":
-        for img in sorted(list(doc.path.parent.glob("*.png")) + list(doc.path.parent.glob("*.jpg"))):
+        for img in sorted(
+            list(doc.path.parent.glob("*.png")) + list(doc.path.parent.glob("*.jpg")) + list(doc.path.parent.glob("*.svg"))
+        ):
             cmd += ["--image", f"{img.name}={img.relative_to(ROOT)}"]
     cmd += ["--title", doc.name, "--lang", "cs", "--strict-fonts", "--strict-images"]
     return cmd

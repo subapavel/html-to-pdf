@@ -196,7 +196,9 @@ fn fixture_renderer() -> Renderer {
     for dir in fixture_dirs() {
         for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()) {
             let p = e.path();
-            if p.extension().is_some_and(|x| x == "png" || x == "jpg") {
+            if p.extension()
+                .is_some_and(|x| x == "png" || x == "jpg" || x == "svg")
+            {
                 let name = p.file_name().unwrap().to_string_lossy().into_owned();
                 images.insert(name, std::fs::read(&p).unwrap());
             }
