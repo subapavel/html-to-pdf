@@ -2013,12 +2013,17 @@ fn a_line_taller_than_a_page_is_placed_alone_and_the_rest_flows_on() {
 /// A card of 25 paragraphs of 100 words (`w<first>` on), of which one in every `every` (the `every / 2`-th of each run:
 /// the 3rd, 8th, … for 5; all for 1) is `position: relative; top: <top>px`, in a plain card or a clip card. `top == 0` shifts nothing: the card without the offsets.
 fn offset_card(top: i32, clip: bool, every: usize, first: usize) -> String {
+    offset_card_of(25, top, clip, every, first)
+}
+
+/// [`offset_card`] with `count` paragraphs.
+fn offset_card_of(count: usize, top: i32, clip: bool, every: usize, first: usize) -> String {
     let card = if clip {
         CLIP_CARD
     } else {
         "border:1px solid #888;"
     };
-    let body: String = (0..25)
+    let body: String = (0..count)
         .map(|i| {
             let shift = if top != 0 && i % every == every / 2 {
                 format!("position:relative;top:{top}px")
@@ -2214,6 +2219,43 @@ fn an_offset_on_every_fifth_paragraph_keeps_its_shift_and_every_word() {
     check_offset_card("R4", "size:A4;margin:15mm", (60, 5), 4, |i| {
         if (i / 100) % 5 == 2 { 45.0 } else { 0.0 }
     });
+}
+
+/// The words of 0..`total` that are not in the text of the PDF.
+fn words_missing(pdf: &[u8], total: usize) -> usize {
+    let found = printed_words(pdf);
+    let mut seen = vec![false; total];
+    for i in found.iter().filter_map(Word::index) {
+        seen[i] = true;
+    }
+    seen.iter().filter(|s| !**s).count()
+}
+
+#[test]
+fn a_shift_that_loses_more_words_than_placing_the_card_whole_places_it_whole() {
+    // F198j-f, plan section 6 ("very large shifts"), vrt-validator of PR #94. A card of N paragraphs, every one
+    // `top: -<T>px`, about as far up as the card is taller than a page. Painted, every line of a column lies above the sheet
+    // (all but the last few in each); placed whole, as main does, the card prints what lies between the page's edges. The
+    // painted plan lost more words than main: words missing, main / F198j before the fix / Chrome m153:
+    //   12 paragraphs, -1000px, A4 15 mm:   818 / 1152 /  684
+    //   25 paragraphs, -1000px, A4 15 mm:  2118 / 2357 /  684
+    //   12 paragraphs,  -600px, A4 margin 0: 765 /  807 /  470
+    //    6 paragraphs,  -300px, A4 margin 0: 159 /  229 /  229
+    // A box with a baked description, or a plan that loses no more than main's, is not touched (the other tests of this
+    // file). The card is placed whole: nothing is lost that main printed.
+    for (what, page, count, top, main_missing) in [
+        ("n12 t1000", "size:A4;margin:15mm", 12, -1000, 818),
+        ("n25 t1000", "size:A4;margin:15mm", 25, -1000, 2118),
+        ("n12 t600 at margin 0", "size:A4;margin:0", 12, -600, 765),
+        ("n6 t300 at margin 0", "size:A4;margin:0", 6, -300, 159),
+    ] {
+        let body = two_columns(&offset_card_of(count, top, false, 1, 0));
+        let missing = words_missing(&render_page(page, &body), count * 100);
+        assert!(
+            missing <= main_missing,
+            "{what}: {missing} words missing, main {main_missing}"
+        );
+    }
 }
 
 /// R5: a `CARD` that holds a wrapper `position: relative; top: <top>px` with 300 words, one 60 x 1200 px image (a line taller
