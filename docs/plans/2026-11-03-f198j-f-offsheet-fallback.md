@@ -236,7 +236,7 @@ Ours: main a7fdf92 and `origin/f213e-first-block-below-top-margin` (PR #93 was s
 
 The vrt-validator found 28 probes, in four sets of 639 (`huge_*`, `neg_*`, 24 of them in its `s2` set), where new lost more words than main: uniform negative shifts on a card only a little taller than a page (§6, "A shift of about the card's excess over a page"). Repros: `neg_a4m15_n12_e1_t1000` (Chrome 684, main 818, new 1152), `neg_a4m15_n25_e1_t1000` (684, 2118, 2357), `neg_a4m0_n12_e1_t600` (470, 765, 807), `neg_a4m0_n6_e1_t300` (229, 159, 229). The rule is that no word main printed may be lost.
 
-**Fix.** `fill_multicol_columns_in` counts, per outermost box, the atoms with an offset that lie wholly outside the sheet (`McFill::outside`; an atom that only crosses an edge keeps its glyphs there, as R1 shows, so `lost` is unchanged). For each box of the group that is still painted (in flow order, a `Block` flow item only) the group is planned once more without it; `mc_whole_loss` counts the atoms of the box, at the place Taffy puts them, that are wholly outside the sheet when it stands whole at its `Block` position on its page. The box is placed whole when that count is smaller than the painted one. A tie keeps the painted pieces. **The decision is per box**, in flow order, each one against the plan the earlier decisions left. The unit of the count is a line (the planner does not know words); a baked box is never a candidate; a paragraph with a frame of its own (a `Lines` flow item) stays painted. The final "past the edge of the page" warning is given only if the plan is still lost afterwards; a box placed whole is warned as "taller than a page", as on main.
+**Fix.** `fill_multicol_columns_in` counts, per outermost box, the atoms with an offset that lie wholly outside the sheet (`McFill::outside`; an atom that only crosses an edge keeps its glyphs there, as R1 shows, so `lost` is unchanged). For each box of the group that is still painted (in flow order, a `Block` flow item only) the group is planned once more without it; `mc_whole_loss` counts the atoms of the box, at the place Taffy puts them, that are wholly outside the sheet when it stands whole at its `Block` position on its page. The box is placed whole when that count is smaller than the painted one. (Round 1 kept the painted pieces on a tie; round 2 below reverses that.) **The decision is per box**, in flow order, each one against the plan the earlier decisions left. The unit of the count is a line (the planner does not know words); a baked box is never a candidate; a paragraph with a frame of its own (a `Lines` flow item) stays painted. The final "past the edge of the page" warning is given only if the plan is still lost afterwards; a box placed whole is warned as "taller than a page", as on main.
 
 **Tests.** Fork `multicol_container_places_a_card_whole_when_its_shifts_lose_more_lines_than_that` (12 paragraphs on 300 px pages with 30 px margins: `-1000px` whole, `-280px` and `-20px` painted; red with the comparison disabled, green). Ours `a_shift_that_loses_more_words_than_placing_the_card_whole_places_it_whole` in `multicol_boxes.rs`: n12 t1000 (<= 818 missing), n25 t1000 (<= 2118), n12 t600 at margin 0 (<= 765), n6 t300 at margin 0 (<= 159); red on `d0780431` (1152 missing), green on `b05e932c`.
 
@@ -248,3 +248,40 @@ The vrt-validator found 28 probes, in four sets of 639 (`huge_*`, `neg_*`, 24 of
 4. Byte gate, fixtures 01 to 45 and the 7 corpus documents, 1 and 4 rayon threads: identical to main; 1 equals 4. No probe of the 639 + 286 + 347 differs between 1 and 4 threads.
 5. See "Gates" below.
 
+### Review round 2 (PR #94): a tie is placed whole (fork `09d4d25a`)
+
+Validator round 2 (1152 + 308 tipping-point probes, `f198jfv/r2/{a,b}`) said merge, with two probes that still print fewer words than main: `t_land15_n10_e1_tm350` (main 585 words missing, `b05e932c` 593) and `t_land15_n8_e2_tm800` (391, 400). In both, placing the box whole and the painted plan leave the same number of atoms wholly outside the sheet, and the tie kept the painted pieces, which lose 8 to 9 more words than main's placement: the count is in lines, and the lines the painted plan loses at the sheet's edge carry more words.
+
+**Fix.** The comparison in `fragment_multicol_container` is `<=`: a box is placed whole when that loses no more lines than painting it, so the painted pieces stay only when they lose strictly fewer. A tie is main's own path, which keeps the rule that no word main printed may be lost. Fork commit `09d4d25a`, on `b05e932c`, append-only.
+
+**Test.** Fork `multicol_container_places_a_card_whole_when_its_shifts_lose_as_many_lines_as_that`: 16 paragraphs on 300 px pages with 30 px margins, every paragraph `top: -320px`; painted and whole both leave 525 lines outside the sheet (a scan of 6 to 16 paragraphs and tops -500 to -100 px found the tie at 16 paragraphs, -328 to -318 px). Red with `<`, green with `<=`. The round 1 test is unchanged and green (`-1000px` whole, `-280px` and `-20px` painted).
+
+**Acceptance against `htmltopdf-main-f213e`**, with `htmltopdf-f198jf3` (fork `09d4d25a`), all probes re-rendered with both binaries (`run1.sh`: Inter-Regular only for the validator's sets, `run.sh`: all faces for ours; words absent and words absent with their centre on the page, by `pdftotext -bbox`):
+
+| Set | Probes | Words missing: main / new | Probes with fewer words than main |
+|---|---|---|---|
+| `r2/a` | 1152 | 754716 / 312836 (`b05e932c`: 312852) | 0 |
+| `r2/b` (with Chrome: 66638) | 308 | 755953 / 124755 (`b05e932c`: 124755) | 0 |
+| `f198jfv/` | 321 | 303166 / 109803 | 0 |
+| `f198jfv/s2` | 156 | 129851 / 48348 | 0 |
+| `f198jfv/s3` | 102 | 182396 / 39352 | 0 |
+| `f198jfv/s4` | 60 | 79735 / 36253 | 0 |
+| ours `v286` | 286 | 184850 / 115904 | 0 |
+| ours `sw` | 347 | 155789 / 1697 | 0 |
+
+The two named probes now equal main (585, 391). 9 probes of `r2/a` differ from `b05e932c`, and each now has main's word count: 6 with the same count as before (the pieces moved, no word), the 2 probes above, and `t_land15_n5_e1_tm150`, which went from 90 to 91 missing words (main 91): the one word the tie rule gives back. The gains stay: the 639 validator probes sum to 233756 as before (main 695148); the 34 affected probes of `v286` 1979 (main 70925), the 76 of the matrix 1697 (main 155789), `s3/sp_a4m0_ABC_nosp` 21 (main 4130), `sp_a5m10_ABC_nosp` 20 (main 4648), `sp_a4first*` unchanged. The visible-word count is never above main's either.
+
+### Gates (fork `09d4d25a`, ours `htmltopdf-f198jf3`; base `htmltopdf-main-f213e`)
+
+| Gate | Result |
+|---|---|
+| Fork `cargo fmt --check`, `clippy --all-targets -D warnings` (Blitz, Taffy, Parley forks patched in by `--config`) | pass |
+| Fork `cargo test -p fulgur --no-fail-fast` (`CARGO_PROFILE_{DEV,TEST}_DEBUG=0`, pinned fontconfig) | 45 suites, 3135 passed, 0 failed, 2 ignored (`b05e932c`: 3134, the new tie test is the one more) |
+| Fork `fulgur-vrt` | 35 of 64 fixtures differ from their goldens as before; the 35 `.actual.pdf` sha256 sums are identical to F213e's `ccaa0207` run (`b05e932c` too): no golden moves. Fork `Cargo.lock` restored with `git checkout -- Cargo.lock` |
+| Ours `cargo fmt --check`, `cargo clippy --release --locked --all-targets -D warnings` | pass |
+| Ours `cargo test --release --locked --no-fail-fast` | 89 suites, 1079 passed, 0 failed, 14 ignored |
+| Byte gate, fixtures 01-45 + 7 corpus (52 PDFs), 1 and 4 rayon threads | identical to main; 1 equals 4 |
+| `scripts/render-fixtures.sh`, `compare.py --threshold-check` | passes, 45 fixtures ok; the output is identical to the run on `b05e932c`; no fixture moved. PNGs of 40 (p1) and 45 (p2) looked at: as F213e (45 p2 5.8 pt low, F183c) |
+| `bench.py --check` | ok; b200-text 818 ms, b200-mixed 795 ms (both under 1 s), b200-items 1324 ms (table exception 1250 ms not met on this machine: load average 2.5 to 4 from another build, and the corpus PDFs are byte-identical to main, so it is host noise; F213e's run measured 1458 ms); scaling r = 3.64 |
+
+Not verified: the fork and ours were not run on another host; the validator's Chrome numbers are the stored ones, Chrome was not re-run.
