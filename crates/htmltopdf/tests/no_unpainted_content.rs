@@ -20,6 +20,9 @@ use std::sync::Mutex;
 
 use htmltopdf::{RenderOptions, Renderer};
 
+#[path = "common/glyph_gaps.rs"]
+mod glyph_gaps;
+
 /// Fixtures that are allowed to warn, with the finding that owns the loss. Empty on purpose.
 const ALLOWED: &[(&str, &str)] = &[];
 
@@ -62,8 +65,15 @@ fn fixtures() -> Vec<PathBuf> {
 /// The renderer `fixtures.rs` builds: Inter, the images next to each fixture, strict fonts and images; the compiled
 /// Tailwind sheet only for a fixture that links it.
 fn renderer(tailwind: bool) -> Renderer {
+    renderer_strict(tailwind, true)
+}
+
+/// [`renderer`] with `strict_fonts` chosen by the caller: false for a fixture listed in `fixtures/glyph-gaps.txt` (F101).
+fn renderer_strict(tailwind: bool, strict_fonts: bool) -> Renderer {
     let root = root();
-    let mut b = Renderer::builder().strict_fonts(true).strict_images(true);
+    let mut b = Renderer::builder()
+        .strict_fonts(strict_fonts)
+        .strict_images(true);
     if tailwind {
         b = b
             .css_file(root.join("fixtures/tailwind/tailwind.css"))
@@ -113,14 +123,17 @@ fn no_fixture_has_content_that_is_painted_on_no_page() {
     log::set_max_level(log::LevelFilter::Warn);
 
     let (with, without) = (renderer(true), renderer(false));
+    let (lenient_with, lenient_without) =
+        (renderer_strict(true, false), renderer_strict(false, false));
     let mut failures = Vec::new();
     for dir in fixtures() {
         let name = dir.file_name().unwrap().to_string_lossy().into_owned();
         let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
-        let r = if html.contains("tailwind.css") {
-            &with
-        } else {
-            &without
+        let r = match (html.contains("tailwind.css"), glyph_gaps::is_listed(&name)) {
+            (true, false) => &with,
+            (false, false) => &without,
+            (true, true) => &lenient_with,
+            (false, true) => &lenient_without,
         };
         std::mem::take(&mut *LOG.lock().unwrap());
         r.render(

@@ -1,0 +1,14 @@
+# Fixtures that contain a character no bundled font has a glyph for (F101, docs/plans/2026-11-04-f101-missing-glyph-warning.md).
+#
+# One line per fixture: the directory name under fixtures/invoices/, then the code points (U+XXXX, space separated)
+# the engine reports as drawn-as-.notdef. Lines starting with # and empty lines are ignored.
+#
+# A listed fixture is rendered WITHOUT --strict-fonts (tests: strict_fonts(false)) and must warn about exactly these
+# code points, so a new gap in it still fails (crates/htmltopdf/tests/missing_glyph_warning.rs). Every fixture that is
+# not listed, and every bench/corpus document, stays strict and must report nothing. The PDF bytes do not depend on the
+# flag. Readers: crates/htmltopdf/tests/common/glyph_gaps.rs (fixtures.rs, row_borders.rs, no_unpainted_content.rs,
+# determinism_threads.rs, missing_glyph_warning.rs), scripts/render-fixtures.sh, scripts/bench.py.
+#
+# Remove an entry when the gap is closed (F101b: a bundled symbol face), re-baselining the fixture as content that is
+# now rendered.
+04-bilingual-vat U+21C4

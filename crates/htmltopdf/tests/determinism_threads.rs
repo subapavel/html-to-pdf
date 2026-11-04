@@ -21,6 +21,9 @@ use std::sync::OnceLock;
 
 use htmltopdf::{GenericFamily, RenderOptions, Renderer};
 
+#[path = "common/glyph_gaps.rs"]
+mod glyph_gaps;
+
 const CHILD_ENV: &str = "HTMLTOPDF_F99A_CHILD";
 const CHILD_TEST: &str = "zz_child_process";
 
@@ -182,10 +185,11 @@ fn scenario(name: &str) -> (Renderer, String) {
     }
 }
 
-fn fixture_renderer() -> Renderer {
+fn fixture_renderer(strict_fonts: bool) -> Renderer {
     let root = root();
     let mut b = Renderer::builder()
-        .strict_fonts(true)
+        // False only for a fixture listed in `fixtures/glyph-gaps.txt` (F101).
+        .strict_fonts(strict_fonts)
         .strict_images(true)
         .css_file(root.join("fixtures/tailwind/tailwind.css"))
         .unwrap();
@@ -228,7 +232,7 @@ fn zz_child_process() {
     };
     let (what, out) = spec.split_once('=').expect("scenario=path");
     if what == "fixtures" {
-        let r = fixture_renderer();
+        let (strict, lenient) = (fixture_renderer(true), fixture_renderer(false));
         let opts = RenderOptions {
             lang: Some("cs".into()),
             ..Default::default()
@@ -236,8 +240,13 @@ fn zz_child_process() {
         std::fs::create_dir_all(out).unwrap();
         for dir in fixture_dirs() {
             let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
-            let pdf = r.render(&html, &opts).expect("fixture render");
             let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+            let r = if glyph_gaps::is_listed(&name) {
+                &lenient
+            } else {
+                &strict
+            };
+            let pdf = r.render(&html, &opts).expect("fixture render");
             std::fs::write(Path::new(out).join(format!("{name}.pdf")), pdf).unwrap();
         }
     } else {

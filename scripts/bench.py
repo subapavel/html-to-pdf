@@ -471,6 +471,17 @@ def documents() -> list[Doc]:
     return docs
 
 
+def glyph_gaps() -> set[str]:
+    """Fixtures listed in fixtures/glyph-gaps.txt (F101): they contain a character no bundled font maps, so they are
+    rendered without --strict-fonts. The PDF bytes do not depend on the flag."""
+    names = set()
+    for line in (ROOT / "fixtures/glyph-gaps.txt").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            names.add(line.split()[0])
+    return names
+
+
 def binary() -> str:
     return os.environ.get("HTMLTOPDF_BIN") or str(ROOT / "target/release/htmltopdf")
 
@@ -485,7 +496,8 @@ def render_cmd(doc: Doc, pdf: Path) -> list[str]:
     if doc.kind == "fixture":
         for img in sorted(list(doc.path.parent.glob("*.png")) + list(doc.path.parent.glob("*.jpg"))):
             cmd += ["--image", f"{img.name}={img.relative_to(ROOT)}"]
-    cmd += ["--title", doc.name, "--lang", "cs", "--strict-fonts", "--strict-images"]
+    strict_fonts = [] if doc.kind == "fixture" and doc.name in glyph_gaps() else ["--strict-fonts"]
+    cmd += ["--title", doc.name, "--lang", "cs", *strict_fonts, "--strict-images"]
     return cmd
 
 

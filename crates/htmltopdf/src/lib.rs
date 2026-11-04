@@ -60,6 +60,15 @@ pub enum Error {
     /// of `@page` margin boxes. The message names at most 20 entries; the vector has all of them.
     #[error("text without a font, left out of the PDF: {}", join_capped(.0))]
     TextWithoutFont(Vec<String>),
+    /// Characters whose font has no glyph for them (F101 / F44): the text is drawn as `.notdef` (an empty box or
+    /// nothing, depending on the viewer) and is missing from the PDF's text layer. One entry per (character, font
+    /// family), in drawing order. Returned only with [`RendererBuilder::strict_fonts`]`(true)`; otherwise logged.
+    /// The message names at most 20 entries; the vector has all of them.
+    ///
+    /// Not produced yet: the engine side (the fulgur fork) comes after this type; see
+    /// `docs/plans/2026-11-04-f101-missing-glyph-warning.md`.
+    #[error("characters with no glyph in their font, drawn as .notdef: {}", join_missing(.0))]
+    MissingGlyphs(Vec<MissingGlyph>),
     /// Bundled font files with a face the PDF writer cannot embed, or bytes that are not a font (F178): a face without
     /// a `head` table, one with no glyph outlines, junk. Such a file is left out of the bundle whole (a collection with
     /// one bad face too); without it the text would be shaped with a face that is then dropped from the PDF, or drawn
@@ -80,6 +89,29 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+}
+
+/// A character that the font chosen for it has no glyph for (F101 / F44).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingGlyph {
+    /// The character, as written in the document.
+    pub character: char,
+    /// The family of the face the text was set in (`name` ID 16, else ID 1).
+    pub font_family: String,
+}
+
+impl fmt::Display for MissingGlyph {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "U+{:04X} \"{}\" in {}",
+            self.character as u32, self.character, self.font_family
+        )
+    }
+}
+
+fn join_missing(list: &[MissingGlyph]) -> String {
+    join_capped(&list.iter().map(|m| m.to_string()).collect::<Vec<_>>())
 }
 
 /// A bundled font file that was left out because the PDF writer cannot embed one of its faces (F178).
@@ -875,6 +907,24 @@ mod tests {
         assert!(msg.contains("t19\"") && !msg.contains("t20\""), "{msg}");
         assert!(msg.ends_with("; ... and 4980 more"), "{msg}");
         assert!(msg.len() < 1000, "{} bytes", msg.len());
+    }
+
+    #[test]
+    fn missing_glyph_reads_as_code_point_character_and_family() {
+        let m = MissingGlyph {
+            character: '\u{21C4}',
+            font_family: "Inter".into(),
+        };
+        assert_eq!(m.to_string(), "U+21C4 \"\u{21C4}\" in Inter");
+        let many: Vec<MissingGlyph> = (0..25)
+            .map(|i| MissingGlyph {
+                character: char::from_u32(0x4E00 + i).unwrap(),
+                font_family: "Inter".into(),
+            })
+            .collect();
+        let msg = Error::MissingGlyphs(many).to_string();
+        assert!(msg.contains("U+4E13 ") && !msg.contains("U+4E14 "), "{msg}");
+        assert!(msg.ends_with("; ... and 5 more"), "{msg}");
     }
 
     #[test]

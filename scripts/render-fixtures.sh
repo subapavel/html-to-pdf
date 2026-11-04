@@ -15,6 +15,10 @@ names=("$@")
 
 FONTS=(); for f in fixtures/fonts/Inter-*.ttf; do FONTS+=(--font "$f"); done
 
+# A fixture listed in fixtures/glyph-gaps.txt (F101) has a character no bundled font maps, so it is rendered without
+# --strict-fonts (the PDF bytes are the same either way). Every other fixture is strict.
+gap_listed() { grep -Eq "^$1([[:space:]]|\$)" fixtures/glyph-gaps.txt; }
+
 for n in "${names[@]}"; do
   dir="fixtures/invoices/$n"; [ -f "$dir/index.html" ] || continue
   out="out/$n"; mkdir -p "$out"
@@ -22,9 +26,10 @@ for n in "${names[@]}"; do
   for img in "$dir"/*.png "$dir"/*.jpg; do [ -f "$img" ] && IMAGES+=(--image "$(basename "$img")=$img"); done
   # A fixture gets the compiled Tailwind sheet only when its <link> names it (27 is plain CSS: no preflight).
   CSS=(); grep -q 'tailwind\.css' "$dir/index.html" && CSS=(--css fixtures/tailwind/tailwind.css)
+  STRICT=(--strict-fonts); gap_listed "$n" && STRICT=()
   "$BIN" render "$dir/index.html" -o "$out/htmltopdf.pdf" \
       "${CSS[@]}" "${FONTS[@]}" "${IMAGES[@]}" \
-      --title "$n" --lang cs --strict-fonts --strict-images
+      --title "$n" --lang cs "${STRICT[@]}" --strict-images
   rm -f "$out"/htmltopdf-p*.png
   pdftoppm -r 96 -png "$out/htmltopdf.pdf" "$out/htmltopdf-p"
   if [ $update = 1 ]; then

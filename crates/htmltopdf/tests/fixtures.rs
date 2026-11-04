@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 
 use htmltopdf::{RenderOptions, Renderer};
 
+#[path = "common/glyph_gaps.rs"]
+mod glyph_gaps;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -25,10 +28,20 @@ fn uses_tailwind(html: &str) -> bool {
 }
 
 fn renderer_with(tailwind: bool) -> Renderer {
+    build_renderer(tailwind, true)
+}
+
+/// Like [`renderer_with`] for a fixture listed in `fixtures/glyph-gaps.txt` (F101): it has a character no bundled font
+/// maps, so it is rendered without `strict_fonts`. The bytes are the same; only the warning is not an error.
+fn lenient_with(tailwind: bool) -> Renderer {
+    build_renderer(tailwind, false)
+}
+
+fn build_renderer(tailwind: bool, strict_fonts: bool) -> Renderer {
     let root = root();
     // Fixtures are under our control, so every font-family they mention must resolve: strict.
     let mut b = Renderer::builder()
-        .strict_fonts(true)
+        .strict_fonts(strict_fonts)
         // Every `<img>` of a fixture must name a bundled image that decodes (F32a).
         .strict_images(true);
     if tailwind {
@@ -92,12 +105,15 @@ fn fixtures() -> Vec<PathBuf> {
 #[test]
 fn every_fixture_renders_to_a_pdf_deterministically() {
     let (with, without) = (renderer_with(true), renderer_with(false));
+    let (lenient_with, lenient_without) = (lenient_with(true), lenient_with(false));
     for dir in fixtures() {
         let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
-        let r = if uses_tailwind(&html) {
-            &with
-        } else {
-            &without
+        let listed = glyph_gaps::is_listed(&dir.file_name().unwrap().to_string_lossy());
+        let r = match (uses_tailwind(&html), listed) {
+            (true, false) => &with,
+            (false, false) => &without,
+            (true, true) => &lenient_with,
+            (false, true) => &lenient_without,
         };
         let opts = RenderOptions {
             lang: Some("cs".into()),
@@ -154,8 +170,13 @@ fn mono_identifiers_survive_into_pdf_text() {
         ("03-logo-qr", &["20260003", "48 400,00 CZK"]),
         ("04-bilingual-vat", &["CEKOCZPP", "20260004"]),
     ];
-    let r = renderer();
+    let (r, lenient) = (renderer(), lenient_with(true));
     for (name, needles) in expected {
+        let r = if glyph_gaps::is_listed(name) {
+            &lenient
+        } else {
+            &r
+        };
         let html = std::fs::read_to_string(
             root()
                 .join("fixtures/invoices")
@@ -444,12 +465,15 @@ fn inline_spacing_invoice_keeps_its_label_spaces() {
 fn every_invoice_fixture_passes_the_font_check() {
     // Guards against false positives of the static `font-family` check on the real Tailwind output.
     let (with, without) = (renderer_with(true), renderer_with(false));
+    let (lenient_with, lenient_without) = (lenient_with(true), lenient_with(false));
     for dir in fixtures() {
         let html = std::fs::read_to_string(dir.join("index.html")).unwrap();
-        let r = if uses_tailwind(&html) {
-            &with
-        } else {
-            &without
+        let listed = glyph_gaps::is_listed(&dir.file_name().unwrap().to_string_lossy());
+        let r = match (uses_tailwind(&html), listed) {
+            (true, false) => &with,
+            (false, false) => &without,
+            (true, true) => &lenient_with,
+            (false, true) => &lenient_without,
         };
         if let Err(e) = r.render(&html, &RenderOptions::default()) {
             panic!("{}: {e}", dir.display());

@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 
 use htmltopdf::{Margins, Page, RenderOptions, Renderer};
 
+#[path = "common/glyph_gaps.rs"]
+mod glyph_gaps;
+
 /// Pitch tolerance in pt (the plan's ±0.2): Taffy rounds 0.5 px halves, single rows may alternate by 0.375 pt.
 const PITCH_TOL: f32 = 0.2;
 /// Max per-channel distance from an expected colour when sampling pixels.
@@ -567,7 +570,12 @@ fn font_files() -> Vec<PathBuf> {
 
 /// Strict, Inter bundled, no Tailwind, `css` appended after the common rules.
 fn renderer(css: &str, tailwind: bool) -> Renderer {
-    let mut b = Renderer::builder().strict_fonts(true);
+    renderer_strict(css, tailwind, true)
+}
+
+/// [`renderer`] with `strict_fonts` chosen by the caller: false for a fixture listed in `fixtures/glyph-gaps.txt` (F101).
+fn renderer_strict(css: &str, tailwind: bool, strict_fonts: bool) -> Renderer {
+    let mut b = Renderer::builder().strict_fonts(strict_fonts);
     if tailwind {
         b = b
             .css_file(root().join("fixtures/tailwind/tailwind.css"))
@@ -651,7 +659,7 @@ fn render_fixture(name: &str) -> Vec<u8> {
             .join("index.html"),
     )
     .unwrap();
-    renderer("", true)
+    renderer_strict("", true, !glyph_gaps::is_listed(name))
         .render(
             &html,
             &RenderOptions {
