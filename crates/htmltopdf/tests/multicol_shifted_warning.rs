@@ -103,7 +103,6 @@ fn a_child_pulled_above_the_previous_line_is_warned_about_and_a_plain_card_is_no
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn an_offset_off_the_sheet_is_warned_about_on_both_paths() {
     // F198j-f. A card the fallback can bake keeps its offsets in the flow and says so ("part of the flow"); a card it cannot
     // bake keeps its painted pieces, and since a line is painted past the edge of the page the engine says that, once. On round 2

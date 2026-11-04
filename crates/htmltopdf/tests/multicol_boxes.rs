@@ -2181,7 +2181,6 @@ fn check_offset_card(
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn a_negative_offset_at_margin_zero_keeps_its_shift_and_every_word() {
     // R1. `@page { margin: 0 }`, every paragraph `top: -8px` (6 pt): the first line of a page is painted 6 pt above the sheet.
     // Words missing of 2500, pages (A4, Inter 14px / 1.2, 25 paragraphs of 100 words; Chrome m153 and the binaries of the F198j-f sweep):
@@ -2192,7 +2191,6 @@ fn a_negative_offset_at_margin_zero_keeps_its_shift_and_every_word() {
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn a_large_negative_offset_on_a5_keeps_its_shift_and_every_word() {
     // R2. A5 with 10 mm margins (28.3 pt), every paragraph `top: -40px` (30 pt): more than the margin.
     // main 2316, 2 pages; F198j 0, 8; head 2316, 2; Chrome 16 (it drops the lines it moves off the sheet), 8. With 15 mm margins
@@ -2201,7 +2199,6 @@ fn a_large_negative_offset_on_a5_keeps_its_shift_and_every_word() {
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn a_negative_offset_with_narrow_margins_keeps_its_shift_and_every_word() {
     // R3. A4 with 5 mm margins (14.2 pt), every paragraph `top: -20px` (15 pt).
     // main 2094, 2 pages; F198j 0, 4; head 2094, 2; Chrome 12, 4.
@@ -2209,7 +2206,6 @@ fn a_negative_offset_with_narrow_margins_keeps_its_shift_and_every_word() {
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn an_offset_on_every_fifth_paragraph_keeps_its_shift_and_every_word() {
     // R4. A4 15 mm, paragraphs 3, 8, 13, 18 and 23 (counting from 1) are `top: 60px` (45 pt, more than the 42.5 pt margin).
     // main 2140, 2 pages; F198j 0, 4; head 2140, 2; Chrome 0, 4. The card has no baked description: a paragraph is above the last
@@ -2238,7 +2234,6 @@ fn shape_offset_wrapper(top: i32) -> String {
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn a_shifted_wrapper_around_a_tall_line_keeps_its_shift_and_the_rest_flows_on() {
     // R5. The wrapper's 600 words are 15 pt lower than in the flat card; the line with the image is taller than a page and
     // stands alone at the top of a column (ADR-0004: a line is not sliced), so the words on its baseline, below the page edge,
@@ -2304,7 +2299,6 @@ fn shape_two_offset_cards() -> String {
 }
 
 #[test]
-#[ignore = "F198j-f: red until the fork fix"]
 fn in_one_flow_a_card_main_could_cut_is_baked_and_one_it_could_not_keeps_its_shift() {
     // G2. One multi-column container, two tall cards: G1's (every paragraph `top: 100px`; it bakes) and R4's (paragraphs
     // 3, 8, ... `top: 60px`; no baked description), the second numbered on from w2500. Per box: the first is baked, the second
