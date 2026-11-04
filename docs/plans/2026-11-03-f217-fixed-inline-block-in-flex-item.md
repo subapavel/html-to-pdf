@@ -232,3 +232,14 @@ Box (`inline-block`, `inline-flex`, `inline-grid`, `inline-table`) x content (em
 
 - A flex item that is an inline root and has an explicit `width` larger than the container is not shrunk: `<div style="display:flex;width:300px"><div style="width:400px">text</div><div style="width:100px">Tail</div></div>`: Chrome shrinks the first item (Tail at 222.7 pt), ours keeps 400 px (Tail at 342.5 pt, byte-identical on main and on the branch); `flex:0 1 300px` and a block child do shrink. Probably the item's own `ContentSize` / `size` interplay in `compute_leaf_layout`.
 - The 3.75 pt F183b gap above (already filed).
+
+### 7.7 Final gates on the merge with main a734840 (2026-11-04)
+
+Binaries: `main` = `htmltopdf-main-f213e` (main code through #93; main a734840 differs from it by docs only), `new` = this branch head after the merge (Blitz fork `5305fa41`, fulgur `ccaa0207`, `skrifa` as on main). `Cargo.lock` differs from main in the two Blitz source lines only; `cargo metadata --locked` passes.
+
+- Byte gate, fixtures 01-46 and the 7 corpus documents (53 PDFs), `RAYON_NUM_THREADS` 1 and 4: **only fixture 46 differs** (both thread counts); each binary gives the same bytes at 1 and 4 threads. This time fixture 45 was part of the gate.
+- `cargo test --release --locked --no-fail-fast`: 90 test binaries, 1083 passed, 0 failed.
+- `cargo fmt --check`: clean. `cargo clippy --release --locked --all-targets -- -D warnings`: clean.
+- `render-fixtures.sh` (`HTMLTOPDF_BIN` absolute) then `python3 scripts/compare.py --threshold-check`: exit 0, 46 fixtures all within their thresholds; fixture 46 2.8 % (threshold 4 %), page count 1/1. `out/compare/46-qr-flex-payment-row-p1.png` looked at: both boxes are 112 px squares, the QR code sits in row A's box, each paragraph stands below its box, as in Chrome (3.75 pt higher, F183b). `pdftotext -bbox` line positions: "Variabilní" 454.6 pt on main, 465.1 pt now (Chrome 469.1); "Děkujeme" 508.6 pt on main, 588.1 pt now (Chrome 595.8).
+- `bench.py --check` (`HTMLTOPDF_BIN` absolute, machine shared with another build): exit 0. Fixture 46 median 14.8 ms. `b200-items` 1302 ms (above the 1250 ms table exception on this loaded machine, as in §7.5), `b200-text` 962 ms, `b200-mixed` 953 ms; scaling r = 3.57.
+- Not run: `vrt-validator`, the fulgur fork VRT and `examples_determinism` (see §7.5 for the earlier fork VRT run).
