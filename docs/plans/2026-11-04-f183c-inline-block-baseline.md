@@ -327,4 +327,4 @@ Next, step 3 (Blitz and fulgur in one lock move): Blitz `layout/baseline.rs` and
 Blitz branch head to build on: `4488400c`; Parley `21d3c72e`.
 
 Build notes: release only, `CARGO_TARGET_DIR=/home/user/html-to-pdf/target` is shared and every cargo run queued 30 to 90 minutes behind the others on its lock; a full `cargo build --release --workspace --all-targets` of this branch took 96 minutes including the wait. After a `--config patch...path` run, restore the `Cargo.lock` of that repo.
-Not verified in step 2: `cargo clippy` (see the commit message of the step-2 commit for its state), the `bench.py --check` speed guard (step 6).
+`cargo clippy --release --locked --workspace --all-targets -- -D warnings` and `cargo fmt --check` pass (two `type_complexity` fixes in the new tests, one commit after the lock move). Not verified in step 2: the `bench.py --check` speed guard and `compare.py` for the whole set (step 6; fixture 48 alone gave 4.25 % on main).

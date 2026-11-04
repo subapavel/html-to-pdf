@@ -681,7 +681,8 @@ fn f183c_the_y_of_the_moved_boxes_is_chromes() {
     let l15: Vec<(String, f32)> = (1..=15)
         .map(|i| (format!("L{i:02}"), 44.6 + 15.0 * (i - 1) as f32))
         .collect();
-    let mut cases: Vec<(&str, String, Vec<(String, f32)>)> = vec![
+    type Expect = Vec<(String, f32)>;
+    let mut cases: Vec<(&str, String, Expect)> = vec![
         (
             "Q1: 300 px box, a block child",
             alone(&boxed("inline-block", Some(300), "", BOXTOP)),

@@ -768,7 +768,9 @@ const B7: &[Case] = &[
     },
 ];
 
-const B10: &[(bool, u32, usize, &[(&str, usize, f32)])] = &[
+/// `(with text, filler px, pages, [(word, page, yMin)])`, Chrome's numbers.
+type Row = (bool, u32, usize, &'static [(&'static str, usize, f32)]);
+const B10: &[Row] = &[
     (
         true,
         700,
