@@ -1,6 +1,6 @@
 # F107: an `<img>` in a running element is not painted in the margin box
 
-Date: 2026-11-04. Finding: F107 (`2026-10-15-m0-findings.md:820-822`), pilot bar item. Status: planned.
+Date: 2026-11-04. Finding: F107 (`2026-10-15-m0-findings.md:820-822`), pilot bar item. Status: done (steps 1-4; `vrt-validator` and `pdf-reviewer` are run by the coordinator).
 
 - Fix on the shared fulgur fork `subapavel/fulgur` `htmltopdf/srgb-colours`, as one commit on top of its head at the time (the fork is linear; rebase before pushing if another finding landed first).
 - Line references are to `/home/user/fulgur` as read today; the commit was not confirmed with git. No `css-spec-researcher` output; every spec reference is from memory and **unverified**.
@@ -120,3 +120,46 @@ The change:
   - F104, F105, F106, F108, F139, F140, F141.
   - `@top-left { content: url(…) }` without a running element: if the probe shows it broken, file a new finding.
 - **Size:** small. The fork change is about 40 lines plus tests; three or four days in all with the fixture.
+
+## 7. Results (2026-11-04)
+
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`: **`5215c775`** (one commit on `09d4d25a`). Ours: branch `f107-image-in-running-element`.
+
+**Ranking of §3, measured (step 1, red tests first, then one fix at a time in a scratch build).**
+
+| State | Result |
+|---|---|
+| nothing (assets threaded through, not used) | I1 (sized PNG), I2, I3, I4, R4 red: no image on any page |
+| H1 only (assets in stage 3's `ConvertContext`) | I1 green (sized PNG painted 1 / 1) and I5, I6 green; I2 (unsized PNG), I3 (SVG), I4 (name starts at 72.7 px, left of the logo) red; the lib test's max-content width is still the page width (the 0-wide image falls back to `body`, `get_body_child_dimension`) |
+| H1 + H2 (seed in `parse_and_layout_margin_doc`) | all green |
+
+H3 (drawable kind) did not matter: a block-level `<img>` (Tailwind preflight) in a flex item went through the same dispatcher. H4 stays ruled out.
+
+**Deviations from the plan.**
+- `images_per_page` counted `pdfimages -list` rows, so a PNG with alpha (fixture 03's logo) was 2 rows (image + `smask`); it counts `image` rows only now. R4 is `[1, 1]`, as planned.
+- Stage 3's conversion moved into `margin_doc_drawables` (render.rs), so the lib test runs the production path instead of a copy of it. `margin_doc_dump` is unchanged.
+- Fixture 47 wraps the SVG in `flex justify-end`. Tailwind's preflight makes every `<img>` a block, `text-align: right` does not move a block image, and css-page-3 §5.3 gives each of the two boxes a share of the free width, so the unwrapped mark stood at the left of a wide `@top-right` box (600-664 px instead of 641-736). That is the spec's behaviour, not a defect; I3 uses the same wrapper.
+- `gap-3` is not in the compiled sheet; the header uses `gap-4` (16 px).
+- No speed cache was needed (below). No golden directory: fixtures have none (17 has none either); the reference is `reference/chrome*.png`.
+
+**Chrome probes (fixture README).** P1 (`content: url()`) paints, but at natural size (the 240 x 72 logo overlaps the heading); P2 (`position: fixed; top: -15mm`) paints nothing in the margin; P3 pins the sizes. **P1b** (the images as `background` of the margin boxes, `padding-left` for the logo) is the reference: mark 642-738 x 12-44 on both pages against ours 641-736 x 12-44; logo ink 1 px lower, name ink 1 px lower.
+
+**Fixture 47**: compare 5.3 / 4.2 % (worst 5.3 %), 2 pages like Chrome, threshold 6.3 %. Main's binary paints neither image (`pdfimages -list` empty). Both pages share one image object (id 25); no size finding.
+
+**Gates.**
+
+| Gate | Result |
+|---|---|
+| Fork `cargo fmt --check`, `clippy --all-targets -D warnings` (Blitz `3cea708f`, Taffy `7bbedd5b`, Parley `1f23226a` patched in by `--config`) | pass |
+| Fork `cargo test -p fulgur --no-fail-fast` (`CARGO_PROFILE_{DEV,TEST}_DEBUG=0`, pinned fontconfig) | 45 suites, 3138 passed, 0 failed, 2 ignored (09d4d25a: 3135; the 3 new tests) |
+| Fork `fulgur-vrt` | 35 of 64 differ from their goldens as before (this container); the 35 `.actual.pdf` sha256 sums are identical to a run on `09d4d25a`: no golden moves |
+| Ours `cargo fmt --check`, `clippy --release --locked --all-targets -D warnings` | pass |
+| Ours `cargo test --release --locked --no-fail-fast` | 90 suites, 1087 passed, 0 failed, 14 ignored (main: 89 / 1079; `running_images.rs` is the new suite, 8 tests) |
+| Byte gate, fixtures 01-45 + 7 corpus + 47, 1 and 4 rayon threads, against `htmltopdf-main-f198jf` | 52 identical; only 47 differs; 1 thread equals 4 |
+| `render-fixtures.sh`, `compare.py --threshold-check` | passes; 47: 5.3 / 4.2 %; PNGs of 47 p1 and p2 looked at |
+| `bench.py --check` | ok; b200-text 833 ms, b200-mixed 844 ms; b200-items 1452 ms (the 1250 ms table exception is not met on this host, and the corpus PDFs are byte-identical to main, so host noise as in F198j-f) |
+| Speed probe: 200 pages, footer = running SVG + `counter(page)`, every page a cache miss | user CPU, 4 alternating runs each: main 1.69 s, ours 1.68 s (noise +-0.1 s); wall 1.0-1.6 s on a loaded host. No growth beyond noise, so no per-`src` seed cache |
+
+**Not verified.** `vrt-validator` and `pdf-reviewer` (coordinator). Chrome cannot render a running element, so the reference shows positions, not the running-element mechanism. The strict-mode refusal and `<svg><image href>` lookups from margin boxes stay F177c (re-worded). `background-image`, `list-style-image` and `content: url()` inside margin boxes now paint (named in §6); no fixture or corpus document has one, which the byte gate confirms. `bench.py --check` ran while the host load average was about 4.
+
+**New edge cases.** Low, synthetic: a margin-box `<img>` that is a Tailwind block sits at the left of a wide box in `@top-right` (spec behaviour, README of 47). Nothing invoice-like found.
