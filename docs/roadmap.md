@@ -40,6 +40,7 @@ these go before anything that is not on this list.
 |---|---|
 | F213e-b | a first `break-inside: avoid` card under a letterhead margin hangs below the content box and loses lines |
 | F213e-c | the same card after a zero-height sibling (a `counter-reset` div) hangs the same way |
+| F183c | an `inline-block` with text (a "ZAPLACENO" stamp, a captioned QR box) is seated by its bottom edge, not its last line: after F217 it paints over the next block |
 | F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it |
 | F30h | rows of several items around a split paragraph |
 | F35 | text of cells next to a split cell (`vertical-align: middle / bottom`) is lost |
