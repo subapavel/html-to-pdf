@@ -168,3 +168,12 @@ Filed by this plan:
   marker path of `note_notdef` is covered by the fork's unit tests, not by an htmltopdf test.
 - **Choice (a).** `Error::MissingGlyphs` and `MissingGlyph` exist in `htmltopdf` but nothing produces them yet; the red tests
   are `#[ignore = "F101: red until the fork reports .notdef"]`. Step 3 removes the `ignore`s.
+
+## 7. Status (2026-11-04)
+
+- Done: step 1 (red tests G1-G7 and the CLI tests, `Error::MissingGlyphs` / `MissingGlyph` unwired, `fixtures/glyph-gaps.txt`
+  with its readers). Nothing else of the plan is started; the fulgur fork is untouched. Results are under *Step 1 result*.
+- Next: step 2, the fulgur fork (`MissingGlyph`, `KrillaFonts::note_notdef` and the family cache, the `paragraph.rs` call,
+  `DrawReport`, `report_missing_glyphs`, `Error::MissingGlyphs`, unit and smoke tests). It starts after F107 leaves the fork.
+  Step 3 then maps the error in `Renderer::run`, removes the nine `#[ignore = "F101: ..."]` attributes (seven in
+  `tests/missing_glyph_warning.rs`, two in `htmltopdf-cli/tests/missing_glyph_warning.rs`) and updates the docs and CLI help.
