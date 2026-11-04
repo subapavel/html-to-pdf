@@ -304,6 +304,15 @@ THRESHOLDS = {
     #     box was painted below the edge of page 1 (its top part on page 1 without a bottom border, the name on no page), 1 page against Chrome's 2:
     #     3.5 / 0.4 % (page 2 absent). Worst page + 1 point; goes down with F183c.
     "44-signature-box-page-bottom": 0.043,
+    # 46: new in F217 (a one-page Czech invoice with two payment rows in `flex gap-4`: a 128 px label and an item whose text holds a
+    #     fixed 112 px `inline-block` (`w-28 h-28`): row A with a padded 64 px QR `<svg>` inside, row B empty (a stamp box); a paragraph
+    #     follows each row. Chrome: both rows 112 px tall, the paragraph below each box ("Variabilní" 469.1 pt, "Děkujeme" 595.8 pt).
+    #     Ours: the same, with each paragraph 3.75 pt higher (90.0 pt below its label, Chrome 93.75): the line box lacks the strut's
+    #     descent under an inline-block's baseline (F183b). 2.8 %: the text drift every fixture has plus the displaced row text. On main's binary (Blitz without F217)
+    #     the boxes were measured without their size: the row ended at its text line, row A's box was drawn at its content size (about 98 px, not 112)
+    #     with "Variabilní" (454.6 pt) printed over its bottom, row B's empty box collapsed to a 2 px sliver and "Děkujeme" (508.6 pt) stood
+    #     87 pt too high: 3.0 %, a number that hardly moves because the boxes are small. Page + 1 point; goes down with F183b.
+    "46-qr-flex-payment-row": 0.038,
     # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
     #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
     #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 9.4 / 6.8 %: the text drift every fixture has over two pages of
