@@ -190,7 +190,7 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.2.4"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#3cea708f046b0bbf8f45b399386533f91af6f829"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#4488400ca0050f13acaaf49c24ff6b2455ce25b9"
 dependencies = [
  "accesskit",
  "app_units",
@@ -231,7 +231,7 @@ dependencies = [
 [[package]]
 name = "blitz-html"
 version = "0.2.0"
-source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#3cea708f046b0bbf8f45b399386533f91af6f829"
+source = "git+https://github.com/subapavel/blitz?branch=htmltopdf%2Fblitz-dom-0.2.4#4488400ca0050f13acaaf49c24ff6b2455ce25b9"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -920,7 +920,7 @@ dependencies = [
 [[package]]
 name = "fontique"
 version = "0.6.0"
-source = "git+https://github.com/subapavel/parley?branch=htmltopdf%2Finline-box-strut#1f23226a9b133fb4626041c0dc3fe440e1e56781"
+source = "git+https://github.com/subapavel/parley?branch=htmltopdf%2Finline-box-strut#21d3c72ec918943ad76877b794ffa7fd58682b7b"
 dependencies = [
  "bytemuck",
  "hashbrown 0.15.5",
@@ -1898,7 +1898,7 @@ dependencies = [
 [[package]]
 name = "parley"
 version = "0.6.0"
-source = "git+https://github.com/subapavel/parley?branch=htmltopdf%2Finline-box-strut#1f23226a9b133fb4626041c0dc3fe440e1e56781"
+source = "git+https://github.com/subapavel/parley?branch=htmltopdf%2Finline-box-strut#21d3c72ec918943ad76877b794ffa7fd58682b7b"
 dependencies = [
  "fontique",
  "harfrust",

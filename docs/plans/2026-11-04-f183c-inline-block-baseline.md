@@ -303,4 +303,28 @@ The four things to change in the plan, all consequences of the table:
 
 ### 7.3 Step 2: Parley and Blitz, output-neutral
 
-Filled in the commit of step 2.
+Fork commits (all pushed, append-only):
+
+| Repo, branch | SHA | What |
+|---|---|---|
+| Blitz `htmltopdf/blitz-dom-0.2.4` | `d3f2a372` | `git revert 5305fa41` (F217's fix), ADR-0012 |
+| Blitz | `6feeb2c7` | `git revert 4c3af6ae` (F217's red tests), ADR-0012. `git diff 3cea708f 6feeb2c7` is empty |
+| Parley `htmltopdf/inline-box-strut` | `21d3c72e` (on `1f23226`) | `InlineBox::baseline: Option<f32>`; `finish` takes the strut path also without a strut for `Some(b)`: above = max(text and strut, `b`, flagged `None` heights), below = max(text and strut, `height - b`, 0); with `Some` the line is `baseline_above + below`, without it the old formula bit for bit; `GlyphRunIter::next` places the box at `baseline - b.unwrap_or(height)`. Seven unit tests in `test_strut.rs` |
+| Blitz | `4488400c` | `whitespace.rs` `replay` passes `baseline: None`; the only change against main's lock `3cea708f` |
+
+`Cargo.lock` (this branch): exactly four lines moved, `parley` and `fontique` to `21d3c72e`, `blitz-dom` and `blitz-html` to `4488400c`; no other crate;
+`cargo metadata --locked` passes. fulgur is untouched (`09d4d25a`).
+
+Gate (binary `htmltopdf-f183c-a` of this branch against the binary of main f550a8e, `RAYON_NUM_THREADS` 1 and 4): the 46 fixtures (01-45, 48) and the 7 `bench/corpus` documents are
+byte-identical at both thread counts (53 PDFs, 106 comparisons; stderr differs only in paths and timings). Fixtures 03, 27, 35, 37, 43, 44, 45 and 48 are identical too, as expected before step 3.
+Parley: `cargo test -p parley --lib` with `PARLEY_IGNORE_DECODING_ERRORS=1` 87 passed (the snapshot PNGs are LFS pointers here, so without the variable 53 snapshot tests fail on main as well).
+
+### 7.4 Where to resume
+
+Done: steps 0, 1, 2 (see 7.1 to 7.3). Not started: steps 3 to 7. The fulgur fork was not touched (the F107 engineer works there; step 3 needs the go).
+
+Next, step 3 (Blitz and fulgur in one lock move): Blitz `layout/baseline.rs` and `ibox.baseline` in `compute_inline_layout`, `PerformLayout` for the boxes of a measuring pass, lib tests, **with the `overflow` rule of 7.1 (only `hidden`, `auto`, `scroll` give `None`; `clip` is like `visible`)**; fulgur `convert/inline_root.rs`: `computed_y = positioned.y - accumulated_line_top`, drop `baseline_shift` and the two `*_baseline_*_from_drawables` functions. Green then: `cargo test --release --locked -- --ignored` for the step 3 tests of 7.2, then remove the old assertions that the ignored tests replace (the 7.0 pt bound in `fixtures.rs`, the 91.3 pt comments), and lower the thresholds of 03, 27, 35, 37, 43, 44, 45, 48 in `compare.py`.
+Blitz branch head to build on: `4488400c`; Parley `21d3c72e`.
+
+Build notes: release only, `CARGO_TARGET_DIR=/home/user/html-to-pdf/target` is shared and every cargo run queued 30 to 90 minutes behind the others on its lock; a full `cargo build --release --workspace --all-targets` of this branch took 96 minutes including the wait. After a `--config patch...path` run, restore the `Cargo.lock` of that repo.
+Not verified in step 2: `cargo clippy` (see the commit message of the step-2 commit for its state), the `bench.py --check` speed guard (step 6).
