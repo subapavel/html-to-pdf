@@ -163,3 +163,19 @@ H3 (drawable kind) did not matter: a block-level `<img>` (Tailwind preflight) in
 **Not verified.** `vrt-validator` and `pdf-reviewer` (coordinator). Chrome cannot render a running element, so the reference shows positions, not the running-element mechanism. The strict-mode refusal and `<svg><image href>` lookups from margin boxes stay F177c (re-worded). `background-image`, `list-style-image` and `content: url()` inside margin boxes now paint (named in §6); no fixture or corpus document has one, which the byte gate confirms. `bench.py --check` ran while the host load average was about 4.
 
 **New edge cases.** Low, synthetic: a margin-box `<img>` that is a Tailwind block sits at the left of a wide box in `@top-right` (spec behaviour, README of 47). Nothing invoice-like found.
+
+### 7.x Review (PR #97)
+
+- **`vrt-validator`: MERGE.**
+  - Byte gate (53 PDFs, RAYON 1/4/8): only fixture 47 differs from main.
+  - Fixture 47 is at 5.27 / 4.18 % (main 5.83 / 4.75 %).
+  - PNG, JPEG and SVG print in all 16 margin boxes, with image objects shared across pages.
+  - 200 pages add about 228 B per page.
+  - Strict mode refuses broken or unbundled images as in the body.
+  - No host file is read.
+  - Pre-existing edges were filed: F219 (wrapped margin-box text lost with `@top-center`), and B15–B17 in the backlog.
+- **`pdf-reviewer`: no defect.**
+  - One XObject with SMask, not resampled.
+  - The SVG is drawn as vectors with the bundled Inter.
+  - Deterministic; `qpdf` clean.
+  - Tagged-output gaps that main already has were filed as F218.
