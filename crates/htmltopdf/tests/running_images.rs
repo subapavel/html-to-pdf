@@ -255,7 +255,7 @@ fn per_page(objs: &[(usize, usize)], pages: usize) -> Vec<usize> {
 
 const LOGO: &str =
     "<div class=\"hlavicka\"><img src=\"logo.png\" style=\"height:32px\" alt=\"\"></div>";
-const MARK: &str = "<div class=\"znacka\"><img src=\"znacka.svg\" alt=\"\"></div>";
+const MARK: &str = "<div class=\"znacka flex justify-end\"><img src=\"znacka.svg\" alt=\"\"></div>";
 
 /// I1: the sized PNG of the R4 footer is painted on both pages (the tightened R4 is in `running_elements.rs`);
 /// here the same with the plan's header shape.

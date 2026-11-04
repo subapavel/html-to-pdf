@@ -321,6 +321,12 @@ THRESHOLDS = {
     #     13 rows, page 2: the 14th row, the totals and the thank-you line): 4.3 / 5.5 %. The worst page GREW 5.5 -> 9.2 because the
     #     content that was wrongly on page 1 is now on page 2 where the F183c offset shows; the F183c finding brings it down. Worst page + 1 point.
     "45-letterhead-keep-together": 0.102,
+    # 47: new in F107 (a letterhead in the top margin: a bundled PNG logo and the name from a flex row in `@top-left`, a bundled SVG
+    #     mark in `@top-right`, both running elements; 17's invoice below it). 5.3 / 4.2 %: the text drift every fixture has and the
+    #     `border-b` rules Chrome paints on every item row (`<tr>` borders, Blitz #386 / F22). The band matches Chrome's reference
+    #     (P1b, the images as backgrounds of the margin boxes; fixture README): logo, name and mark within 1-2 px, the mark
+    #     641-736 x 12-44 against 642-738 x 12-44. On main's binary neither image was painted. Worst page + 1 point; F22 brings it down.
+    "47-running-header-logo": 0.063,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

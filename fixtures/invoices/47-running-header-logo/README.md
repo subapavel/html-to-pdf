@@ -13,13 +13,15 @@ The two-page invoice of 17 (42 item rows, "Celkem k úhradě"), with the footer 
 <header class="hlavicka flex items-center gap-4 text-sm">
   <img src="logo.png" alt="" style="height:32px"> <span class="font-semibold">Příkladná integrace s.r.o.</span>
 </header>
-<div class="znacka"><img src="znacka.svg" alt=""></div>
+<div class="znacka flex justify-end"><img src="znacka.svg" alt=""></div>
 ```
 
 This is the GCPM way of putting a letterhead on every page. `logo.png` (fixture 03's, 240 × 72, no `width` / `height` in the
 markup: the natural ratio gives 106.67 × 32 px) is a bundled PNG; `znacka.svg` (96 × 32 px, a rounded rectangle with the text
 "ISO 9001" in Inter) is a bundled SVG, bundled like the PNGs (`scripts/render-fixtures.sh` and the fixture tests also register
-`*.svg` now). Both sit inside the 56.69 px top band (F139) and are centred in it (F103).
+`*.svg` now). Both sit inside the 56.69 px top band (F139) and are centred in it (F103). The mark's wrapper is `flex justify-end` on purpose: Tailwind's
+preflight makes every `<img>` a block, `text-align: right` of `@top-right` does not move a block-level image, and css-page-3 §5.3 hands each
+of the two boxes a share of the free width (so the box is wider than the 96 px mark and the image would stand at its left edge).
 
 Exercises:
 - an `<img>` in a running element (F107; CSS GCPM 3 §2.2: the element is the content of the margin box, so its images are ordinary
