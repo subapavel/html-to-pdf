@@ -2,7 +2,7 @@
 
 Date: 2026-11-04. Finding: F183c (`2026-10-15-m0-findings.md`, with the F213 and F213e notes), re-scoped to the baseline of atomic inlines with
 in-flow content; folds in F183b (section 3.2). Pilot item (`docs/roadmap.md`, *Pilot bar*): it must land before F217 (PR #95), which exposes it.
-Status: step 0 done (section 7.1), steps 1 and 2 done (7.2, 7.3); steps 3 to 7 open.
+Status: steps 0 to 2 done (7.1 to 7.3); steps 3 to 5 implemented and gated (7.5); **step 6 stopped on one sweep case (7.5, "Open: the 1 px band")**; step 7 (findings, validators) not started.
 
 ## 1. Problem
 
@@ -328,3 +328,54 @@ Blitz branch head to build on: `4488400c`; Parley `21d3c72e`.
 
 Build notes: release only, `CARGO_TARGET_DIR=/home/user/html-to-pdf/target` is shared and every cargo run queued 30 to 90 minutes behind the others on its lock; a full `cargo build --release --workspace --all-targets` of this branch took 96 minutes including the wait. After a `--config patch...path` run, restore the `Cargo.lock` of that repo.
 `cargo clippy --release --locked --workspace --all-targets -- -D warnings` and `cargo fmt --check` pass (two `type_complexity` fixes in the new tests, one commit after the lock move). Not verified in step 2: the `bench.py --check` speed guard and `compare.py` for the whole set (step 6; fixture 48 alone gave 4.25 % on main).
+
+### 7.5 Steps 3 to 6: what was done (2026-11-09)
+
+Fork commits (all pushed, append-only). Parley is unchanged (`21d3c72e`).
+
+| Repo | SHA | What |
+|---|---|---|
+| Blitz | `ecb900f6` | step 3: `layout/baseline.rs` (`atomic_inline_baseline`, `last_line_baseline`), `ibox.baseline`, boxes with content laid out with `PerformLayout` also in a measuring pass; 11 lib tests (the five of fulgur, the walk, a measured-at-another-width test that fails without `PerformLayout`) |
+| fulgur | `f2bfc96f` | step 3: `baseline_shift` and the two `*_from_drawables` walks removed, `computed_y = positioned.y - accumulated_line_top`, stale comments |
+| Blitz | `65bf3726` | step 4: `strut_box` flags every atomic inline with `vertical-align: baseline`, `inside_atomic_inline` removed |
+| Blitz | `514d51e0` | `layout.margin` of an inline box is kept (Parley places the margin box, the painter needs the border box inside it; B12 was 10 px high without it) |
+| Blitz | `2fd60f3f` | step 5: `first_line_baseline`; `inline-flex` / `inline-grid` give the first in-flow item (an item without a line gives its bottom edge), `inline-table` the first row; a table cell that is not `vertical-align: baseline` gives its bottom edge |
+| fulgur | `8a4cd2c4` | `computed_y` adds the top margin (`unrounded_layout.margin.top`); lib test that `computed_y` is the position Blitz recorded |
+
+Deviations from the plan, all decided on Chrome numbers of 7.1: `clip` is like `visible`; the **real `<table style="display:inline-table">` is fixed, not filed** (the cell-bottom rule is three lines; measured on Blitz: 43 px for a 40 px first cell with a 3 px border, 23 px for an auto cell, the text baseline for a `vertical-align: baseline` cell); `overflow` is tested on the box itself only (a nested `overflow: hidden` block keeps its line baseline, as in fulgur's old walk; not measured in Chrome).
+
+Lock of this branch: `blitz-dom`, `blitz-html` to `2fd60f3f` and `fulgur` to `8a4cd2c4`, three lines of `Cargo.lock`.
+
+Gates (binary `htmltopdf-f183c-c` of this head against main `0cbe50f`, binary `htmltopdf-main-f107`):
+
+| Gate | Result |
+|---|---|
+| `cargo test --release --locked --no-fail-fast` | 1109 passed, 0 failed, 14 ignored (none of them F183c's; all 18 of `inline_block_baseline.rs`, the three `inline_img_strut` flips and the 5 y tests are on) |
+| `cargo fmt --check`, `cargo clippy --release --locked --all-targets -- -D warnings` | pass |
+| Byte gate, RAYON 1 and 4 | 47 of 54 PDFs identical to main at both counts (fixtures 01, 02, 04-26, 28-36, 38-42, 47, and the 7 corpus documents); 03, 27, 37, 43, 44, 45, 48 differ; **35 does not move** (its `::before` dot is not an atomic inline box); binary is deterministic across 1 and 4 threads |
+| `render-fixtures.sh` + `compare.py --threshold-check` | all 47 ok; page counts unchanged (Chrome's) |
+| `bench.py --check` | ok: b200-items 1230 ms, b200-text 749, b200-mixed 770, scaling r 4.27; fixtures 9 to 28 ms |
+| Item table with a badge per row (b200-items with 4800 inline-block badges, 262 / 268 pages on main / new) | median of 5: main 1608 / 1647 ms, new 1779 / 1669 ms: within the noise, at most 10 % |
+| Parley `cargo test -p parley --lib` | 87 passed |
+| Blitz `cargo test -p blitz-dom --lib -- --test-threads=1` | 175 passed |
+| fulgur `cargo test -p fulgur --no-fail-fast` | 3131 passed, 0 failed |
+| fulgur-vrt | 36 of 64 differ with the pinned `FONTCONFIG_FILE`, against the 35 recorded for main; see `docs/upstream.md` |
+
+Fixtures that moved, worst page, main to this head (threshold, set to the new number plus 1 point where the worst page improved): 03 4.7 to 2.4 % (3.5), 27 6.1 to 5.9 (7.0), 37 3.2 to 2.2 (3.2), 43 3.7 / 1.4 to 3.7 / 0.4 (unchanged 4.7: the worst page is page 1, untouched), 44 3.3 / 0.8 to 3.3 / 0.4 (unchanged 4.3), 45 0.0 / 9.2 to 0.0 / 5.3 (6.3), 48 4.3 to 3.6 (4.7). None grew. The PNGs of all seven were looked at: the stamp under the title, the badges level with their text, the QR frame on the line of its text, "Faktura" at the content top of page 2, nothing in the bottom margin.
+
+Sweep against Chrome m153 (per case: pages, every word, y of the marker words, the box rows, stderr warnings):
+
+| Set | Cases | improved / same / further than main | warnings main to new |
+|---|---|---|---|
+| `pb`: the step-0 probes (B1 to B13, fixed boxes, contexts, images, `pg_t_*`, `pg_e_*`, F213d / F213e shapes) | 132 | 131 / 1 / **0** | 8 to 0 |
+| `sw`: context (p, grid item, table cell, flex column) x box (fixed 60, 112, 300, 600, auto, empty, `overflow: hidden`, `inline-flex`) x room (fits, box -8, -4, 0, +4, +8, none) | 224 | 203 / 18 / **3** | 39 to 0 |
+| `ed`, `e2`: the room's edge in 1 px steps for an empty box, a clipped box, a box with text and an image | 42 + 50 | 76 / 11 / **5** | |
+
+No case loses a word or gains a warning; the sum of |dy| to Chrome over the `sw` marks falls from 133402 to 75431, the cases within 0.75 pt from 0 to 179 of 224; page counts differ from Chrome in the same 30 `sw` cases as on main (flex-column items, F217).
+
+**Open: the 1 px band.** The 8 cases that are further than main are one case: an **empty or clipped box (`overflow: hidden`) whose line fits the room in Chrome by exactly the strut's last pixel**. For a 52 px box Chrome keeps the row on page 1 from room 56 (box + 4), main from 52 (it has no strut under such a box), this head from 57 (box + 5). So for rooms 52 to 55 main is wrong and this head is right; for room 56 main is right and this head is wrong: the wrong band shrinks from 4 px to 1 px, but at that one room the case is further than main. The cause is not the box: Chrome keeps a line that overflows the room by less than 1 px (room 56.13 for a row of 57; measured: an `<img>` of 40 px needs room 44 in Chrome and 45 in main and here, a box with text 51 against 52 in both: the same 1 px on shapes that F183b did not touch), where our fragmenter wants the whole line inside the room. F183b makes the empty box's row include the strut, as Chrome's does (the row pitch X to AFTER is 15.0 pt in both), so the band moves from "no strut, 4 px early" to "the fragmenter's 1 px". Fixing it means giving the fragmenter that tolerance, which moves page breaks in every document and is another finding; it was not done here. Decision needed: accept the 1 px band (it is a strict improvement in the room count: 1 wrong room instead of 4, and on an invoice a shape that only occurs when a row ends within a pixel of the page end) and file the tolerance as its own finding, or hold F183c until the tolerance lands. Not decided here: the plan's pass condition ("none is further than main") is not met as written.
+
+New edge cases found:
+
+- **`margin-left` / `margin-right` of an inline box are lost in the paint (x).** Main and this head draw `<span style="display:inline-block;margin-left:50px">` at the margin edge, so the box sits 50 px left of where the line holds its space (the text after it is right). Invoice-like (`ml-2` on a badge): findings queue. The fix is the same line as the top margin in `convert/inline_root.rs` (`x_offset` plus `layout.margin.left`); not done here, it moves pixels of fixtures with such boxes and is another finding.
+- Not measured in Chrome: a nested block with `overflow: hidden` as the last child of an inline-block (the walk keeps its line baseline); `overflow-x: clip` alone on an `inline-flex`; `inline-flex` with `overflow: hidden` (here: the bottom edge, as fulgur's old walk did).

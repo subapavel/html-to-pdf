@@ -420,7 +420,6 @@ fn g3_tailwind_preflight_images_are_block() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
 fn g3_empty_inline_block_leaves_the_strut_descent_below_it() {
     // An empty `inline-block` has its bottom margin edge on the baseline, and the strut's descent stays under it
     // (CSS 2.1 section 10.8.1): Chrome m153 puts the next block at 52, not 48 (F183b, flipped by F183c).
@@ -488,7 +487,6 @@ fn v1_short_line_height_with_text_and_a_30px_image() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
 fn v2_image_inside_an_inline_block_has_the_strut_under_it() {
     // The inner line is 64 tall and the box sits on its last line's baseline (CSS 2.1 section 10.8.1), so the strut inside
     // the box counts and the block after it is at 64, 34 for the 30 px image in a button (Chrome m153; F183b, flipped by
@@ -566,7 +564,6 @@ fn v3_unflagged_box_taller_than_a_baseline_image_keeps_the_old_line() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
 fn v3_inline_block_taller_than_a_baseline_image_keeps_the_strut_descent() {
     // A 100 px empty inline-block and a 20 px baseline image: the box's bottom edge is on the baseline and the strut's
     // descent stays under it, so the line is 104 (Chrome m153; F183b, flipped by F183c; it was 100).

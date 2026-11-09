@@ -12,8 +12,8 @@
 //! The page is A4 with 15 mm margins (content box 1009.13 px), `body { font: 14px/20px Inter }`. `room(R)` is a block
 //! that leaves R px below it. `alone(..)` is `<p>BOX</p><p>AFTER</p>`: a 150 px wide `inline-block` with a 1 px border
 //! alone in its paragraph. Every page number is Chrome's (version of the committed references, measured with the
-//! settings of `scripts/reference/render.mjs` and `pdftotext -bbox`, plan section 7). The y positions are not compared
-//! with Chrome's: ours seats an inline box bottom-on-baseline (F183c), so a fixed-height box and its line sit lower.
+//! settings of `scripts/reference/render.mjs` and `pdftotext -bbox`, plan section 7). The y positions of the moved lines
+//! are compared in `f183c_the_y_of_the_moved_lines_is_chromes` (an inline box sits on the baseline of its last line since F183c).
 //!
 //! The tests named `r_*` are red before the fix; the `g_*` tests are guards that hold before and after.
 
@@ -673,9 +673,8 @@ fn r_a_page_tall_box_behind_a_margined_ancestor_at_the_page_top_loses_no_line() 
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn f183c_the_y_of_the_moved_boxes_is_chromes() {
-    // The y that this file leaves uncompared "because of F183c" (see the header), with Chrome m153's numbers measured with
+    // The y that the tests above leave to this one (see the header), with Chrome m153's numbers measured with
     // the bundled Inter TTF through `@font-face`, so that `pdftotext` reports the metrics of our font (plan section 7).
     // Room 120, box moved to page 2; within 1 px (0.75 pt). `(name, html, [(word, y on page 2)])`.
     let l15: Vec<(String, f32)> = (1..=15)

@@ -1324,7 +1324,6 @@ const B10: &[Row] = &[
 // inlines); step 5 (first baseline of inline-flex, inline-grid, inline-table).
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b1_stamp_alone_in_a_block() {
     // The 140 x 60 stamp (12 px padding on top, 3 px border) alone in a block: Chrome's box top is at line top, its
     // text baseline is the box's baseline, the next block follows the box. Ours painted the box 36 pt low.
@@ -1332,25 +1331,21 @@ fn b1_stamp_alone_in_a_block() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b2_qr_caption_box_in_a_sentence_is_level_with_its_text() {
     check(B2);
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b3_fixture_43_shape_label_qr_amount() {
     check(B3);
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b4_badges_on_a_text_line() {
     check(B4);
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines; clip and visible are the last line, the others the bottom edge)"]
 fn b5_overflow_decides_the_baseline() {
     // Chrome m153: `overflow: hidden`, `auto` and `scroll` put the bottom margin edge on the baseline (the text sits on
     // the bottom of the box), `visible` and `clip` the last line box's baseline. The plan assumed `clip` is "not visible";
@@ -1359,7 +1354,6 @@ fn b5_overflow_decides_the_baseline() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
 fn b6_empty_box_keeps_the_strut_descent_below_it() {
     // A box without in-flow content has its bottom margin edge on the baseline and the strut's descent under it:
     // the next block follows 4-5 px below the box (48 + 2 x 3 px border + the strut's descent).
@@ -1367,13 +1361,11 @@ fn b6_empty_box_keeps_the_strut_descent_below_it() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 4 (F183b: the strut covers atomic inlines)"]
 fn images_inside_an_atomic_inline_keep_the_strut() {
     check(IMG);
 }
 
 #[test]
-#[ignore = "F183c: red until step 5 (first baseline of inline-flex, inline-grid, inline-table)"]
 fn b7_inline_flex_grid_table_use_the_first_baseline() {
     // css-align-3 section 9.1: `baseline-source: auto` is the last baseline for `inline-block` and the first for every
     // other box. `inline-table` made of `display: table-row/-cell` boxes is covered; a real `<table>` with the default
@@ -1382,7 +1374,6 @@ fn b7_inline_flex_grid_table_use_the_first_baseline() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b8_nested_boxes_the_last_block_child_holds_an_inline_block() {
     // The baseline of the outer box is that of the last line box in its normal flow, found through the last block
     // child that has one; an empty last block child is skipped.
@@ -1390,7 +1381,6 @@ fn b8_nested_boxes_the_last_block_child_holds_an_inline_block() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b9_fixed_box_with_more_lines_than_fit_prints_every_line_once() {
     // F183c-b: 40 lines of 20 px in a 300 px box. Chrome prints all 40 lines (they overflow the box), the line box
     // reaches down to the last of them and AFTER follows at 646.1 pt. Ours seated the overflow above the page top:
@@ -1450,7 +1440,6 @@ fn b9_fixed_box_with_more_lines_than_fit_prints_every_line_once() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b10_box_in_a_plain_block_at_the_rooms_edge() {
     // The `pg_t_*` / `pg_e_*` probes of F217's validator, with a plain block instead of a flex row: a 112 px box with
     // text (`t`) or empty (`e`) in a sentence, N px of filler above. Pages, the place of every word and no warning
@@ -1528,7 +1517,6 @@ fn b11_two_top_aligned_boxes_keep_their_text_level() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b12_margins_on_the_box() {
     // `margin-top` moves the box and the line's text down by the margin; `margin-bottom` adds to the line below the box;
     // the margin of the last child inside the box is part of the box and not of the baseline.
@@ -1536,13 +1524,11 @@ fn b12_margins_on_the_box() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn b13_a_float_or_absolutely_positioned_last_child_is_skipped() {
     check(B13);
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn fixed_boxes_with_text_at_the_top_sit_on_the_text_baseline() {
     // Boxes of 60, 112, 300 and 600 px with one line of text at the top, and the other fixed shapes of the sweep: line
     // height 1 and 30 px, a 30 px font, padding under the text, the box alone in its paragraph.
@@ -1550,7 +1536,6 @@ fn fixed_boxes_with_text_at_the_top_sit_on_the_text_baseline() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn boxes_in_a_grid_item_and_a_table_cell() {
     // The measuring pass of a grid item or a cell and the final pass must agree on the box (plan section 6, Taffy's
     // cache); flex items are F217's.
@@ -1558,7 +1543,6 @@ fn boxes_in_a_grid_item_and_a_table_cell() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn a_600px_box_moved_to_page_two_by_f213d_is_printed_whole() {
     // Was `page_bottom_warning.rs` "F183c, a known residual loss": the 600 px box (a short block child) that does not fit
     // the 120 px of room moves to page 2 whole; ours painted it hanging 90.9 pt below the edge of page 2, so the net
@@ -1586,7 +1570,6 @@ fn a_600px_box_moved_to_page_two_by_f213d_is_printed_whole() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn fixture_48_paid_stamp_and_qr_sit_where_chrome_puts_them() {
     // Fixture 48: a grid header with the 140 x 60 "ZAPLACENO" stamp under the title, 15 item rows and a payment
     // sentence with a 112 px QR box, ending 10 pt above the content bottom. Chrome m153 (the committed reference):

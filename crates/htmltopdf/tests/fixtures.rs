@@ -2061,16 +2061,7 @@ fn letterhead_invoice_moves_whole_to_page_two() {
     }
     // The invoice starts at the content top of page 2 like Chrome's (43.3 pt); the thank-you line ends it.
     let y = |word: &str| ours.iter().find(|w| w.3 == word).unwrap().1;
-    // F183c: ours seats the 843 px box bottom-on-baseline and Blitz aligns its last line there, so the box (and "Faktura")
-    // is painted 5.8 pt (7.7 px) lower than in Chrome (49.1 pt, Chrome 43.3 pt) while the thank-you line, below the carrier,
-    // is where Chrome has it (693.1 pt, Chrome 693.3 pt). The bound is that offset, not a tolerance for a wrong page; the
-    // ignored test `letterhead_invoice_starts_at_chromes_y` below has the bound of 1.5 pt, and replaces this one with step 3
-    // of docs/plans/2026-11-04-f183c-inline-block-baseline.md.
-    assert!(
-        (y("Faktura") - 43.3).abs() <= 7.0,
-        "`Faktura` at {:.1} pt, Chrome puts it at 43.3 pt (F183c allows 5.8 pt lower)",
-        y("Faktura")
-    );
+    // "Faktura" itself is checked at 1.5 pt by `letterhead_invoice_starts_at_chromes_y` below.
     assert!(
         (y("Děkujeme") - 693.3).abs() <= 2.0,
         "`Děkujeme` at {:.1} pt, Chrome puts it at 693.3 pt",
@@ -2083,11 +2074,9 @@ fn letterhead_invoice_moves_whole_to_page_two() {
 }
 
 #[test]
-#[ignore = "F183c: red until step 3 (Blitz reports the baseline of the box, fulgur stops moving it a second time)"]
 fn letterhead_invoice_starts_at_chromes_y() {
-    // Fixture 45 again, with the bound of the finished fix: the 843 px box sits on the baseline of its last line, so
-    // "Faktura" is at Chrome's 43.3 pt (it was 49.1 pt, 5.8 pt low; the old bound of 7.0 pt in
-    // `letterhead_invoice_moves_whole_to_page_two` goes with this one) and the thank-you line stays at 693.3 pt.
+    // Fixture 45 again: the 843 px box sits on the baseline of its last line (F183c), so "Faktura" is at Chrome's 43.3 pt
+    // (it was 49.1 pt, 5.8 pt low) and the thank-you line stays at 693.3 pt.
     let name = "45-letterhead-keep-together";
     let html = std::fs::read_to_string(
         root()
