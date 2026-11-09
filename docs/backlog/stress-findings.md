@@ -71,3 +71,19 @@ Same on main and after F107 (`f107v/p/c2.html`); an image and the page number in
 ### B17 — an unbundled `list-style-image` / `background-image` in a margin box is dropped without a warning; `content: url()` in a margin box does not paint  (severity: low, size: unknown — fulgur)
 
 F107 validator `f107v/p/sidefx.html`. Nothing is read from the host. Goes with F177c.
+
+### B18 — a nested `overflow: hidden` block as the last child of an inline-block keeps its own line baseline  (severity: low, size: unknown — Blitz)
+
+F183c plan §7.5: `atomic_inline_baseline` tests `overflow` on the box itself only, so an inline-block whose last child is an `overflow: hidden` block sits on that block's last line, as fulgur's old walk did. CSS 2.1 §10.8.1 and css-align-3 §9.1 would have the clipped block give its bottom edge. Not measured in Chrome; synthetic.
+
+### B19 — `overflow-x: clip` alone on an `inline-flex` is not checked against Chrome  (severity: low, size: unknown — Blitz)
+
+F183c plan §7.5: `clip` is treated like `visible` for the baseline (measured on an `inline-block`: Chrome keeps the last line baseline). A single axis of `clip` on an `inline-flex` was not measured.
+
+### B20 — an `inline-flex` with `overflow: hidden` gives its bottom edge as the baseline; not checked against Chrome  (severity: low, size: unknown — Blitz)
+
+F183c plan §7.5: `first_line_baseline` returns none for `hidden`, `scroll` and `auto` (the box falls back to its bottom edge, as fulgur's old walk did). Chrome was measured for `inline-block` only.
+
+### B21 — `align-items: baseline` in flex and grid: Blitz gives Taffy no item baselines  (severity: low, size: unknown — Blitz / Taffy)
+
+Non-goal of F183c (plan §6). Items aligned by baseline are aligned as if their baseline were the top edge (`start`), so a badge beside a larger text in a `flex items-baseline` row sits higher than in Chrome. Synthetic until a fixture uses `items-baseline` with different font sizes; then it goes to the queue (ADR-0011).

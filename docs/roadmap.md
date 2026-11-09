@@ -40,7 +40,6 @@ these go before anything that is not on this list.
 |---|---|
 | F213e-b | a first `break-inside: avoid` card under a letterhead margin hangs below the content box and loses lines |
 | F213e-c | the same card after a zero-height sibling (a `counter-reset` div) hangs the same way |
-| F183c | an `inline-block` with text (a "ZAPLACENO" stamp, a captioned QR box) is seated by its bottom edge, not its last line: after F217 it paints over the next block |
 | F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it |
 | F30h | rows of several items around a split paragraph |
 | F35 | text of cells next to a split cell (`vertical-align: middle / bottom`) is lost |
@@ -54,13 +53,14 @@ these go before anything that is not on this list.
 | F47 | a single-side cell border (`border-b`) can be painted black |
 | F203 | negative vertical margins (`-mt-*`) are ignored |
 | F208 | horizontal padding / margin / border of an inline element (badge `px-2`) moves no text |
+| F220 | `margin-left` / `margin-right` on an `inline-block` (a badge `ml-2`) is lost in the paint: the box is drawn at its margin edge, off the text that follows |
 | F120 | an `inline-flex` badge is laid out at max-content width |
 | F66g | a wide `nowrap` table loses its right columns at the page edge (warned) |
 | F75 | text in a family with no face is dropped |
 | F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 | F17 | non-sRGB colours in SVG logos paint black |
 
-F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
+F183c was done on 2026-11-09 (an `inline-block` with text sits on the baseline of its last line box, the strut of the block stays under it; the stamp and the captioned QR box no longer paint over the next block; fixtures 03, 27, 37, 43, 44, 45 and 48 move toward Chrome, none grows; its plan §7.5); it was taken off the list. F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
 
 Not on the list on purpose: tagging / PDF/UA (F85, F123, F198k, F200, F42), PDF/A (F62, owner decision 2026-10-26),
 speed of long tables (F45, owner decision 2026-10-27), multi-column edge shapes (F198*, F173, F174*, F193, F30d-*),
