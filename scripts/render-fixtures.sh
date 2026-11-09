@@ -19,7 +19,7 @@ for n in "${names[@]}"; do
   dir="fixtures/invoices/$n"; [ -f "$dir/index.html" ] || continue
   out="out/$n"; mkdir -p "$out"
   IMAGES=()
-  for img in "$dir"/*.png "$dir"/*.jpg; do [ -f "$img" ] && IMAGES+=(--image "$(basename "$img")=$img"); done
+  for img in "$dir"/*.png "$dir"/*.jpg "$dir"/*.svg; do [ -f "$img" ] && IMAGES+=(--image "$(basename "$img")=$img"); done
   # A fixture gets the compiled Tailwind sheet only when its <link> names it (27 is plain CSS: no preflight).
   CSS=(); grep -q 'tailwind\.css' "$dir/index.html" && CSS=(--css fixtures/tailwind/tailwind.css)
   "$BIN" render "$dir/index.html" -o "$out/htmltopdf.pdf" \

@@ -60,7 +60,10 @@ fn renderer_with(tailwind: bool) -> Renderer {
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "png" || x == "jpg"))
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|x| x == "png" || x == "jpg" || x == "svg")
+            })
             .collect();
         files.sort();
         for f in files {
