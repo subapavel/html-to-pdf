@@ -38,28 +38,26 @@ these go before anything that is not on this list.
 
 | Finding | Why it blocks |
 |---|---|
+| F213e-c | a `break-inside: avoid` card under a letterhead after a zero-height sibling (a `counter-reset` div) hangs below the content box; Chrome moves it to page 2 |
 | F213e-b | a first `break-inside: avoid` card under a letterhead margin hangs below the content box and loses lines |
-| F213e-c | the same card after a zero-height sibling (a `counter-reset` div) hangs the same way |
-| F30h | rows of several items around a split paragraph |
+| F30h | a flex row with `items-center` / `items-end` or padding around a split item loses up to 98 % of the row **silently** (re-check 2026-11-09) |
 | F35 | text of cells next to a split cell (`vertical-align: middle / bottom`) is lost |
-| F38 | first content taller than page 1's room goes off the page |
-| F88 | a paragraph with large vertical padding loses most of its lines, silently |
-| F46 | an inline `<img>` in a split paragraph is dropped and two lines merge |
-| F109 | a `:first` page box different from later pages clips or loses content |
-| F107 | a logo `<img>` in a running header is not painted |
-| F24 | a `width: 100%` table overflows its card's padding |
+| F75 | text in a family with no face is dropped |
+| F66g | a wide `nowrap` table loses its right columns at the page edge (warned) |
+| F208 | an inline badge (`px-2`, `ml-1`): its padding moves no text, its pill background is not painted, words merge ("Celkemk") |
+| F220 | `margin-left` / `margin-right` on an `inline-block` (a badge `ml-2`) is lost in the paint: the box is drawn at its margin edge, off the text after it |
+| F120 | an `inline-flex` badge is laid out at max-content width |
 | F129 | free table width is split equally, not by content: column positions of most item tables |
 | F130 | columns with an explicit `width` are not stretched |
-| F47 | a single-side cell border (`border-b`) can be painted black |
-| F203 | negative vertical margins (`-mt-*`) are ignored |
-| F208 | horizontal padding / margin / border of an inline element (badge `px-2`) moves no text |
-| F120 | an `inline-flex` badge is laid out at max-content width |
-| F66g | a wide `nowrap` table loses its right columns at the page edge (warned) |
-| F75 | text in a family with no face is dropped |
-| F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 | F17 | non-sRGB colours in SVG logos paint black |
+| F24 | a `width: 100%` table overflows its card's padding |
+| F109 | a `:first` page box different from later pages clips or loses content |
+| F203 | negative vertical margins (`-mt-*`) are ignored |
+| F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 
-F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F217 was done on 2026-11-03 (a fixed-size inline-block in a flex item's text keeps its size; fixture 46). F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
+F183c was done on 2026-11-09 (an `inline-block` with text sits on the baseline of its last line box, the strut of the block stays under it; the stamp and the captioned QR box no longer paint over the next block; fixtures 03, 27, 37, 43, 44, 45 and 48 move toward Chrome, none grows; its plan §7.5); it was taken off the list. F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F217 was done on 2026-11-03 and re-landed on top of F183c on 2026-11-14 (a fixed-size inline-block in a flex item's text keeps its size; fixture 46; its plan §7.8). F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
+
+Re-checked on 2026-11-09 against main and Chrome m153 (scratch `pilotcheck/`): F46, F47 and F88 are fixed (by F30c-n, F30f, F96 and F213 along the way) and F38 is fixed for invoice shapes (F213e); all four left the list. The order above follows that re-check: silent text loss first, then warned loss, then what only looks off.
 
 Not on the list on purpose: tagging / PDF/UA (F85, F123, F198k, F200, F42), PDF/A (F62, owner decision 2026-10-26),
 speed of long tables (F45, owner decision 2026-10-27), multi-column edge shapes (F198*, F173, F174*, F193, F30d-*),

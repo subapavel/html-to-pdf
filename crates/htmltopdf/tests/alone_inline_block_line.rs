@@ -12,8 +12,8 @@
 //! The page is A4 with 15 mm margins (content box 1009.13 px), `body { font: 14px/20px Inter }`. `room(R)` is a block
 //! that leaves R px below it. `alone(..)` is `<p>BOX</p><p>AFTER</p>`: a 150 px wide `inline-block` with a 1 px border
 //! alone in its paragraph. Every page number is Chrome's (version of the committed references, measured with the
-//! settings of `scripts/reference/render.mjs` and `pdftotext -bbox`, plan section 7). The y positions are not compared
-//! with Chrome's: ours seats an inline box bottom-on-baseline (F183c), so a fixed-height box and its line sit lower.
+//! settings of `scripts/reference/render.mjs` and `pdftotext -bbox`, plan section 7). The y positions of the moved lines
+//! are compared in `f183c_the_y_of_the_moved_lines_is_chromes` (an inline box sits on the baseline of its last line since F183c).
 //!
 //! The tests named `r_*` are red before the fix; the `g_*` tests are guards that hold before and after.
 
@@ -670,4 +670,181 @@ fn r_a_page_tall_box_behind_a_margined_ancestor_at_the_page_top_loses_no_line() 
             }
         }
     }
+}
+
+#[test]
+fn f183c_the_y_of_the_moved_boxes_is_chromes() {
+    // The y that the tests above leave to this one (see the header), with Chrome m153's numbers measured with
+    // the bundled Inter TTF through `@font-face`, so that `pdftotext` reports the metrics of our font (plan section 7).
+    // Room 120, box moved to page 2; within 1 px (0.75 pt). `(name, html, [(word, y on page 2)])`.
+    let l15: Vec<(String, f32)> = (1..=15)
+        .map(|i| (format!("L{i:02}"), 44.6 + 15.0 * (i - 1) as f32))
+        .collect();
+    type Expect = Vec<(String, f32)>;
+    let mut cases: Vec<(&str, String, Expect)> = vec![
+        (
+            "Q1: 300 px box, a block child",
+            alone(&boxed("inline-block", Some(300), "", BOXTOP)),
+            vec![("BOXTOP".into(), 44.6), ("AFTER".into(), 270.3)],
+        ),
+        (
+            "Q7: 300 px inline-table",
+            alone(&boxed(
+                "inline-table",
+                Some(300),
+                "",
+                "<span style=\"display:table-row\"><span style=\"display:table-cell\">BOXTOP</span></span>",
+            )),
+            vec![("BOXTOP".into(), 44.6), ("AFTER".into(), 270.3)],
+        ),
+    ];
+    let mut text_lines = l15.clone();
+    text_lines.push(("AFTER".into(), 270.3));
+    cases.push((
+        "Q3: auto box of 15 text lines",
+        alone(&boxed("inline-block", None, "", &br_lines(15))),
+        text_lines.clone(),
+    ));
+    cases.push((
+        "Q4: auto box of 15 block children",
+        alone(&boxed("inline-block", None, "", &blocks(15))),
+        text_lines,
+    ));
+    let mut bad = Vec::new();
+    for (name, html, expect) in cases {
+        let words = printed_words(&render(&format!("{}{html}", room(120))));
+        for (t, y) in expect {
+            let w = find(&words, &t);
+            if w.page != 2 || (w.y_min - y).abs() > 0.75 {
+                bad.push(format!(
+                    "{name}: `{t}` at {:.1} pt on page {}, Chrome {y:.1} pt on page 2",
+                    w.y_min, w.page
+                ));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "differences from Chrome m153:\n{}",
+        bad.join("\n")
+    );
+}
+
+/// An `inline-block` 200 px wide with a 1 px border: `n` block lines `<prefix>00`.., then (with `spacer`) a trailing
+/// `display:block` child of 9 px with no line in it.
+fn two_box(prefix: &str, n: u32, spacer: bool) -> String {
+    let lines: String = (0..n)
+        .map(|i| format!("<span style=\"display:block\">{prefix}{i:02}</span>"))
+        .collect();
+    let sp = if spacer {
+        "<span style=\"display:block;height:9px\"></span>"
+    } else {
+        ""
+    };
+    format!("<span style=\"display:inline-block;width:200px;border:1px solid\">{lines}{sp}</span>")
+}
+
+#[test]
+fn r_f183c_two_boxes_on_a_line_taller_than_a_page_keep_the_lines_of_the_first() {
+    // html-to-pdf F183c validator (v2 / v6 / `a4_two_ib_8_200`): box A of 59 block lines (1182 px, taller than a page)
+    // beside a box B whose last child is a block with no line in it. B's baseline is the baseline of its last line box,
+    // so B hangs 9 px below it and the line is taller than A by a pixel or more. The fragments of the carrier ended at
+    // A's bottom, the renderer measured the line against them, found it taller, and printed no line of the carrier:
+    // A00 to A49 (the part on page 1) were on no page, where main prints them. Chrome moves the whole line to page 2;
+    // ADR-0004 keeps the box split between its lines, so the first lines stay on page 1 as on main.
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", 59, false),
+        two_box("B", 4, true)
+    ));
+    let words = printed_words(&pdf);
+    for t in texts("A", 0, 58)
+        .iter()
+        .map(String::as_str)
+        .chain(["AFTER"])
+    {
+        let _ = find(&words, t);
+    }
+    assert_eq!(
+        find(&words, "A00").page,
+        1,
+        "the first lines of the tall box stay on page 1, as on main"
+    );
+    assert_eq!(find(&words, "A58").page, 2);
+}
+
+#[test]
+fn g_f183c_two_boxes_on_a_line_taller_than_a_page_without_a_trailing_child() {
+    // The same without the trailing block in B: the line is as tall as A, the carrier's fragment holds it, and main
+    // prints A00 to A58 and AFTER (it loses B on page 2; not asserted).
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", 59, false),
+        two_box("B", 4, false)
+    ));
+    let words = printed_words(&pdf);
+    for t in texts("A", 0, 58)
+        .iter()
+        .map(String::as_str)
+        .chain(["AFTER"])
+    {
+        let _ = find(&words, t);
+    }
+    assert_eq!(find(&words, "A00").page, 1);
+}
+
+/// Every word of `A00..` and `B00..` of the two boxes, and AFTER, is printed once.
+fn assert_two_boxes_print_every_word(a_lines: u32, b_lines: u32, b_spacer: bool, pages: usize) {
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", a_lines, false),
+        two_box("B", b_lines, b_spacer)
+    ));
+    let words = printed_words(&pdf);
+    let names: Vec<String> = texts("A", 0, a_lines - 1)
+        .into_iter()
+        .chain(texts("B", 0, b_lines - 1))
+        .chain(["AFTER".to_string()])
+        .collect();
+    let lost: Vec<&String> = names
+        .iter()
+        .filter(|n| !words.iter().any(|w| &w.text == *n))
+        .collect();
+    assert!(
+        lost.is_empty(),
+        "{} of {} words are printed nowhere: {:?}",
+        lost.len(),
+        names.len(),
+        lost.iter().take(8).collect::<Vec<_>>()
+    );
+    for n in &names {
+        let _ = find(&words, n);
+    }
+    assert_eq!(
+        page_count(&pdf),
+        pages,
+        "Chrome and main have {pages} pages"
+    );
+}
+
+#[test]
+fn r_f183c_the_later_box_is_the_taller_one_and_prints_every_word() {
+    // Validator re-check (`ba_n59_tA0_tB0`): A of 56 lines, B of 59 lines, both taller than a page, no trailing child.
+    // The walk fragments B after A, so B starts on page 2 while the line was painted on page 1: B00 to B40 were on no
+    // page, where main prints them (B on page 2). The line is on the first page of any box and a box that starts later
+    // is painted by its continuation.
+    assert_two_boxes_print_every_word(56, 59, false, 3);
+}
+
+#[test]
+fn r_f183c_the_later_box_is_a_pixel_taller_through_a_trailing_block() {
+    // `ab_n56_tA0_tB1`: A and B of 56 lines, B ends in a 9 px block with no line: B hangs deeper, the line is taller than
+    // A. Main prints all of B (it loses the head of A); the first fix printed A and lost the head of B.
+    assert_two_boxes_print_every_word(56, 56, true, 3);
+}
+
+#[test]
+fn r_f183c_the_short_box_with_a_trailing_block_prints_every_word_too() {
+    // The first re-check's shape (`v2`) with B's words counted: B00 to B03 start on the page after A's end.
+    assert_two_boxes_print_every_word(59, 4, true, 2);
 }

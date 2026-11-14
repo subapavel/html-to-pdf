@@ -48,7 +48,8 @@ THRESHOLDS = {
     "02-long": 0.057,
     # Lowered in F5 (table column widths): 03 8.9 → 8.2, 04 5.8 → 5.7 %; F19 (row backgrounds) 03 8.2 → 6.2 %.
     # F9 (<img> natural size: the logo renders) 03 6.2 → 5.7 %.
-    "03-logo-qr": 0.058,
+    # F183c (an inline-block sits on the baseline of its last line: the two badges are 3 px higher, where Chrome has them) 4.7 -> 2.4 %.
+    "03-logo-qr": 0.035,
     "04-bilingual-vat": 0.049,
     # 05: F6 (`@page { size: A4; margin: 0 }` honoured: the header band is full-bleed like Chrome's instead of printed 15 mm
     #     inside the page) 21.6 -> 3.5 %. The rest is the text drift every fixture has and the shadow under the totals box.
@@ -195,7 +196,8 @@ THRESHOLDS = {
     #     like Chrome's). On main's binary a line holding an image is only as tall as the image (Parley counts an inline box as
     #     ascent), so the rule and the cell border sit 4 px high and everything below drifts up: 7.61 %; with the strut of
     #     the block under the image (F183) 6.1 % (the text drift every fixture has). Worst page + 1 point.
-    "27-inline-logo": 0.071,
+    #     F183c (the `.meta` and `.pay` boxes) 6.1 -> 5.9 %.
+    "27-inline-logo": 0.070,
     # 28: new in F30f-b (a Czech invoice whose template reserves a fixed note box, `h-28 overflow-hidden`, a body-direct div with
     #     about 28 lines of direct text; one page like Chrome's, the box edge cutting the 5th line). On main's binary the hidden
     #     lines run past the page bottom, so the box starts page 2 and shows all of them (2 pages, 4.2 % / 1.5 %); with the
@@ -261,7 +263,8 @@ THRESHOLDS = {
     #     on the amounts that add, a `00` spacer before the KS value, a STORNO stamp, a draft box with a visible note, a "Zobrazit
     #     online" link; 1 page like Chrome's). 3.2 % on main's binary (the hidden words printed and the note missing), 3.17 % now: the text drift
     #     every fixture has plus a few words.
-    "37-hidden-placeholders": 0.042,
+    #     F183c (the hidden STORNO stamp and `.meta` sit on the baseline of their last line) 3.2 -> 2.2 %.
+    "37-hidden-placeholders": 0.032,
     # 38: new in F30c-o (a two-page Czech invoice: nine items, then `<h2>` and TWO body-level `<p>` of terms (clauses 1-25 and 26-50,
     #     15 and 16 lines), a print sheet with `@media print { p { orphans: 3; widows: 3 } }`; the first paragraph ends page 1 with room
     #     for 2.3 lines, which the second one cannot use with three lines: Chrome moves it to page 2, "26." at the top, 2 pages like
@@ -295,6 +298,7 @@ THRESHOLDS = {
     #     hangs 18.7 px below where Chrome has it; "Děkujeme" is at 200.3 pt against Chrome's 200.5). 3.7 / 1.4 %: the text drift every
     #     fixture has. On the binary before F213 the line was painted below the edge of page 1 and printed on no page, the box was cut
     #     (its label on page 1, the QR on page 2): 3.8 / 1.3 %, a number that hardly moves because the lost line is small. Worst page + 1 point.
+    #     F183c: the box and its line are where Chrome has them, page 2 1.4 -> 0.4 %; the worst page (page 1, 3.7 %) is unchanged, so the threshold stays.
     "43-qr-inline-block-page-bottom": 0.047,
     # 44: new in F213d (a two-page Czech invoice: thirteen items, the total, the thank-you line, then ONE `<p class="mt-8 text-right">` whose
     #     `inline-block` (70 mm tall, `.podpis`: caption, 72 px stamp `<svg>`, name, free space below) does not fit the 160 px left on page 1;
@@ -303,6 +307,7 @@ THRESHOLDS = {
     #     line by about its free space). 3.3 / 0.8 %: the text drift every fixture has plus the displaced box on page 2. On the binary before F213d the
     #     box was painted below the edge of page 1 (its top part on page 1 without a bottom border, the name on no page), 1 page against Chrome's 2:
     #     3.5 / 0.4 % (page 2 absent). Worst page + 1 point; goes down with F183c.
+    #     F183c: the box is where Chrome has it, page 2 0.8 -> 0.4 %; the worst page (page 1, 3.3 %) is unchanged, so the threshold stays.
     "44-signature-box-page-bottom": 0.043,
     # 46: new in F217 (a one-page Czech invoice with two payment rows in `flex gap-4`: a 128 px label and an item whose text holds a
     #     fixed 112 px `inline-block` (`w-28 h-28`): row A with a padded 64 px QR `<svg>` inside, row B empty (a stamp box); a paragraph
@@ -329,7 +334,21 @@ THRESHOLDS = {
     #     invoice pays for. On the binary before the fix (fork 8d4d8e7d) the fragmenter entered the box and split it (page 1: header and
     #     13 rows, page 2: the 14th row, the totals and the thank-you line): 4.3 / 5.5 %. The worst page GREW 5.5 -> 9.2 because the
     #     content that was wrongly on page 1 is now on page 2 where the F183c offset shows; the F183c finding brings it down. Worst page + 1 point.
-    "45-letterhead-keep-together": 0.102,
+    #     F183c (the 843 px box sits on the baseline of its last line: "Faktura" at 43.3 pt like Chrome's, it was 49.1) 9.2 -> 5.3 %. Worst page + 1 point.
+    "45-letterhead-keep-together": 0.063,
+    # 47: new in F107 (a letterhead in the top margin: a bundled PNG logo and the name from a flex row in `@top-left`, a bundled SVG
+    #     mark in `@top-right`, both running elements; 17's invoice below it). 5.3 / 4.2 %: the text drift every fixture has and the
+    #     `border-b` rules Chrome paints on every item row (`<tr>` borders, Blitz #386 / F22). The band matches Chrome's reference
+    #     (P1b, the images as backgrounds of the margin boxes; fixture README): logo, name and mark within 1-2 px, the mark
+    #     641-736 x 12-44 against 642-738 x 12-44. On main's binary neither image was painted. Worst page + 1 point; F22 brings it down.
+    "47-running-header-logo": 0.063,
+    # 48: new in F183c step 1 (a one-page Czech invoice: a `grid grid-cols-2` header with the 140 x 60 "ZAPLACENO" stamp, an `inline-block`, under
+    #     the title in the right column; fifteen items; the payment sentence with a 112 px `inline-block` QR box, which ends the page 13 px above
+    #     the content bottom in Chrome; one page like Chrome's). 4.25 % on main (f550a8e), measured before the fix: the stamp and its text are 9.5 pt
+    #     below Chrome's and the QR box and its line are 71 pt low (the box hangs over the thank-you line and into the bottom margin), F183c.
+    #     Worst page + 1 point; goes down with F183c.
+    #     F183c: 4.3 -> 3.6 % (the stamp and the QR box sit on the baseline of their last line, nothing is in the bottom margin).
+    "48-paid-stamp-header": 0.047,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

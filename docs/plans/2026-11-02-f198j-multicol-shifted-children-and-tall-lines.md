@@ -303,3 +303,5 @@ of the clip variant). Also, `mc_relative_offset` is zero unless the box is `posi
 Blitz's own shift of those stays in the flow as on main (`static` matches main to the bit, `sticky` is 7 pt from Chrome's no shift, as on main; F198j-c). Fork tests: `plan_reports_an_offset_that_paints_a_line_off_the_sheet`, the
 truth table with `static` and `sticky`, a `render_smoke` card for 20 / 100 / 300 px (red without the fallback), here `an_offset_that_would_paint_a_line_off_the_sheet_keeps_every_word` (red on `58c78ae2`: 85 missing at 100 px).
 Remaining refusals are in findings F198j-d, the rounding of offsets in F198j-e.
+
+F198j-f (`2026-11-03-f198j-f-offsheet-fallback.md`): the fallback removed a box that `mc_box_baked` refuses from the cut boxes and placed it whole (34 of the 286 probes, main's numbers). It now bakes box by box, only the boxes main described, and the others keep their painted pieces; fork `d0780431`.
