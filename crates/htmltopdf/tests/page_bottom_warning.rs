@@ -269,8 +269,9 @@ fn warns_about_content_below_the_page_only() {
         "abspos box at the page edge: {w:?}"
     );
 
-    // F30f-b, a known residual loss: an inline-flex box is kept whole. Its text is painted inside the inline box,
-    // under a translation, which the net does not follow; the pagination warning is what says so.
+    // F217 (ADR-0004 amended): an inline-flex box alone on its line is split between its line boxes like an inline-block, so
+    // the 4000 words that used to be placed whole and painted past the page (the F30f-b residual loss) are printed and the
+    // pagination warning is gone. `inline-flex` sharing its line with text is still kept whole.
     let w = page_warnings(
         "",
         &format!(
@@ -279,9 +280,19 @@ fn warns_about_content_below_the_page_only() {
         ),
     );
     assert!(
-        w.iter()
-            .any(|m| m.contains("in an inline-flex or inline-grid box is placed whole")),
-        "inline-flex around 4000 words: {w:?}"
+        w.is_empty(),
+        "inline-flex alone on its line, 4000 words: {w:?}"
+    );
+    let w = page_warnings(
+        "",
+        &format!(
+            "<div>Hi <span style=\"display:inline-flex;width:100%\"><span>{}</span></span></div>",
+            prose(4000)
+        ),
+    );
+    assert!(
+        !w.is_empty(),
+        "inline-flex sharing its line, 4000 words: still a known loss, the net must say so"
     );
 
     // F213b, a known residual loss: a line taller than a page (the inline-block is 1200 px) is not split, so its baseline
