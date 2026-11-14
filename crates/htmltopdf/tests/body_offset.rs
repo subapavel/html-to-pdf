@@ -463,9 +463,15 @@ fn img(h: u32) -> String {
 
 /// A `break-inside: avoid` box of 45 lines (900 px) of inline text; `extra_style` is more style.
 fn card(extra_style: &str) -> String {
+    card_of_lines(45, extra_style)
+}
+
+/// The same box with `n` lines of exactly 20 px (the body's `line-height` is `normal`, about 19.4 px; 30 lines are 600 px
+/// + 2 px of border).
+fn card_of_lines(n: usize, extra_style: &str) -> String {
     format!(
-        "<div style=\"break-inside:avoid;border:1px solid #000;{extra_style}\">{}</div>",
-        lines(1..=45)
+        "<div style=\"break-inside:avoid;border:1px solid #000;line-height:20px;{extra_style}\">{}</div>",
+        lines(1..=n)
     )
 }
 
@@ -603,7 +609,7 @@ fn f213e_c6_a_first_avoid_card_whose_margin_collapses_through_body_splits_in_pla
 }
 
 #[test]
-#[ignore = "F213e-c: a zero-height sibling before an avoid card leaves cursor_y at 0, the card hangs"]
+#[ignore = "F213e-c: red until the fork fix"]
 fn f213e_c5z_an_avoid_card_after_a_zero_height_box_moves_whole() {
     // C5z: a zero-height `<div>` before the card. It is a sibling, so the break in front of the card is a real Class A
     // break point and Chrome honours the avoid: page 1 empty, the whole card from the content top (first line at 41.7
@@ -726,4 +732,382 @@ fn f213e_c12_a_first_image_taller_than_a_page_under_a_body_margin_starts_on_page
     );
     assert_eq!(page_of(&words(&pdf), "AFTER"), 3);
     assert_eq!(page_count(&pdf), 3, "Chrome: 3 pages");
+}
+
+// --- F213e-c: a zero-height sibling is a break point in front of an avoid card ----------------------------------------
+//
+// Plan docs/plans/2026-11-09-f213e-b-avoid-card-under-letterhead.md (PR A), Chrome m153 numbers from its section 7.
+// A zero-height in-flow box before a `break-inside: avoid` card leaves `cursor_y` at 0, so the fragmenter read "nothing
+// precedes the card" and let it hang below the content box (css-break-3 section 4.1: a break between in-flow siblings is
+// a Class A break point whatever their height). Chrome moves the card whole to page 2 (0 / 45). The tests marked
+// `F213e-c` are red until the fork fix; the `_g_` ones are green on main and must stay green.
+//
+// Every case below is `body { margin-top: ... }`, an optional box before the card, the card, then `AFTER`. A case lists
+// the `Line` words per page that Chrome prints and the page count; `AFTER` must be on the last page.
+
+/// One case: name, extra CSS, the body, the `Line` words Chrome prints on each page.
+type Case = (String, String, String, Vec<usize>);
+
+/// Renders each case and reports every one that differs from Chrome (lost or doubled words, words below the content
+/// box, other split, other page count, `AFTER` not on the last page), so one run names all red cases of a test.
+fn assert_cases(cases: &[Case]) {
+    let mut bad = Vec::new();
+    for (name, css, body, want) in cases {
+        let pdf = render(name, css, body);
+        let found = words(&pdf);
+        let got = per_page(&found, "Line", want.len());
+        let total: usize = tokens(&found, "Line").len();
+        let pages = page_count(&pdf);
+        let limit = PAGE_H_PT - MARGIN_PT + SLACK_PT;
+        let below = found.iter().filter(|w| w.y_max > limit).count();
+        let after_ok = !body.contains("AFTER") || page_of(&found, "AFTER") == want.len();
+        if &got != want
+            || total != want.iter().sum::<usize>()
+            || pages != want.len()
+            || below > 0
+            || !after_ok
+        {
+            bad.push(format!(
+                "{name}: Chrome {want:?}; printed {got:?} ({total} words), {pages} pages, {below} words below the \
+                 content box, AFTER on the last page: {after_ok}"
+            ));
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "{} of {} cases differ from Chrome:\n{}",
+        bad.len(),
+        cases.len(),
+        bad.join("\n")
+    );
+}
+
+/// A card of `n` lines after `before`, then `AFTER`, under `css`.
+fn case(name: &str, css: &str, before: &str, card_html: &str, want: &[usize]) -> Case {
+    (
+        name.to_string(),
+        css.to_string(),
+        format!("{before}{card_html}<p>AFTER</p>"),
+        want.to_vec(),
+    )
+}
+
+const Z: &str = "<div style=\"height:0\"></div>";
+const M200: &str = "body { margin-top: 200px }";
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_card_of_blocks_after_a_zero_height_box_moves_whole() {
+    // P2, block-children twin of C5z: Chrome 0 / 45 (page 1 empty, the card from the content top, AFTER below it); main
+    // splits it 40 / 5 because `content_above` reads "nothing above". Without the box the same card splits 40 / 5 in
+    // both (guard `f213e_g_c5_a_first_avoid_card_of_blocks_splits_in_place_like_chrome`). Also with the box's
+    // `margin-bottom: 10px` and a 0.4 px one (Taffy rounds it to 0).
+    assert_cases(&[
+        case("f213ec-blocks-z", M200, Z, &card_of_blocks(), &[0, 45]),
+        case(
+            "f213ec-blocks-z-mb10",
+            M200,
+            "<div style=\"height:0;margin-bottom:10px\"></div>",
+            &card_of_blocks(),
+            &[0, 45],
+        ),
+        case(
+            "f213ec-blocks-0.4px",
+            M200,
+            "<div style=\"height:0.4px\"></div>",
+            &card_of_blocks(),
+            &[0, 45],
+        ),
+        case(
+            "f213ec-blocks-empty-span",
+            M200,
+            "<span></span>",
+            &card_of_blocks(),
+            &[0, 45],
+        ),
+    ]);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_every_kind_of_zero_height_box_is_a_sibling_before_an_inline_card() {
+    // P2 / P7 (plan 7.2, 7.5): all of these put the 45-line card on page 2 whole in Chrome (0 / 45). Main hangs it for
+    // each (43 lines on page 1, 2 lost). `<span></span>` is an anonymous block with an inline element and no line box: it
+    // counts (the plan's first guess, "not an anonymous block", was wrong). 0.4 px rounds to 0 in Taffy; 0.5 px and
+    // larger already work (guard `f213e_g_c5_a_card_after_a_2px_box_moves_whole`).
+    let befores = [
+        ("z-z", format!("{Z}{Z}")),
+        ("empty-p", "<p></p>".to_string()),
+        (
+            "relative",
+            "<div style=\"position:relative;height:0\"></div>".to_string(),
+        ),
+        (
+            "sticky",
+            "<div style=\"position:sticky;height:0\"></div>".to_string(),
+        ),
+        (
+            "clear",
+            "<div style=\"clear:both;height:0\"></div>".to_string(),
+        ),
+        ("flex", "<div style=\"display:flex\"></div>".to_string()),
+        (
+            "empty-table",
+            "<table style=\"height:0\"></table>".to_string(),
+        ),
+        (
+            "img0",
+            "<img src=\"red60.png\" style=\"display:block;width:100px;height:0\">".to_string(),
+        ),
+        (
+            "mb10",
+            "<div style=\"height:0;margin-bottom:10px\"></div>".to_string(),
+        ),
+        ("0.4px", "<div style=\"height:0.4px\"></div>".to_string()),
+        ("empty-span", "<span></span>".to_string()),
+        ("empty-span-spaces", " <span> </span> ".to_string()),
+    ];
+    let cases: Vec<Case> = befores
+        .iter()
+        .map(|(n, b)| case(&format!("f213ec-inline-{n}"), M200, b, &card(""), &[0, 45]))
+        .collect();
+    assert_cases(&cases);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_counter_reset_div_is_a_sibling() {
+    // The shape the finding came from: `<div style="counter-reset:polozka">` is a zero-height div. Chrome 0 / 45.
+    assert_cases(&[case(
+        "f213ec-counter-reset",
+        M200,
+        "<div style=\"counter-reset:polozka\"></div>",
+        &card(""),
+        &[0, 45],
+    )]);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_hidden_or_out_of_flow_box_does_not_stop_a_zero_height_box_from_counting() {
+    // P5 / P6: `display:none` and `position:absolute` boxes are not siblings, but a zero-height box after them still is.
+    // Chrome 0 / 45 for each; main hangs. (That the hidden / abspos box alone does not count is F213e-b's, PR B.)
+    let befores = [
+        ("none-z", format!("<div style=\"display:none\">x</div>{Z}")),
+        (
+            "abspos-z",
+            format!("<div style=\"position:absolute;height:0\"></div>{Z}"),
+        ),
+        ("hidden-attr-z", format!("<div hidden>x</div>{Z}")),
+    ];
+    let cases: Vec<Case> = befores
+        .iter()
+        .map(|(n, b)| case(&format!("f213ec-{n}"), M200, b, &card(""), &[0, 45]))
+        .collect();
+    assert_cases(&cases);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_padded_card_after_a_zero_height_box_moves_whole() {
+    // P8: 16 px of padding (934 px in all). Chrome 0 / 45 after the box (first line at 56.6 pt); main hangs it (42 lines
+    // on page 1). Without the box Chrome splits it 39 / 6 and main hangs: that is F213e-b, PR B.
+    assert_cases(&[case(
+        "f213ec-padded-z",
+        M200,
+        Z,
+        &card("padding:16px"),
+        &[0, 45],
+    )]);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_card_with_room_for_44_lines_after_a_zero_height_box_moves_whole() {
+    // P8: `body { margin-top: M }`, M = 126 .. 130 leaves room for 44 of the 45 lines. After the box Chrome moves the card
+    // whole at every M (0 / 45); main hangs it (all 45 on page 1 at M = 128, the last 2 off the content box).
+    let cases: Vec<Case> = [126, 128, 130]
+        .iter()
+        .map(|m| {
+            case(
+                &format!("f213ec-room44-m{m}"),
+                &format!("body {{ margin-top: {m}px }}"),
+                Z,
+                &card(""),
+                &[0, 45],
+            )
+        })
+        .collect();
+    assert_cases(&cases);
+}
+
+#[test]
+#[ignore = "F213e-c: red until the fork fix"]
+fn f213ec_a_card_ending_past_chromes_1010px_moves_whole_after_a_zero_height_box() {
+    // P8, the 1 px band: a 30-line card (602 px) ends at M + 602. Past Chrome's 1010 px (M = 408.5 and above) Chrome puts
+    // the whole card on page 2 after the box (0 / 30, first line at 44.6 pt); main keeps it on page 1, and from M = 480
+    // loses the lines past the page edge. The room is `chrome_bottom(0) - cursor`, not `bottom(0) - cursor`.
+    let cases: Vec<Case> = ["408.5", "450", "560"]
+        .iter()
+        .map(|m| {
+            (
+                format!("f213ec-band-m{m}"),
+                format!("body {{ margin-top: {m}px }}"),
+                format!("{Z}{}", card_of_lines(30, "")),
+                vec![0, 30],
+            )
+        })
+        .collect();
+    assert_cases(&cases);
+}
+
+#[test]
+fn f213ec_g_a_card_that_fits_stays_on_page_one_with_or_without_a_zero_height_box() {
+    // Guard (P2): 30 lines (602 px) under a 200 px offset fit page 1. Chrome: whole on page 1, first line at 194.6 pt,
+    // AFTER below it, 1 page. A fix that moves a card after the box without asking whether it overflows breaks this.
+    assert_cases(&[
+        case("f213ec-g-fit30", M200, "", &card_of_lines(30, ""), &[30]),
+        case("f213ec-g-fit30-z", M200, Z, &card_of_lines(30, ""), &[30]),
+    ]);
+}
+
+#[test]
+fn f213ec_g_a_card_ending_within_chromes_1010px_stays_on_page_one() {
+    // Guard (P8, the 1 px band): a 30-line card ending at 1008 to 1010 px (M = 406 .. 408) stays whole on page 1 in Chrome,
+    // with or without a zero-height box before it; a card ending in (1009.13, 1010] is within `chrome_bottom(0)` though
+    // past `bottom(0)`. No `AFTER`: the page count is the card's.
+    let mut cases: Vec<Case> = Vec::new();
+    for m in ["406", "407.5", "408"] {
+        for (tag, before) in [("", ""), ("-z", Z)] {
+            cases.push((
+                format!("f213ec-g-band-m{m}{tag}"),
+                format!("body {{ margin-top: {m}px }}"),
+                format!("{before}{}", card_of_lines(30, "")),
+                vec![30],
+            ));
+        }
+    }
+    assert_cases(&cases);
+}
+
+#[test]
+fn f213ec_g_an_inline_card_in_a_section_or_a_wrapper_splits_in_place() {
+    // Guard (P3, plan 7.3): with nothing before it, a `<section>` or a bare `<div>` around the inline card does not
+    // change the split: Chrome 40 / 5, main the same (the plan expected this to be red; it is not). The twin with
+    // block children is `f213e_g_c5_a_first_avoid_card_of_blocks_splits_in_place_like_chrome`.
+    assert_cases(&[
+        case(
+            "f213ec-g-section-inline",
+            M200,
+            "",
+            &format!("<section>{}</section>", card("")),
+            &[40, 5],
+        ),
+        case(
+            "f213ec-g-wrapper-inline",
+            M200,
+            "",
+            &format!("<div>{}</div>", card("")),
+            &[40, 5],
+        ),
+    ]);
+}
+
+#[test]
+#[ignore = "F213e-d: a zero-height sibling around a <section> is not seen by the nested walk"]
+fn f213ed_a_zero_height_box_around_a_section_moves_the_card_whole() {
+    // P3 (plan 7.3), not covered by PR A's three call sites (`content_above` passed to `fragment_block_subtree` and
+    // the nested walk are left unchanged): Chrome moves the card whole (0 / 45) when a zero-height box is before the
+    // `<section>`, or inside it before the card, for both card kinds; main splits it 40 / 5.
+    let ic = card("");
+    let bc = card_of_blocks();
+    assert_cases(&[
+        case(
+            "f213ed-z-section-inline",
+            M200,
+            Z,
+            &format!("<section>{ic}</section>"),
+            &[0, 45],
+        ),
+        case(
+            "f213ed-z-section-blocks",
+            M200,
+            Z,
+            &format!("<section>{bc}</section>"),
+            &[0, 45],
+        ),
+        case(
+            "f213ed-section-z-inline",
+            M200,
+            "",
+            &format!("<section>{Z}{ic}</section>"),
+            &[0, 45],
+        ),
+        case(
+            "f213ed-section-z-blocks",
+            M200,
+            "",
+            &format!("<section>{Z}{bc}</section>"),
+            &[0, 45],
+        ),
+    ]);
+}
+
+#[test]
+fn f213ec_g_a_box_that_fits_chromes_room_stays_on_page_one_after_a_zero_height_box() {
+    // Guard for `chrome_bottom` (PR A, C8): `body { margin: 8px }`, a zero-height box, a block image of 1000 / 1001 /
+    // 1002 px. The room on page 1 is 1001.13 px but Chrome's fragmentainer is 1010 px, so the image stays on page 1 and
+    // AFTER (20 px) goes to page 2 at 43.8 pt. 1003 px and above move (`f213e_c8_*`, without the box).
+    for h in [1000, 1001, 1002] {
+        let name = format!("f213ec-g-img{h}-z");
+        let pdf = render(
+            &name,
+            "body { margin: 8px }",
+            &format!("{Z}{}<p>AFTER</p>", img(h)),
+        );
+        assert_eq!(image_pages(&pdf), vec![1], "{name}: image on page 1");
+        assert_eq!(page_of(&words(&pdf), "AFTER"), 2, "{name}: AFTER on page 2");
+        assert_eq!(page_count(&pdf), 2, "{name}: Chrome: 2 pages");
+    }
+}
+
+#[test]
+fn f213ec_g_page_one_that_is_merely_smaller_takes_no_break_in_front_of_the_card() {
+    // Guard (P4, plan 7.4, corrected): `@page :first { margin-top: 60mm }` makes page 1 smaller (839 px, 41 lines of the
+    // card), it is not an offset that was consumed above the card. Chrome takes no break in front of the card after a
+    // zero-height box either: 41 / 4 with and without it (first line at 172.1 pt), and the 30-line card stays whole.
+    let first = "@page :first { margin-top: 60mm }";
+    assert_cases(&[
+        case(
+            "f213ec-g-first-30",
+            first,
+            "",
+            &card_of_lines(30, ""),
+            &[30],
+        ),
+        case(
+            "f213ec-g-first-30-z",
+            first,
+            Z,
+            &card_of_lines(30, ""),
+            &[30],
+        ),
+        case("f213ec-g-first-45", first, "", &card(""), &[41, 4]),
+        case("f213ec-g-first-45-z", first, Z, &card(""), &[41, 4]),
+    ]);
+}
+
+#[test]
+#[ignore = "F109: page 2 is given page 1's height"]
+fn f109_a_2px_box_before_a_card_on_a_smaller_first_page_moves_the_card_whole() {
+    // P4: with a 2 px box before the 45-line card Chrome puts page 1 empty and the whole card on page 2 (0 / 45, first
+    // line at 44.6 pt, 2 pages). Main moves it too, but paginates page 2 against page 1's smaller box: 41 lines on page
+    // 2, 4 on page 3 (3 pages).
+    assert_cases(&[case(
+        "f109-first-2px",
+        "@page :first { margin-top: 60mm }",
+        "<div style=\"height:2px\"></div>",
+        &card(""),
+        &[0, 45],
+    )]);
 }
