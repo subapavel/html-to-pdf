@@ -315,3 +315,93 @@ fn g6_a_paragraph_in_the_item_is_unchanged() {
     )));
     assert_clears(&words, 114.0);
 }
+
+// --- an `inline-flex` / `inline-grid` box taller than a page loses no word (F217 validator, round 1) ----------------
+//
+// With the box measured at its size (the fix above) an `inline-flex` box that holds a 1500 px `inline-block` is itself
+// taller than a page. The block walk kept a paragraph in an `inline-flex` or `inline-grid` box whole ("not a flow
+// root"), cut it between pages without line ranges, and the renderer measured its lines from the fragment heights: all
+// the lines but the first were painted on no page ("the box in text." was lost; with a box of 1000 to 2200 px). Main
+// printed every word, because it measured the box at 0 px. `inline-grid` lost the same words on main with a tall
+// paragraph. The paragraph in an `inline-flex` or `inline-grid` box that is alone on its line is split between its
+// lines like the one in an `inline-block` (css-flexbox-1 §4: an item is a block container whose lines are break points).
+
+const LEAD: &str = "Lead words before";
+const TAIL: &str = "trailing words after the box in text.";
+
+fn page_count(pdf: &[u8]) -> usize {
+    let path = std::env::temp_dir().join(format!("htmltopdf-fib-pc-{}.pdf", std::process::id()));
+    std::fs::write(&path, pdf).unwrap();
+    let out = std::process::Command::new("pdfinfo")
+        .arg(&path)
+        .output()
+        .expect("pdfinfo (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("Pages:"))
+        .and_then(|n| n.trim().parse().ok())
+        .expect("pdfinfo printed no page count")
+}
+
+fn all_words_printed(words: &[Word], expected: &str) {
+    let mut want: Vec<&str> = expected.split_whitespace().collect();
+    want.sort_unstable();
+    let mut got: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
+    got.sort_unstable();
+    assert_eq!(got, want, "every word is printed exactly once");
+}
+
+fn tall_box_in(display: &str, height: u32, side: bool) -> Vec<u8> {
+    render(&format!(
+        "<div style=\"display:{display};width:420px\"><div style=\"border:1px solid green\">{LEAD} \
+         <span style=\"display:inline-block;border:1px solid;width:100px;height:{height}px\">tallh</span> {TAIL}</div>{}</div>\
+         <p>AFTER</p>",
+        if side { "<div>SIDE side</div>" } else { "" }
+    ))
+}
+
+#[test]
+fn w1_a_tall_box_in_the_item_of_an_inline_flex_box_loses_no_word() {
+    // The validator's repro (`inlflexc__tallh`): 15 words on main, 11 on three pages before the fix.
+    let pdf = tall_box_in("inline-flex", 1500, true);
+    all_words_printed(
+        &printed_words(&pdf),
+        &format!("{LEAD} tallh {TAIL} SIDE side AFTER"),
+    );
+    assert!(
+        page_count(&pdf) >= 2,
+        "a box of 1500 px does not fit one page"
+    );
+}
+
+#[test]
+fn w2_the_same_for_every_height_from_a_page_up() {
+    for height in [1000, 1200, 1500, 2200] {
+        let pdf = tall_box_in("inline-flex", height, true);
+        all_words_printed(
+            &printed_words(&pdf),
+            &format!("{LEAD} tallh {TAIL} SIDE side AFTER"),
+        );
+    }
+}
+
+#[test]
+fn w3_an_inline_grid_box_with_a_tall_paragraph_loses_no_word() {
+    // Main lost words here too (10 of 37): the paragraph of an `inline-grid` item was kept whole.
+    let pdf = tall_box_in("inline-grid", 1500, false);
+    all_words_printed(&printed_words(&pdf), &format!("{LEAD} tallh {TAIL} AFTER"));
+}
+
+#[test]
+fn w4_a_box_that_fits_the_page_is_unchanged() {
+    // 400 to 900 px were right before the fix and stay right (guard).
+    for height in [400, 900] {
+        let pdf = tall_box_in("inline-flex", height, true);
+        all_words_printed(
+            &printed_words(&pdf),
+            &format!("{LEAD} tallh {TAIL} SIDE side AFTER"),
+        );
+        assert_eq!(page_count(&pdf), 1, "height {height}");
+    }
+}

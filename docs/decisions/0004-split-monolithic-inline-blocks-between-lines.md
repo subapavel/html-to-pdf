@@ -1,6 +1,6 @@
 # ADR-0004: Split a tall `inline-block` between its line boxes instead of slicing it at the page edge
 
-Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`) · Amended 2026-10-18 by F30e (`inline-table`, below) and 2026-11-03 by F213d (a box that fits a page, below)
+Date: 2026-10-18 · Status: accepted · First use: F30f (`docs/plans/2026-10-18-f30f-inline-block-overflow-wrapper.md`) · Amended 2026-10-18 by F30e (`inline-table`, below), 2026-11-03 by F213d (a box that fits a page, below) and 2026-11-14 by F217 (`inline-flex` / `inline-grid`, below)
 
 ## Context
 
@@ -53,6 +53,17 @@ the carrier fits a fresh page as its wrappers hold it (its height at most the pa
 (`content_ends_inside`, the walk of `clip_hides_nothing`, where the margin below the last child is not content: Blitz's auto height omits it); the split between its lines stays for a box taller than a page and
 for one whose content overflows it visibly (the overflow would stay behind). The box taller than a page with a short child
 (a fixed 1200 px box with one line) is not split either way and is lost, with a warning (F213d-b).
+
+**Amended 2026-11-14 by F217: `inline-flex` and `inline-grid` alone on their line are split like an `inline-block`.** The
+first Decision paragraph kept them whole (F30f-b). The cost showed once Blitz measured a fixed-size `inline-block` in a flex
+item at its size (F217): an `inline-flex` box holding a 1500 px box is taller than a page, the block walk cut the paragraph
+in its item without line ranges, and the renderer painted all but its first line on no page (15 words on main, 11 with
+F217, on three pages; Chrome 15 on four). `inline-grid` with a tall paragraph lost 27 of 37 words on main already. The
+same Chrome measurements as above hold for `inline-flex` (the Context section: "the same holds for `inline-flex`"), and an
+item of a flex or grid box is a block container whose lines are break points (css-flexbox-1 §4, css-grid-2 §6), as the
+inside of an `inline-block` is. So `alone_on_its_line` takes `inline-flex` and `inline-grid` too; the box that shares its
+line stays whole (`LineBarrier::AtomicNotFlowRoot`, now only that). Not covered, as for the other boxes: a box that shares
+its line with text and is itself taller than a page (F217 plan §7.9).
 
 ## Consequences
 
