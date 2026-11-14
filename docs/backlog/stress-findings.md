@@ -91,3 +91,7 @@ Non-goal of F183c (plan §6). Items aligned by baseline are aligned as if their 
 ### B22 — an inline-block with `margin: -6px 0` gives 3 pages against 2; with `line-height: 0` AFTER is 3 pt low  (severity: low, size: unknown — Blitz / fulgur)
 
 F183c validator, probe `adv_a5_10_ib_negmargin_auto_Rpage2_d-6` (`f183cv/adv/`): an auto-height inline-block with a negative vertical margin at the page end makes a third page where Chrome has two, and a box with `line-height: 0` puts the block after it 3 pt lower than Chrome. A negative margin on an inline box shortens the line by the margin in Chrome; Parley places the margin box and Blitz keeps the margin in the layout (F183c, commit `514d51e0`), so the line height is probably taken from the border box. Not on a fixture; synthetic.
+
+### B23 — inline-blocks that share a line taller than a page stack below the first box instead of beside it  (severity: low, size: medium — fulgur pagination, with F222 / F213b)
+
+F183c re-validation, `rv/var2/four_staggered`: four inline-blocks on one line, each starting on a later page. Every word is printed once and in order, but each later box continues below the previous one's end (B00 on page 3, C00 on page 5: 6 pages, as on main), where Chrome places them beside the first box (B00 on page 2: 4 pages). Same output as main.
