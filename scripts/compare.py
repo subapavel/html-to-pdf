@@ -317,7 +317,8 @@ THRESHOLDS = {
     #     the boxes were measured without their size: the row ended at its text line, row A's box was drawn at its content size (about 98 px, not 112)
     #     with "Variabilní" (454.6 pt) printed over its bottom, row B's empty box collapsed to a 2 px sliver and "Děkujeme" (508.6 pt) stood
     #     87 pt too high: 3.0 %, a number that hardly moves because the boxes are small. Page + 1 point; goes down with F183b.
-    "46-qr-flex-payment-row": 0.038,
+    #     Re-landed on top of F183c (2026-11-14): 3.0 % on main (e560633) -> 2.1 %, threshold 2.1 + 1 point.
+    "46-qr-flex-payment-row": 0.031,
     # 40: new in F198j (a Czech invoice whose two-column terms are ONE `overflow-hidden rounded-lg border p-4` card, taller than a page in
     #     one column, whose twenty clause headings are full-bleed grey strips (`-mx-4`, the first also `-mt-4`, one nudged 2 px down
     #     with `relative top-0.5`); 2 pages like Chrome's, 945 words). 9.4 / 6.8 %: the text drift every fixture has over two pages of
