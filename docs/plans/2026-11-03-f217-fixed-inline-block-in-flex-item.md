@@ -271,7 +271,7 @@ The validator ran the sweep `rvw/sh` (455 documents: context x shape) and `rvw/s
 **Sweep against main** (binary of the final head against `e560633`, Chrome numbers from the validator's `rvw/ch`):
 
 - `rvw/sw` 48 documents: **0 with fewer words**; page count differs in 15 and every one is the fix: the `flex` / `inlflex` boxes 1 to 2 pages (main had the box at 0 px; Chrome 4), `inlgrid` 3 to 2 pages with the 5 words main lost back (10 to 15 words).
-- `rvw/sh` 455 documents: 235 byte-identical, 0 with fewer words in all `*__tallh` shapes but one (below), page count differs in 20: 15 `*__tallh` / `*__pcth` shapes (1 to 2 or 3: the box is now measured, as F217 intends; Chrome 3 to 5), 5 `*__tallcontent` shapes (2 to 3, 3 to 2).
+- `rvw/sh` 455 documents: 235 byte-identical, fewer words in 6 documents (below), page count differs in 15: 10 `*__tallh` shapes (1 to 2 or 3: the box is now measured, as F217 intends; Chrome 3 to 5) and 5 `*__tallcontent` shapes (2 to 3, 3 to 2).
 - `rv/var` (66), `rv/var2` (38), `f217v/r` (10): 0 with fewer words, 0 page differences, identical bytes in 65, 38, 4 (`u04` is the one in 7.8: the plain-text counter, main printed the box text over the next word).
 
 **Still fewer words than main, not fixed (case 2, a flex item taller than a page).** 6 documents, all `tallcontent` (a 130-line `inline-block` of block children, 2600 px, in a flex item) or a centred overflow:
