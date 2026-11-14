@@ -729,3 +729,66 @@ fn f183c_the_y_of_the_moved_boxes_is_chromes() {
         bad.join("\n")
     );
 }
+
+/// An `inline-block` 200 px wide with a 1 px border: `n` block lines `<prefix>00`.., then (with `spacer`) a trailing
+/// `display:block` child of 9 px with no line in it.
+fn two_box(prefix: &str, n: u32, spacer: bool) -> String {
+    let lines: String = (0..n)
+        .map(|i| format!("<span style=\"display:block\">{prefix}{i:02}</span>"))
+        .collect();
+    let sp = if spacer {
+        "<span style=\"display:block;height:9px\"></span>"
+    } else {
+        ""
+    };
+    format!("<span style=\"display:inline-block;width:200px;border:1px solid\">{lines}{sp}</span>")
+}
+
+#[test]
+fn r_f183c_two_boxes_on_a_line_taller_than_a_page_keep_the_lines_of_the_first() {
+    // html-to-pdf F183c validator (v2 / v6 / `a4_two_ib_8_200`): box A of 59 block lines (1182 px, taller than a page)
+    // beside a box B whose last child is a block with no line in it. B's baseline is the baseline of its last line box,
+    // so B hangs 9 px below it and the line is taller than A by a pixel or more. The fragments of the carrier ended at
+    // A's bottom, the renderer measured the line against them, found it taller, and printed no line of the carrier:
+    // A00 to A49 (the part on page 1) were on no page, where main prints them. Chrome moves the whole line to page 2;
+    // ADR-0004 keeps the box split between its lines, so the first lines stay on page 1 as on main.
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", 59, false),
+        two_box("B", 4, true)
+    ));
+    let words = printed_words(&pdf);
+    for t in texts("A", 0, 58)
+        .iter()
+        .map(String::as_str)
+        .chain(["AFTER"])
+    {
+        let _ = find(&words, t);
+    }
+    assert_eq!(
+        find(&words, "A00").page,
+        1,
+        "the first lines of the tall box stay on page 1, as on main"
+    );
+    assert_eq!(find(&words, "A58").page, 2);
+}
+
+#[test]
+fn g_f183c_two_boxes_on_a_line_taller_than_a_page_without_a_trailing_child() {
+    // The same without the trailing block in B: the line is as tall as A, the carrier's fragment holds it, and main
+    // prints A00 to A58 and AFTER (it loses B on page 2; not asserted).
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", 59, false),
+        two_box("B", 4, false)
+    ));
+    let words = printed_words(&pdf);
+    for t in texts("A", 0, 58)
+        .iter()
+        .map(String::as_str)
+        .chain(["AFTER"])
+    {
+        let _ = find(&words, t);
+    }
+    assert_eq!(find(&words, "A00").page, 1);
+}

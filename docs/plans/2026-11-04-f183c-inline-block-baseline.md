@@ -385,3 +385,29 @@ New edge cases found:
 ### 7.6 Step 7: docs (2026-11-09)
 
 `docs/upstream.md`: three fork rows and the deferred vrt re-bless note (7.5). Findings: F183c and F183b done; F183i filed (the original F183c text); F183c-b re-checked and done, the 40-line probe and the 15-line probe now print every line at Chrome's y (only the unbuilt "above the top page edge" warning is left, with no known shape); F220 (horizontal margin of an inline-block) and F221 (the fragmenter's whole-line rule) filed; B18 to B21 in the stress backlog. F213d-e's F183c part: the hang of a fixed box below its line is gone (the box sits on its last line), the page-count differences at the room's edge are F221's. `docs/roadmap.md`: F183c off the pilot list, F220 on it after F208. Not run: `vrt-validator`, `pdf-reviewer`.
+
+### 7.7 Validator finding: two boxes on a line taller than a page lost 50 lines (2026-11-14)
+
+**The loss.** `<p>` with two inline-blocks: A of 59 block lines (1182 px, taller than a page), B with a trailing `display:block; height:9px` child (probes `v2`, `v6`, `v8`, F213e `a4_two_ib_8_200`, `a4_two_ib_40_200`). The PR printed no word of A00 to A49 (not even the border) and warned "painted on no page"; main prints them on page 1; Chrome moves the whole line to page 2 and slices it there. Without the spacer in B, or with one in both, the PR was fine.
+
+**Cause.** Not the baseline walk and not B's position (B sits where Parley puts it, `pos.y 1100`, in the PR and in Chrome's order). The line is taller than A: the line keeps `b` above and `height - b` below the baseline of every box (Parley `finish`), B's last line box is 9 px above its bottom, so B hangs 9 px (plus its border) below the baseline where A hangs 6; the line is 1183 px, A is 1182 px. Before F183c every box sat on its bottom edge and the line was as tall as the tallest box. The walk enters the carrier because the line is taller than a page, fragments A between its lines (1001 + 181 px) and closes the carrier's fragments at A's bottom: page 0 is 1182 px high. The renderer, with no line slices for the carrier, measures its one line from the fragment heights (`paragraph_line_range_for_page`): a line of 1183 px does not fit a fragment of 1182 px, so it is painted on no page, and A with it. The `+1 px` is the whole bug; every shape in which a neighbour hangs deeper than the tall box by anything (the probes: 1 px to 14 px) hits it. Checked by printing the Parley line (`min 0 max 1183`) and the fragments (`p0 1182`).
+
+**Fix** (fulgur `caa5e87c`, `pagination_layout.rs`): `record_carrier_slices_after` records the carrier's line slices (the line on the first fragment of the box, none on the others) also for a box that shares the line and spans pages, as it did only for a box alone on its line. The line is then painted once on the page where the box starts, and A's later fragments are painted as continuations, as for an alone box. The output is main's: A00 to A49 on page 1, A50 to A58 on page 2, B41 on, AFTER (B00 to B40 stay lost, as on main, warned: the line paints B below page 1; Chrome is the whole line on page 2, which is the taller-than-a-page line of F213b / F198l, not cheap). Not done: moving a shared line taller than a page whole to the next page (that is F213b's slicing).
+
+**Tests (red then green).** `alone_inline_block_line.rs`: `r_f183c_two_boxes_on_a_line_taller_than_a_page_keep_the_lines_of_the_first` (red before: A00 to A49 missing, 10 words printed; green: every A line and AFTER once, A00 on page 1, A58 on page 2) and the guard `g_f183c_two_boxes_on_a_line_taller_than_a_page_without_a_trailing_child`; fulgur lib test `the_carrier_line_of_two_boxes_is_on_the_page_where_the_taller_one_starts` (red before: no slices; green: `(0, 1), (1, 1), ...`).
+
+**Gates after the fix.**
+
+| Gate | Result |
+|---|---|
+| `cargo test --release --locked --no-fail-fast` | 1111 passed, 0 failed, 14 ignored (was 1109) |
+| fulgur `cargo test -p fulgur --no-fail-fast` | 3132 passed, 0 failed (was 3131) |
+| `cargo fmt --check`, `cargo clippy --release --locked --all-targets -D warnings`, fulgur clippy `--all-targets -D warnings` | pass |
+| Byte gate, RAYON 1 and 4 | 54 PDFs: the same 7 as main differ (03, 27, 37, 43, 44, 45, 48), byte-identical to the PR before this fix; 1 and 4 threads identical |
+| `compare.py --threshold-check` | 47 ok, numbers unchanged (03 2.4 %, 27 5.9, 37 2.2, 43 3.7 / 0.4, 44 3.3 / 0.4, 45 0.0 / 5.3, 48 3.6) |
+| Validator's F213d family (3843 cases, `p/dv`), main against the fix | 3333 changed, 510 identical; 11 with fewer words than main, as before the fix (see below); `DIST+` / `PAGES+` 1 each: `adv_a5_10_ib_negmargin_auto_Rpage2_d-6`, B22 |
+| Validator's F213e family (2901 cases, `p/ev`) | 702 changed, 2199 identical; **0 with fewer words than main** (was 2: `a4_two_ib_40_200`, `a4_two_ib_8_200`, now main's 74 and 78 words) |
+
+The 11 `FEWERWORDS` of the F213d family are the validator's: the 10 ghost-word cases (`adv_a4_m0_ib_negmargin_fixed_*`: main prints a word twice, with a warning, we print it once) and `adv_a4_m0_ib_negmargin_auto_Rpage2_d-6`, which counts 56 words on main and 55 here only in the validator's wide read (the MediaBox widened downward): `F00` is at y = -0.06 pt (the top of its bbox 0.06 pt above the page edge, the glyphs inside; Chrome's own F00 bbox starts at -3.3 pt for its font), where main has it at 5.9 pt; `pdftotext` on the real page prints it in both (55 lines each). The `margin: -12px` position is B22's family; no word is lost.
+
+Not verified: the PNGs were not looked at again (the byte gate shows the 54 PDFs equal the ones looked at before this fix); the full F213d / F213e sweep against Chrome is the validator's, here only against main.
