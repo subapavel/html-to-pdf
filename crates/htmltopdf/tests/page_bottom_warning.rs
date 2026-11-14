@@ -172,9 +172,9 @@ fn warns_about_content_below_the_page_only() {
         ),
         // F213e: the F213 box (300 px) as the first block of the body under `body { margin-top: 809px }`, which leaves 200 px of
         // page 1: the line moves to page 2 like Chrome's instead of being printed on no page ("content extends 246.1 pt past the
-        // bottom page edge"). Not the 950 px box under a 200 px margin: ours still seats an inline box bottom-on-baseline and
-        // Blitz aligns its last line there (F183c), so a box taller than half a page is painted below the edge of its page
-        // and the net says so. Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
+        // bottom page edge"). (Before F183c the 950 px box under a 200 px margin was left out: ours seated an inline box bottom-on-baseline and
+        // Blitz aligned its last line there, so a box taller than half a page was painted below the edge of its page
+        // and the net said so.) Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
         (
             "F213e Q1b: the first line with a tall inline-block under a body margin of 809px",
             format!("{F213_PAGE} body {{ margin-top: 809px }}"),
@@ -318,19 +318,9 @@ fn warns_about_content_below_the_page_only() {
         );
     }
 
-    // F183c, a known residual loss the net now sees: a fixed-height box with in-flow content is painted hanging below its line
-    // by about its free space (ours seats an inline box bottom-on-baseline, Blitz places the box by its last line). A box of 600 px
-    // moved to page 2 by F213d (Chrome: the whole box at the top of page 2) is painted down to 90.9 pt below the edge of page 2,
-    // so the bottom of the box is printed on no page. The fix is F183c, not F213d; the net says so until then.
-    let w = page_warnings(
-        F213_PAGE,
-        &format!("{}{}", f213d_room(120), f213d_box(600, F213_BOXTOP)),
-    );
-    assert!(
-        w.iter()
-            .any(|m| m.contains("past the bottom page edge on page 2")),
-        "F183c, a fixed 600 px box moved to page 2: {w:?}"
-    );
+    // The F183c residual (a fixed 600 px box moved to page 2 and painted hanging below its line) is the test
+    // `a_600px_box_moved_to_page_two_by_f213d_is_printed_whole` in `inline_block_baseline.rs`: the net warned about it before
+    // F183c (90.9 pt past the edge of page 2); the box now sits where Chrome has it and the net is silent.
 
     // A transformed body is a split barrier: kept whole, and the pagination warning names the box.
     let w = page_warnings("body { transform: translateX(0) }", &lines(200));

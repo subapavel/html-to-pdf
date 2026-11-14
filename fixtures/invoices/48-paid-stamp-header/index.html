@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura 2026-0048</title>
+<link rel="stylesheet" href="../../tailwind/tailwind.css">
+<style>
+  @page { size: A4; margin: 15mm; }
+  /* The paid stamp: tailwind.css has no text-center and no red border colour, so they are written here. */
+  .razitko { width: 140px; height: 60px; padding-top: 12px; border: 3px solid #cc0000; color: #cc0000; text-align: center; }
+</style>
+</head>
+<body class="font-sans text-[10pt] text-gray-900 leading-snug">
+
+<!-- The header is a grid, not a flex row: the stamp is an inline-block under the title in the right column. -->
+<header class="grid grid-cols-2 gap-8 border-b-2 border-gray-900 pb-4 mb-8">
+  <div>
+    <p class="text-sm font-semibold">Příkladná integrace s.r.o.</p>
+    <p class="text-sm text-gray-600">Krátká 12, 541 01 Trutnov</p>
+    <p class="text-sm text-gray-600">IČO 12345678 · DIČ CZ12345678</p>
+  </div>
+  <div class="text-right">
+    <h1 class="text-2xl font-bold tracking-tight">Faktura 2026-0048</h1>
+    <p class="text-sm text-gray-600">Vystaveno 4. 11. 2026 · splatnost 18. 11. 2026</p>
+    <p class="mt-2"><span class="razitko inline-block"><span class="block text-sm font-bold tracking-wider">ZAPLACENO</span><span class="block text-xs">4. 11. 2026</span></span></p>
+  </div>
+</header>
+
+<table class="w-full text-sm mb-8">
+  <thead>
+    <tr class="border-b border-gray-300 text-left text-xs uppercase tracking-wider text-gray-500">
+      <th class="py-2 pr-2 font-semibold">Popis</th>
+      <th class="py-2 px-2 font-semibold text-right">Množství</th>
+      <th class="py-2 pl-2 font-semibold text-right">Celkem</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Licence k programovému vybavení pro 5 pracovišť</td>
+      <td class="py-2 px-2 text-right tabular-nums">5 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">45 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Nasazení a zaškolení obsluhy v sídle odběratele</td>
+      <td class="py-2 px-2 text-right tabular-nums">16 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">38 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Roční údržba a technická podpora</td>
+      <td class="py-2 px-2 text-right tabular-nums">12 měs.</td>
+      <td class="py-2 pl-2 text-right tabular-nums">21 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Doprava a ubytování technika (2 dny)</td>
+      <td class="py-2 px-2 text-right tabular-nums">2 dny</td>
+      <td class="py-2 pl-2 text-right tabular-nums">6 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Dokumentace a uživatelská příručka v tištěné podobě</td>
+      <td class="py-2 px-2 text-right tabular-nums">3 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">4 500,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Migrace dat z původního systému</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">18 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Školicí materiály a přístupy do e-learningu</td>
+      <td class="py-2 px-2 text-right tabular-nums">5 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">7 500,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Konzultace při přípravě provozního řádu</td>
+      <td class="py-2 px-2 text-right tabular-nums">6 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">9 600,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Úprava tiskových šablon podle požadavků odběratele</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">12 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Správa uživatelských účtů a nastavení oprávnění</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">5 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Zálohování a obnova dat, nastavení plánu záloh</td>
+      <td class="py-2 px-2 text-right tabular-nums">1 ks</td>
+      <td class="py-2 pl-2 text-right tabular-nums">8 200,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Integrace s účetním systémem odběratele</td>
+      <td class="py-2 px-2 text-right tabular-nums">20 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">32 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Testovací provoz a ladění po nasazení</td>
+      <td class="py-2 px-2 text-right tabular-nums">10 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">14 000,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Kontrola a ladění výkonu databáze</td>
+      <td class="py-2 px-2 text-right tabular-nums">4 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">6 400,00</td>
+    </tr>
+    <tr class="border-b border-gray-100">
+      <td class="py-2 pr-2">Revize bezpečnostního nastavení serverů</td>
+      <td class="py-2 px-2 text-right tabular-nums">3 h</td>
+      <td class="py-2 pl-2 text-right tabular-nums">4 800,00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="text-right text-lg font-bold mb-6">Celkem k úhradě <span class="tabular-nums ml-1">222 400,00 Kč</span></p>
+
+<!-- The QR box is an inline-block in the text of the payment sentence: it sits on the baseline of its last line. -->
+<p class="mt-6 text-sm">Zaplaťte QR kódem <span class="inline-block w-28 h-28 border border-gray-300 bg-gray-50 rounded-md text-xs">QR kód</span> nebo převodem na účet 123456789/0300.</p>
+
+<p class="mt-6 text-xs text-gray-500">Děkujeme za spolupráci.</p>
+
+</body>
+</html>

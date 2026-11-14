@@ -14,9 +14,8 @@
 //! 809 px that leaves 200 px below it; `B(h)` is a 150 px wide `inline-block` of height `h` with a one-line block
 //! child `BOXTOP`. Every page number below is Chrome's (version of the committed references, measured with
 //! `scripts/reference/render.mjs`'s settings and `pdftotext -bbox`, plan section 7). The y positions are not compared
-//! with Chrome's except where the box is empty or replaced: Chrome puts a box with in-flow content on the baseline of
-//! its last line box, we put every inline box bottom-on-baseline (F183c), so `START` sits at the box's bottom here and at
-//! its top in Chrome.
+//! with Chrome's in the tests below, which are about pages; `f183c_the_y_of_the_moved_lines_is_chromes` compares them. A box
+//! with in-flow content sits on the baseline of its last line box like Chrome's since F183c (it was seated by its bottom edge).
 //!
 //! The `p1*` / `p5*` tests are red before the fix; the `g*` tests are guards that hold before and after.
 //!
@@ -196,7 +195,7 @@ fn assert_on_page(words: &[Word], page: usize, texts: &[&str]) {
 #[test]
 fn p1_a_line_with_an_inline_block_taller_than_the_room_moves_to_the_next_page() {
     // `S<p>START B(300) TAIL</p><p>AFTER</p>`. Chrome: 2 pages, page 1 empty; START, BOXTOP, TAIL at 41.7 pt and AFTER at
-    // 267.4 pt on page 2. (Ours puts START at the bottom of the box, F183c, so y is not compared.)
+    // 267.4 pt on page 2. (The y is compared in `f183c_the_y_of_the_moved_lines_is_chromes`.)
     let pdf = render(&format!(
         "{}<p>START {} TAIL</p><p>AFTER</p>",
         s(),
@@ -228,8 +227,8 @@ fn p1_a_box_of_several_blocks_moves_with_its_line() {
 
 #[test]
 fn p1t_the_same_with_vertical_align_top() {
-    // `vertical-align: top` loses the words as well: Parley 0.6 seats every inline box bottom-on-baseline (F183c).
-    // Chrome: page 2 for all four words (START 40.9 pt, BOXTOP 41.7 pt). y is not compared (F183c).
+    // `vertical-align: top` loses the words as well: Parley 0.6 seated every inline box bottom-on-baseline (F183c fixed the baseline).
+    // Chrome: page 2 for all four words (START 40.9 pt, BOXTOP 41.7 pt). y is compared in `f183c_the_y_of_the_moved_lines_is_chromes`.
     let pdf = render(&format!(
         "{}<p>START {} TAIL</p><p>AFTER</p>",
         s(),
@@ -323,8 +322,8 @@ fn g3_a_tall_svg_moves_with_its_line() {
 #[test]
 fn g4_a_tall_box_on_the_third_line_splits_before_its_line() {
     // P4: `L1<br>L2<br>START B TAIL<br>L4<br>L5`. Two lines stay on page 1 (orphans 2), the line with the box and the
-    // lines after it go to page 2. Chrome: L1, L2 on page 1; START, BOXTOP, TAIL, L4, L5, AFTER on page 2. (Ours
-    // paints the box itself in the wrong place, F183c; the pages are right.)
+    // lines after it go to page 2. Chrome: L1, L2 on page 1; START, BOXTOP, TAIL, L4, L5, AFTER on page 2. (The box
+    // itself was painted in the wrong place before F183c; the pages were right.)
     let pdf = render(&format!(
         "{}<p>L1<br>L2<br>START {} TAIL<br>L4<br>L5</p><p>AFTER</p>",
         s(),
@@ -398,8 +397,7 @@ fn f213e_c10_the_same_in_a_section() {
 
 #[test]
 fn f213e_g1_a_first_line_that_fits_stays_on_page_one() {
-    // Q1fit: M = 100, B(300): 302 px in a room of 909. Chrome: one page, START at 116.7 pt (ours seats the box
-    // bottom-on-baseline, F183c: y is not compared).
+    // Q1fit: M = 100, B(300): 302 px in a room of 909. Chrome: one page, START at 116.7 pt (y: see `f183c_the_y_of_the_moved_lines_is_chromes`).
     let pdf = render_css(
         "body{margin-top:100px}",
         &format!("<p>START {} TAIL</p><p>AFTER</p>", b(300, "")),
@@ -455,7 +453,7 @@ fn f213e_alone_box_under_a_body_margin_moves_to_page_two() {
     // fresh page and not page 1. Chrome: page 1 empty, BOXTOP at 41.7 pt and AFTER at 267.4 / 492.4 / 674.7 pt on page 2, 2 pages.
     // Before (fork b81c6782, F213d HIGH-1b): `ancestor_insets` counted the body margin, the box "did not fit its page" and kept the
     // F30f split: it hung below the content box and was printed on no page ("content extends 248 / 467 / 655 pt past the bottom
-    // page edge"). The y of BOXTOP is not compared (F183c). Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
+    // page edge"). The y of BOXTOP is compared in `f183c_the_y_of_the_moved_lines_is_chromes`. Plan docs/plans/2026-11-03-f213e-first-block-below-top-margin.md.
     for (m, h) in [(809, 300), (500, 600), (265, 843)] {
         let pdf = render_css(
             &format!("body{{margin-top:{m}px}}"),
@@ -473,4 +471,75 @@ fn f213e_alone_box_under_a_body_margin_moves_to_page_two() {
         assert_on_page(&words, 2, &["BOXTOP", "AFTER"]);
         assert_eq!(page_count(&pdf), 2, "M {m}, box {h}: two pages like Chrome");
     }
+}
+
+#[test]
+fn f183c_the_y_of_the_moved_lines_is_chromes() {
+    // The y that the tests above leave uncompared "because of F183c", with Chrome m153's numbers measured with the bundled
+    // Inter TTF through `@font-face` (the same font metrics as ours: `pdftotext` reports a `yMin` 2.9 pt smaller for the
+    // host's Inter OTF, which is where the older 41.7 / 267.4 pt in the comments come from). Within 1 px (0.75 pt).
+    // (page, START y or None, BOXTOP y, AFTER y)
+    let mut bad = Vec::new();
+    let mut want = |name: &str, pdf: &[u8], expect: &[(&str, usize, f32)]| {
+        let words = printed_words(pdf);
+        for (t, page, y) in expect {
+            let w = find(&words, t);
+            if w.page != *page || (w.y_min - y).abs() > 0.75 {
+                bad.push(format!(
+                    "{name}: `{t}` at {:.1} pt on page {}, Chrome {y:.1} pt on page {page}",
+                    w.y_min, w.page
+                ));
+            }
+        }
+    };
+    // P1: `S<p>START B(300) TAIL</p><p>AFTER</p>`.
+    let pdf = render(&format!(
+        "{}<p>START {} TAIL</p><p>AFTER</p>",
+        s(),
+        b(300, "")
+    ));
+    want(
+        "P1",
+        &pdf,
+        &[
+            ("START", 2, 44.6),
+            ("BOXTOP", 2, 44.6),
+            ("TAIL", 2, 44.6),
+            ("AFTER", 2, 270.3),
+        ],
+    );
+    // F213e g1: the same under `body { margin-top: 100px }`: it fits page 1.
+    let pdf = render_css(
+        "body{margin-top:100px}",
+        &format!("<p>START {} TAIL</p><p>AFTER</p>", b(300, "")),
+    );
+    want(
+        "F213e g1",
+        &pdf,
+        &[
+            ("START", 1, 119.6),
+            ("BOXTOP", 1, 119.6),
+            ("AFTER", 1, 345.3),
+        ],
+    );
+    // F213e: the alone box under a body margin of 809 / 500 / 265 px.
+    for (m, h, after) in [(809, 300, 270.3), (500, 600, 495.3), (265, 843, 677.6)] {
+        let pdf = render_css(
+            &format!("body{{margin-top:{m}px}}"),
+            &format!(
+                "<p><span style=\"display:inline-block;width:150px;height:{h}px;border:1px solid #000\">\
+                 <span style=\"display:block\">BOXTOP</span></span></p><p>AFTER</p>"
+            ),
+        );
+        want(
+            &format!("F213e M {m}, box {h}"),
+            &pdf,
+            &[("BOXTOP", 2, 44.6), ("AFTER", 2, after)],
+        );
+    }
+    assert!(
+        bad.is_empty(),
+        "differences from Chrome m153:\n{}",
+        bad.join("\n")
+    );
 }
