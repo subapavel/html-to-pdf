@@ -95,3 +95,7 @@ F183c validator, probe `adv_a5_10_ib_negmargin_auto_Rpage2_d-6` (`f183cv/adv/`):
 ### B23 — inline-blocks that share a line taller than a page stack below the first box instead of beside it  (severity: low, size: medium — fulgur pagination, with F222 / F213b)
 
 F183c re-validation, `rv/var2/four_staggered`: four inline-blocks on one line, each starting on a later page. Every word is printed once and in order, but each later box continues below the previous one's end (B00 on page 3, C00 on page 5: 6 pages, as on main), where Chrome places them beside the first box (B00 on page 2: 4 pages). Same output as main.
+
+### B24 — a first paragraph of two or three lines with room for one line under a body offset hangs; Chrome splits it 1 / rest  (severity: low, size: small — fulgur pagination)
+
+F213e-c step 7 (plan `2026-11-09-f213e-b-avoid-card-under-letterhead.md` section 8): `body { margin-top: 980px }`, then `<p>Line1<br>Line2</p>` (room for one 20 px line on page 1). Chrome m153 breaks the paragraph between its lines (first line on page 1, the rest on page 2: orphans and widows give way, css-break-3 section 4.4) when nothing precedes it; ours keeps both lines on page 1 and prints the second over the bottom margin (the F213e-b mechanism, for a paragraph that is not `break-inside: avoid`). After a zero-height sibling both engines move the paragraph whole (fixed in F213e-c). Needs a room of less than `orphans + widows` lines under an offset of 970 px or more on A4, so synthetic; not on a fixture.

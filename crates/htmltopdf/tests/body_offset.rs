@@ -609,7 +609,6 @@ fn f213e_c6_a_first_avoid_card_whose_margin_collapses_through_body_splits_in_pla
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213e_c5z_an_avoid_card_after_a_zero_height_box_moves_whole() {
     // C5z: a zero-height `<div>` before the card. It is a sibling, so the break in front of the card is a real Class A
     // break point and Chrome honours the avoid: page 1 empty, the whole card from the content top (first line at 41.7
@@ -740,7 +739,8 @@ fn f213e_c12_a_first_image_taller_than_a_page_under_a_body_margin_starts_on_page
 // A zero-height in-flow box before a `break-inside: avoid` card leaves `cursor_y` at 0, so the fragmenter read "nothing
 // precedes the card" and let it hang below the content box (css-break-3 section 4.1: a break between in-flow siblings is
 // a Class A break point whatever their height). Chrome moves the card whole to page 2 (0 / 45). The tests marked
-// `F213e-c` are red until the fork fix; the `_g_` ones are green on main and must stay green.
+// `F213e-c` were red on main (the card hung or was split in place) and are green with the fork fix; the `_g_` ones were
+// green on main and must stay green.
 //
 // Every case below is `body { margin-top: ... }`, an optional box before the card, the card, then `AFTER`. A case lists
 // the `Line` words per page that Chrome prints and the page count; `AFTER` must be on the last page.
@@ -796,7 +796,6 @@ const Z: &str = "<div style=\"height:0\"></div>";
 const M200: &str = "body { margin-top: 200px }";
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_card_of_blocks_after_a_zero_height_box_moves_whole() {
     // P2, block-children twin of C5z: Chrome 0 / 45 (page 1 empty, the card from the content top, AFTER below it); main
     // splits it 40 / 5 because `content_above` reads "nothing above". Without the box the same card splits 40 / 5 in
@@ -829,7 +828,6 @@ fn f213ec_a_card_of_blocks_after_a_zero_height_box_moves_whole() {
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_every_kind_of_zero_height_box_is_a_sibling_before_an_inline_card() {
     // P2 / P7 (plan 7.2, 7.5): all of these put the 45-line card on page 2 whole in Chrome (0 / 45). Main hangs it for
     // each (43 lines on page 1, 2 lost). `<span></span>` is an anonymous block with an inline element and no line box: it
@@ -875,7 +873,6 @@ fn f213ec_every_kind_of_zero_height_box_is_a_sibling_before_an_inline_card() {
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_counter_reset_div_is_a_sibling() {
     // The shape the finding came from: `<div style="counter-reset:polozka">` is a zero-height div. Chrome 0 / 45.
     assert_cases(&[case(
@@ -888,7 +885,6 @@ fn f213ec_a_counter_reset_div_is_a_sibling() {
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_hidden_or_out_of_flow_box_does_not_stop_a_zero_height_box_from_counting() {
     // P5 / P6: `display:none` and `position:absolute` boxes are not siblings, but a zero-height box after them still is.
     // Chrome 0 / 45 for each; main hangs. (That the hidden / abspos box alone does not count is F213e-b's, PR B.)
@@ -908,7 +904,6 @@ fn f213ec_a_hidden_or_out_of_flow_box_does_not_stop_a_zero_height_box_from_count
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_padded_card_after_a_zero_height_box_moves_whole() {
     // P8: 16 px of padding (934 px in all). Chrome 0 / 45 after the box (first line at 56.6 pt); main hangs it (42 lines
     // on page 1). Without the box Chrome splits it 39 / 6 and main hangs: that is F213e-b, PR B.
@@ -922,7 +917,6 @@ fn f213ec_a_padded_card_after_a_zero_height_box_moves_whole() {
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_card_with_room_for_44_lines_after_a_zero_height_box_moves_whole() {
     // P8: `body { margin-top: M }`, M = 126 .. 130 leaves room for 44 of the 45 lines. After the box Chrome moves the card
     // whole at every M (0 / 45); main hangs it (all 45 on page 1 at M = 128, the last 2 off the content box).
@@ -942,7 +936,6 @@ fn f213ec_a_card_with_room_for_44_lines_after_a_zero_height_box_moves_whole() {
 }
 
 #[test]
-#[ignore = "F213e-c: red until the fork fix"]
 fn f213ec_a_card_ending_past_chromes_1010px_moves_whole_after_a_zero_height_box() {
     // P8, the 1 px band: a 30-line card (602 px) ends at M + 602. Past Chrome's 1010 px (M = 408.5 and above) Chrome puts
     // the whole card on page 2 after the box (0 / 30, first line at 44.6 pt); main keeps it on page 1, and from M = 480
@@ -959,6 +952,43 @@ fn f213ec_a_card_ending_past_chromes_1010px_moves_whole_after_a_zero_height_box(
         })
         .collect();
     assert_cases(&cases);
+}
+
+#[test]
+fn f213ec_a_short_paragraph_after_a_zero_height_box_moves_whole() {
+    // The paragraph twin (plan section 3, call site 3; Chrome m153, measured with the bundled Inter): `body { margin-top:
+    // 980px }` leaves 29 px on page 1, room for one 20 px line. Two lines (no allowed break between them with the initial
+    // `orphans` / `widows`) and three lines: after a zero-height box Chrome puts page 1 empty and the whole paragraph from
+    // the content top (0 / all). Main prints the second line over the bottom margin.
+    for (n, name) in [(2, "f213ec-para2-z"), (3, "f213ec-para3-z")] {
+        let para: String = (1..=n)
+            .map(|i| format!("Line{i:04}"))
+            .collect::<Vec<_>>()
+            .join("<br>");
+        let pdf = render(
+            name,
+            "body { margin-top: 980px }",
+            &format!("{Z}<p>{para}</p><p>AFTER</p>"),
+        );
+        let found = words(&pdf);
+        assert_eq!(
+            page_of(&found, "Line0001"),
+            2,
+            "{name}: the paragraph starts page 2"
+        );
+        assert_eq!(
+            page_of(&found, &format!("Line{n:04}")),
+            2,
+            "{name}: and stays whole"
+        );
+        assert_eq!(page_of(&found, "AFTER"), 2, "{name}");
+        assert_eq!(page_count(&pdf), 2, "{name}: Chrome: 2 pages");
+        let limit = PAGE_H_PT - MARGIN_PT + SLACK_PT;
+        assert!(
+            found.iter().all(|w| w.y_max <= limit),
+            "{name}: nothing below the content box"
+        );
+    }
 }
 
 #[test]

@@ -355,3 +355,47 @@ Body-level children listed from the three `index.html` files with a small HTML p
 - Page size A4 only; the offsets 100 and 400, the other card kinds of the 672-case sweep and `html` padding as a source (except 7.8) were not probed.
 - The sweep, the byte gates and the fixture 49 layout are later steps.
 - Chrome's numbers are one run each on m153; Chrome's own order of widows / orphans was read from the results (43/2), not from its source.
+
+## 8. F213e-c results (PR A, 2026-11-14)
+
+Fork `subapavel/fulgur` `htmltopdf/srgb-colours`, per ADR-0012 (F217's PR #95 is on hold and its fork commit is on the branch):
+
+- `7626f400` is `git revert 99a8401e` (F217). Its tree equals the tree of main's lock `7dad143b` (`git diff 7dad143b 7626f400` is empty).
+- `8f7b2629` is the F213e-c change; `Cargo.lock` names it (only the fulgur SHA moved; Blitz and Parley pins are main's). `pagination_layout.rs` only:
+  - `zero_height_child_is_sibling` and `sibling_page`, set in the zero-height branch of `fragment_pagination_root`;
+  - `PageStrips::sibling_break_moves` (= `sibling_on_page && first_box_overflows`: page 0 under an offset, cursor at 0, the box ends past `chrome_bottom(0)` and fits `fresh() + 1`);
+  - the three call sites of section 3: the plain advance, `keeps_whole_at`'s `above` (`content_above` itself is unchanged), and the paragraph move-whole.
+- `4be3de79` holds 4 fork lib tests and 1 `render_smoke` case (`page_strips_sibling_break_moves`, `a_zero_height_sibling_counts_unless_hidden_or_out_of_flow`, `an_avoid_card_after_a_zero_height_box_moves_whole`, `an_avoid_card_that_fits_or_has_no_sibling_before_it_is_not_moved_by_the_zero_height_rule`, `a_short_paragraph_after_a_zero_height_box_moves_whole`, `render_v2_smoke_avoid_card_after_a_zero_height_box_under_an_offset_moves_whole`). **Written without a build of the fulgur test target: not compiled, not run, not pushed** (see 8.5).
+
+### 8.1 Tests (`crates/htmltopdf/tests/body_offset.rs`)
+
+- Un-ignored, red on main for the stated reason, green with the fix: `f213e_c5z_…` and 7 `f213ec_*` tests (the block-children twin, 12 kinds of zero-height box, counter-reset div, hidden / abspos box before a `Z`, padded card, room for 44 lines, the 1 px band at M = 408.5 / 450 / 560).
+- New: `f213ec_a_short_paragraph_after_a_zero_height_box_moves_whole` (call site 3; Chrome m153 with the bundled Inter: `margin-top: 980px`, `Z`, a 2- or 3-line paragraph gives page 1 empty and the whole paragraph on page 2). Red on main (`Line0001` on page 1), green with the fix.
+- Guards, green on main and with the fix (the 29 tests of the file that pass on main, among them the new `f213ec_g_*`): fits-stays, the 1 px band, `<section>` / wrapper first, `@page :first` smaller page, the C8 image room.
+- Result: 38 passed, 5 ignored (`f213e_c5_…` and `f213e_c6_…`: F213e-b, PR B; `f213e_c12_…`: F213b; `f213ed_…`: F213e-d; `f109_…`: F109). Each of the five fails with the same message on main and with the fix.
+
+- Full suite, `cargo test --release --locked --no-fail-fast` at the pinned fork SHA `8f7b2629`: 91 suites, 1128 passed, 0 failed, 15 ignored. `cargo fmt --check` and `cargo clippy --release --locked --workspace --all-targets -- -D warnings` pass (our workspace; the fork is not linted by it).
+
+### 8.2 Byte gate (main `e560633` binary against the fix, same fonts and flags)
+
+- Fixtures 01-48 (47 directories) and the 7 `bench/corpus` documents, `RAYON_NUM_THREADS` 1 and 4: **0 of 54 PDFs differ** at either count. No fixture has a zero-height sibling before a box that overflows page 0 (7.10 held). `compare.py --threshold-check`: every fixture `ok`, every number as before (the PDFs are byte-identical), no threshold changed.
+- Fixture 45 and the pilot fixtures need no re-bless.
+
+### 8.3 No word lost against main (15,988 documents in three runs, `RAYON_NUM_THREADS=1`, `pdftotext` word multiset, main `e560633` against the fix)
+
+- Run 1, 706 documents (`f213ec/p` 370 probes of this finding, `f213e/sw`, `f213e/p`, `f213e/v45`): 124 differ, **0 have fewer words, 84 have more** (lost words printed again), 582 are byte-identical.
+- Run 2, 15,178 documents: the F213e families `f213ev/p/**` (2,903), the F213d families (`f213d/sweep`, `f213d/v/p`, `f213d/p`, `f213dv/p`, `f213dv/fx/invoices/44v`) and F213 (`f213v/c`): **all byte-identical to main**. (The 11 known F213d cases, `adv_a4_m0_ib_negmargin_*`, are identical to main too, so they cannot show up as fewer words.)
+- Run 3, `rv/var` and `rv/var2` (104 documents): all identical.
+- The validator's `run3.py` does not exist in the scratch directories; `scratchpad/f213ec-gate/words.py` is the replacement (renders both binaries, compares word multisets).
+
+### 8.4 Visual check
+
+A 45-line card after `<div style="height:0">` under `body { margin-top: 200px }`: main prints page 1 with 43 lines, the last two below the page edge and lost, and `AFTER` alone on page 2; the fix prints page 1 empty and the whole card with `AFTER` on page 2, as Chrome m153 does (0 / 45). No fixture changes, so there is no side-by-side in `out/compare/`; the pair is in `scratchpad/f213ec-gate/viz/side.png`.
+
+### 8.5 Not verified, and what this leaves
+
+- `cargo test -p fulgur`, the fulgur-vrt goldens and `cargo clippy` in the fork were **not run**: a build of the fork's own test target was denied by the permission classifier in this session, and the shared target has no test profile for it. The engine change itself was built (release, through a temporary `--config patch` that was never committed) and exercised by every number above; the 6 new fork tests are unproven. The UA `body { margin: 8px }` gives every fork test an offset, so a fork golden with a zero-height box before a box that overflows page 0 could move (none is expected).
+- The plan's 672-case sweep (`sweep.py`) and the F213 1440-case sweep against Chrome were not run: the scratch sweep script of the plan does not exist; the word-multiset runs above stand in for the "no word lost" criterion, not for "nearer Chrome's pages".
+- `bench.py --check` and `vrt-validator` not run (see the PR).
+- Chrome numbers of the paragraph test are one run each (m153, bundled Inter via `@font-face`).
+- Filed: B24 (a first short paragraph that hangs under an offset; Chrome splits it 1 / rest). F213e-d (zero-height sibling around a `<section>`), F213e-e (forced break after a zero-height sibling) and F213e-f (blank page 1 under body padding) are the plan's 7.11 list and are **not** filed yet.
