@@ -792,3 +792,59 @@ fn g_f183c_two_boxes_on_a_line_taller_than_a_page_without_a_trailing_child() {
     }
     assert_eq!(find(&words, "A00").page, 1);
 }
+
+/// Every word of `A00..` and `B00..` of the two boxes, and AFTER, is printed once.
+fn assert_two_boxes_print_every_word(a_lines: u32, b_lines: u32, b_spacer: bool, pages: usize) {
+    let pdf = render(&format!(
+        "<p>{} {}</p><p>AFTER</p>",
+        two_box("A", a_lines, false),
+        two_box("B", b_lines, b_spacer)
+    ));
+    let words = printed_words(&pdf);
+    let names: Vec<String> = texts("A", 0, a_lines - 1)
+        .into_iter()
+        .chain(texts("B", 0, b_lines - 1))
+        .chain(["AFTER".to_string()])
+        .collect();
+    let lost: Vec<&String> = names
+        .iter()
+        .filter(|n| !words.iter().any(|w| &w.text == *n))
+        .collect();
+    assert!(
+        lost.is_empty(),
+        "{} of {} words are printed nowhere: {:?}",
+        lost.len(),
+        names.len(),
+        lost.iter().take(8).collect::<Vec<_>>()
+    );
+    for n in &names {
+        let _ = find(&words, n);
+    }
+    assert_eq!(
+        page_count(&pdf),
+        pages,
+        "Chrome and main have {pages} pages"
+    );
+}
+
+#[test]
+fn r_f183c_the_later_box_is_the_taller_one_and_prints_every_word() {
+    // Validator re-check (`ba_n59_tA0_tB0`): A of 56 lines, B of 59 lines, both taller than a page, no trailing child.
+    // The walk fragments B after A, so B starts on page 2 while the line was painted on page 1: B00 to B40 were on no
+    // page, where main prints them (B on page 2). The line is on the first page of any box and a box that starts later
+    // is painted by its continuation.
+    assert_two_boxes_print_every_word(56, 59, false, 3);
+}
+
+#[test]
+fn r_f183c_the_later_box_is_a_pixel_taller_through_a_trailing_block() {
+    // `ab_n56_tA0_tB1`: A and B of 56 lines, B ends in a 9 px block with no line: B hangs deeper, the line is taller than
+    // A. Main prints all of B (it loses the head of A); the first fix printed A and lost the head of B.
+    assert_two_boxes_print_every_word(56, 56, true, 3);
+}
+
+#[test]
+fn r_f183c_the_short_box_with_a_trailing_block_prints_every_word_too() {
+    // The first re-check's shape (`v2`) with B's words counted: B00 to B03 start on the page after A's end.
+    assert_two_boxes_print_every_word(59, 4, true, 2);
+}

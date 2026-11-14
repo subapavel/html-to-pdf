@@ -411,3 +411,28 @@ New edge cases found:
 The 11 `FEWERWORDS` of the F213d family are the validator's: the 10 ghost-word cases (`adv_a4_m0_ib_negmargin_fixed_*`: main prints a word twice, with a warning, we print it once) and `adv_a4_m0_ib_negmargin_auto_Rpage2_d-6`, which counts 56 words on main and 55 here only in the validator's wide read (the MediaBox widened downward): `F00` is at y = -0.06 pt (the top of its bbox 0.06 pt above the page edge, the glyphs inside; Chrome's own F00 bbox starts at -3.3 pt for its font), where main has it at 5.9 pt; `pdftotext` on the real page prints it in both (55 lines each). The `margin: -12px` position is B22's family; no word is lost.
 
 Not verified: the PNGs were not looked at again (the byte gate shows the 54 PDFs equal the ones looked at before this fix); the full F213d / F213e sweep against Chrome is the validator's, here only against main.
+
+### 7.8 Re-validation: the fix of 7.7 moved the loss to the later box (2026-11-14)
+
+**The loss.** Shape: two boxes on one line, both taller than a page, or the later one the lower. `ba_n59_tA0_tB0` (A 56 lines, B 59 lines, no trailing child): B words on main 58, on caa5e87c 17; `ab_n56_tA0_tB1` (B 9 px taller through a trailing block): 55 against 11; `margins_ib` 55 against 15; 17 of the 66 validator files (`rv/var/`) printed fewer words than main. The earlier PR head kept those B words, so caa5e87c caused it.
+
+**Cause.** The walk fragments the boxes of a carrier one after the other, as if stacked: A from page 1 to where it ends, B from there (`ba_n59_tA0_tB0`: A on pages 1 and 2, B starts on page 2 and ends on page 3). The line (and with it the boxes' descendants that have a fragment on the page the line is painted on) is painted once; every later fragment is painted by `paint_inline_box_continuation`, which starts at the page after the box's *own* first page. caa5e87c put the line on the first page of the first box that spans pages (A's, page 1). B has no fragment on page 1, and its first fragment (page 2) is not a continuation: B00 to B40 were on no page. Main painted the line on page 2 (measured from the fragment heights) and lost the head of A instead. Looked at the geometry before changing anything (a dump of every fragment: B at `p1`, bottom at `p2`).
+
+**Fix** (fulgur `7dad143b`; on top of caa5e87c, append-only): `record_carrier_slices_after` puts the line on the earliest first page of any box on it (and records the slices when any box spans pages); `render::box_continues_on` (with `carrier_line_page`, the page of the carrier's `0..1` slice) lets a box whose first fragment is after that page be painted from its first page by its continuation. A box alone on its line has its first page as the line page: unchanged. Positions: B's later fragments are where the walk put them (below A's end), as on main; the words are printed, their place is not Chrome's (B beside A is a separate finding: the walk stacks the boxes of a shared line).
+
+**Tests (red then green, against caa5e87c).** `alone_inline_block_line.rs`: `r_f183c_the_later_box_is_the_taller_one_and_prints_every_word` (`ba_n59_tA0_tB0`: 41 of 116 words printed nowhere, B00 to B40), `r_f183c_the_later_box_is_a_pixel_taller_through_a_trailing_block` (`ab_n56_tA0_tB1`: 44 of 113) and `r_f183c_the_short_box_with_a_trailing_block_prints_every_word_too` (the 7.7 shape, B00 to B03 now counted: 4 of 64); the two tests of 7.7 stay green. fulgur lib: `a_box_that_starts_after_the_carrier_line_page_continues_from_its_first_page` (render; did not compile before), `the_carrier_line_of_two_tall_boxes_is_on_the_first_page_of_the_earlier_one` (a guard on the geometry: B starts after A, the slices are recorded).
+
+**Gates.**
+
+| Gate | Result |
+|---|---|
+| `cargo test --release --locked --no-fail-fast` | 1114 passed, 0 failed, 14 ignored (was 1111) |
+| fulgur `cargo test -p fulgur --no-fail-fast` | 3134 passed, 0 failed (was 3132) |
+| fmt, `cargo clippy --release --locked --all-targets -D warnings`, fulgur clippy | pass |
+| Byte gate, RAYON 1 and 4 | the same 7 as main differ; all 54 PDFs byte-identical to the head before this fix; 1 and 4 identical |
+| `compare.py --threshold-check` | 47 ok, every number as before |
+| Every file of the validator's `rv/var/` (66), main against this head | 0 with fewer words, 0 page-count differences, 62 with more words (main loses them; warnings 1284 to 73); b5c597a had 17 with fewer words |
+| F213e family (2901) | 0 with fewer words than main |
+| F213d family (3843) | 11 `FEWERWORDS` as before, the same files (10 ghost-word cases, `adv_a4_m0_ib_negmargin_auto_Rpage2_d-6` the wide-read artifact of 7.7), plus B22's `DIST+` / `PAGES+` |
+
+Not verified: the PNGs of the `rv/var` shapes were not looked at (words and pages only); `three_tall_last` / `three_tall_mid` lose the whole line on main too and are unchanged; Chrome's positions of the later box (it is beside A in Chrome, below it here) are not compared.
