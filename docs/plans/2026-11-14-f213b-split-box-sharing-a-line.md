@@ -176,13 +176,14 @@ field touches only the line painter.
 
 - `t1` (P1, one-line carrier): every word once. START and TAIL are on T129's page, with baselines within 0.5 pt of
   T129's. AFTER comes after it.
-- `t2` (P3, multi-line, tall line first): "Lead words before" is level with T129. "trailing" is on the next line below
-  the box, on the same page.
+- `t2` (P3, multi-line, tall line first): "Lead words before" and "trailing" are level with T129 (Chrome keeps them on
+  the box's line, §7 P3), and AFTER is below the div's second line, on the same page.
 - `t3` (P3, tall line 3rd of 4): it starts on a fresh page, as Chrome does.
 - `t4` (P2, F213d-b): START, BOXTOP and TAIL are on the box's first page, and AFTER is after the box's end. If step 1
   finds main already prints these words, `t4` stays as a guard.
 - `t5` (P4, text lines inside the box): every L once (step 5).
-- `t6` (P5, `inline-flex` sharing its line): text on the first-baseline page.
+- `t6` (P5b, `inline-flex` sharing its line, one item at the bottom of a 1200 px box): START and TAIL on the page of the
+  item (the first baseline). The column of 130 items (P5) holds on main already and is the guard `g_t6_…` (§7).
 - **Guards:** the F213 shape (a box that fits, moved whole), the F30f alone box and the F183c two-box cases in
   `alone_inline_block_line.rs` stay byte-identical.
 - **`page_bottom_warning.rs`:** the F213b and F213d-b "must warn" entries move to "must not warn".
@@ -268,4 +269,111 @@ Size: medium-large, about 8 engineer days.
 
 ## 7. Evidence
 
-(Filled in by the implementing agent.)
+Filled in by the implementing agent on 2026-11-14 (steps 0 and 1). Scratch files: the session scratchpad `f213b/`
+(`probes/` for the probes, `main-b` and `m1-99a` for the binaries, `words2.py` and `bytegate.py` for the gates).
+
+### 7.1 Step 0: preconditions and the M1 decision
+
+- F213e-c has merged (PR #101). The branch is main `75e6b60` merged in; main's fulgur pin is `4be3de79` on
+  `htmltopdf/srgb-colours` (the fork head, it contains `7626f400`). F213b's fork commits are appended to it.
+- **Baseline binary.** `main-b` is a release build of this tree's lock. Its PDFs are byte-identical to the F213e-c binary
+  that the earlier gates used (`rv/f213ec-new`) on the 47 fixture directories 01-48 and the 7 corpus documents (`bench/corpus`: 54 documents in all), at `RAYON_NUM_THREADS` 1 and 4.
+- **M1.** `m1-99a` is main's lock (Blitz `2fd60f3f`, Parley `21d3c72e`, Taffy `7bbedd5b`) with the fulgur fork head
+  `4be3de79` plus `99a8401e` cherry-picked (clean) in a scratch clone, built with a `--config` path patch; nothing
+  committed. Results against `main-b`:
+  - fixtures 01-48 plus the corpus (54 documents), RAYON 1 and 4: **0 documents differ** (byte-identical);
+  - `rvw/sh` (455): 454 identical, **1 with fewer words**: `inlflexc__tallcontent` loses 77 distinct words (`T053` to
+    `T129`, 3 pages become 2). 99a8401e splits an `inline-flex` column between its lines, and without F217's Blitz change
+    its tall content is lost; this is the "gated only together with F217's Blitz commits" caveat of section 3.4;
+  - `rvw/sw` (48): 43 identical, 5 with more words, 0 fewer; `rv/var` (66) and `rv/var2` (38): all identical;
+  - F213d family (`f213dv/p`, 5893 documents), F213e family (`f213ev/p`, 2901; `f213e/p`, 74; `f213e/sw`, 256): all
+    identical.
+- **Decision (section 3.4): the default holds.** M1's criterion "0 documents with fewer words" fails on
+  `inlflexc__tallcontent`, so F213b's PR is its own PR on main's tree and does not carry 99a8401e; F217 re-applies it on
+  F213b's head and re-measures. M2 is moot because M1 failed (the exception needs both); step 5 does not need to run it.
+
+### 7.2 Step 1: Chrome measurements
+
+Chrome for Testing 153.0.8010.12 (`/opt/pw-browsers/chromium`), Playwright with `emulateMedia print`, `preferCSSPageSize`,
+Inter from `fixtures/fonts` through `@font-face`, `pdftotext -bbox` (page, yMin in pt). A4, 15 mm margins, `body` 14px/20px,
+`p` margin 0. Box = `inline-block`, 100 px wide, 1 px border, 130 block children `T000`..`T129` (2602 px). `S` = `<p>S</p>`.
+Main = `main-b`. A word listed as "lost" is printed nowhere. Chrome ends a sliced-box document with a blank page (P1: 4 pages,
+page 4 empty); the page counts below include it.
+
+| Probe | Chrome | Main |
+|---|---|---|
+| P1 `<p>START box TAIL</p><p>AFTER</p>` page top | 4 pages. T000 p1 44.6; T129 p3 464.6; START and TAIL p3 464.6 (T129's baseline); AFTER p3 480.3; T050 printed twice | 3 pages; every T once (T000 p1 44.3, T129 p3 478.6); START, TAIL lost; AFTER p3 493.6 |
+| P1 after `S` | S p1; the box and the line move to p2: T000 p2 44.6, START/TAIL p4 464.6, AFTER p4 480.3; 5 pages | S p1; T000 p1 59.3 (starts in place); START, TAIL lost; AFTER p3 508.6 |
+| P1 box alone | T000 p1, T129 p3 464.6, AFTER p3 480.3, T050 twice | every T once, AFTER p3 493.6 |
+| P2 `START box(height 1200, BOXTOP) TAIL`, AFTER, page top | START, BOXTOP, TAIL p1 44.6; AFTER p2 187.8; 2 pages | the three words p1 44.3 (F213d-b is not lost on main since F183c); **AFTER p2 43.6** (over the rest of the box) |
+| P2 after `S` | S p1; START, BOXTOP, TAIL p2 44.6; AFTER p3 187.8; 3 pages (the plan's pre-F183c note holds) | the three words p1 59.3; AFTER p2 43.6 |
+| P2 box alone, page top / after `S` | BOXTOP p1 44.6, AFTER p2 187.8 / BOXTOP p2, AFTER p3 187.8 | BOXTOP p1 44.3, AFTER p2 43.6 / BOXTOP p1, AFTER p2 43.6 |
+| P2b same box, one child `BOXLOW` with `margin-top:1100px` (baseline on p2) | START, BOXLOW, TAIL p2 112.1, AFTER p2 187.8 (the margin is kept at the page edge) | BOXLOW p2 43.6, AFTER p2 58.6; START, TAIL lost |
+| P3 `div(300px){Lead words before box trailing words after the box in text.}`, page top | T000 p1; `Lead` and `trailing` p3 464.6 (the same line as T129); line 2 480.3; AFTER p3 495.3; 3 pages + blank | T000..T052 p1; the rest of the box and every word of the div lost; AFTER p2 43.6 |
+| P3 after `S1..S3` paragraphs | T000 p2 44.6; `Lead` p4 464.6; AFTER p4 495.3 (the tall line starts a fresh page) | T000..T052 on p2; the div's words lost |
+| P3 tall line 3rd of 4 (`X1<br>X2<br>Lead..box..trailing<br>X4`) | X1 p1 43.8, X2 p1 58.8; T000 p2 44.6; `Lead`, `trailing` p4 464.6; X4 p4 495.3; AFTER p4 510.3 | X1, X2 p1; T000..T052 p2; `Lead`, `trailing`, X4 lost |
+| P3 tall line 1st of 4 | T000 p1; `Lead` p3 464.6; X2 p3 495.3, X4 525.3; AFTER 540.3 | T000..T052; the rest lost; X2, X4 p2 43.6 / 73.6 |
+| P4 `START box(80 text lines L01..L80) TAIL` page top | L01 p1 44.6; L51 on p1 and p2; L80 p2 472.1; START, TAIL p2 472.1; AFTER p2 487.8; 3 pages incl. blank | L01..L53 p1; L54..L80, START, TAIL lost; AFTER p2 43.6 |
+| P4 after `S` | S p1; L01 p2; START, TAIL p3 472.1; AFTER p3 487.8; 4 pages | L01..L52 p1 (starts in place); the rest lost |
+| P4 box alone | L01 p1, L51 twice, L80 p2 472.1, AFTER p2 487.8 | every L once, L80 p2 478.6, AFTER p2 494.3 |
+| P5 `inline-flex` column of 130 items sharing the line, page top | START, TAIL, T000 p1 44.6 (first baseline); AFTER p3 480.3; T050 twice | START, TAIL p1 44.3; every T once; AFTER p3 493.6: **already right** (guard `g_t6_…`) |
+| P5 after `S` | START, TAIL p2 44.6 (moved); AFTER p4 480.3 | START, TAIL p1 59.3 (in place) |
+| P5b `inline-flex`, `align-items:flex-end`, height 1200, one item `FLEXITEM` | START, FLEXITEM, TAIL p2 172.1; AFTER p2 187.8 | FLEXITEM p2 43.6; START, TAIL lost; AFTER p2 58.6 |
+| P5c the same with `flex-start` | START, FLEXITEM, TAIL p1 44.6; AFTER p2 187.8 | the three words p1 44.3; AFTER p2 43.6 |
+| P6 badge (`inline-block` `BADGE`) after the box on the P1 line, `vertical-align` baseline / bottom / middle | BADGE p3 464.6 / 464.6 / 465.3, with START and TAIL | START, TAIL lost; BADGE p3 494.3 |
+| P6 `vertical-align: top` | **BADGE p1 44.6** (the line's top), START and TAIL p3 464.6 | START, TAIL lost; BADGE p3 494.3 |
+| P7 F222 `later_short_first_30` | A00..A50 p2, B00..B10 p3, A50..A100 p3, B11..B29 p4, A101..A119 and AFTER p4 (337.1); 4 pages | A words lost; AFTER p2 501.8 |
+| P7 B23 `four_staggered` | p2 A00..A50 B00..B10; p3 A50..A100 B10..B60 C00..C40 D00; p4 A101.. B61.. C41.. D01..; AFTER p4 337.1 | 6 pages: A p1..p3, B p3..p4, C p5..p6, D p6; AFTER p6 501.8 |
+| P8 the P3 shape in `border 1px; padding 16px` | 4 pages: p1 the empty open frame, p2-p3 the frame sides and the box, p4 closes the frame with `Lead`..`trailing` at 464.6, AFTER 495.3, END 523.1 | 2 pages, T000..T051 on p1, the rest lost |
+| P8 after 3 paragraphs | 5 pages, T000 on p3, `Lead` p5 464.6 | 2 pages; 49 T words |
+
+What the probes change in the plan:
+
+- **P1, P2b, P5b** confirm the design: the text of the line sits on the page of the baseline (the last line box of an
+  `inline-block`, the first baseline of an `inline-flex`), level with the baseline's own line (within 0.1 pt in
+  Chrome). The tests compare our words with each other, because Chrome slices the box and prints a line twice at each
+  page edge (ADR-0004) and keeps a margin at the page edge where we truncate it.
+- **P3**: `trailing` is on the box's line, not on the line below it (the plan's t2 said "below", section 4 is corrected).
+  The line after the tall line starts 15.7 pt below the baseline (T129 to the next line of the div).
+- **P2**: F213d-b is not a lost-word bug any more (F183c fixed it); what is left on main is AFTER over the rest of the box
+  (p2 43.6 pt, Chrome 187.8 pt). `t4` is red for that reason, not for START / BOXTOP / TAIL.
+- **P5**: the `inline-flex` column already holds on main. The red `inline-flex` case needs the first baseline off the
+  first page: `align-items: flex-end` (P5b). The column stays as the guard.
+- **P6**: a `vertical-align: top` item on the tall line is on the box's first page in Chrome (the line's top), where the
+  baseline page is the last one; the plan's non-goal stands (we place it from the baseline page, warned in step 6). Not
+  tested.
+- **P7**: main loses the A words of `later_short_first_30` (F222) and spreads `four_staggered` over 6 pages (B23);
+  recorded, not targeted.
+- **P8**: Chrome's card frame is sliced on every page it touches, the first page holding only the empty open frame;
+  fixture 51's numbers (section 4) are measured on this shape in step 7.
+
+### 7.3 Spec quotes (fetched 2026-11-14 from w3.org; the `css-spec-researcher` role was not available in this run)
+
+- css-break-3 section 4.1 (Possible Break Points): "Since line boxes contain no possible break points, inline-block and
+  inline-table boxes (and other inline-level display types that establish an independent formatting context) may also be
+  considered monolithic: that is, in the cases where a single line box is too large to fit within its fragmentainer
+  even by itself and the UA chooses to split the line box, it may fragment such boxes or it may treat them as
+  monolithic." Section 2.1's paraphrase ended at "it may fragment such boxes"; the UA may equally treat them as
+  monolithic, which is what ADR-0004's non-split did. Both are licensed, so the choice is ours.
+- CSS 2.1 section 10.8.1: "The baseline of an 'inline-block' is the baseline of its last line box in the normal flow,
+  unless it has either no in-flow line boxes or if its 'overflow' property has a computed value other than 'visible', in
+  which case the baseline is the bottom margin edge."
+- css-inline-3 section 4.2.1 (`baseline-source`): "auto: Specifies last-baseline alignment for inline-block,
+  first-baseline alignment for everything else." The css-align-3 section 9.1 text (how the baselines of a flex or grid
+  container are found) and css-overflow-3 section 2 (negative overflow) were not re-read.
+
+### 7.4 The red tests (`crates/htmltopdf/tests/tall_shared_line.rs`)
+
+Run with `cargo test --release -p htmltopdf --test tall_shared_line -- --include-ignored` on `main-b`'s tree; the red tests
+carry `#[ignore]` with the step that turns them green. Reasons for failing on main:
+
+| Test | Probe | Fails because |
+|---|---|---|
+| `r_t1_one_line_carrier_…` | P1 | `START` printed 0 times (every T is printed once) |
+| `r_t1_the_baseline_is_where_…` | P2b | `START` printed 0 times, BOXLOW is on page 2 |
+| `r_t4_f213d_b_…` | P2 | AFTER at 43.6 pt, Chrome 187.8 pt (the three words are printed already) |
+| `r_t6_an_inline_flex_box_…` | P5b | `START` printed 0 times |
+| `g_t6_an_inline_flex_column_…` | P5 | green on main (guard) |
+| `r_t2_…` | P3 | `T053` printed 0 times |
+| `r_t3_…` | P3 3rd of 4 | `T053` printed 0 times |
+| `r_t5_…` | P4 | `L54` printed 0 times |
