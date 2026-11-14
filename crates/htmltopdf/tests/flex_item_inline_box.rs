@@ -405,3 +405,18 @@ fn w4_a_box_that_fits_the_page_is_unchanged() {
         assert_eq!(page_count(&pdf), 1, "height {height}");
     }
 }
+
+#[test]
+fn w5_an_inline_flex_box_alone_on_its_line_prints_every_word() {
+    // The F30f-b residual loss: 4000 words in the item of an `inline-flex` box were placed whole, 696 were printed on
+    // main (the rest below the page edge, with a warning); the box is split between its lines like an `inline-block`.
+    let body: String = (1..=4000)
+        .map(|i| format!("w{i:04}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let pdf = render(&format!(
+        "<div style=\"display:inline-flex;width:100%\"><div>{body}</div></div>"
+    ));
+    all_words_printed(&printed_words(&pdf), &body);
+    assert!(page_count(&pdf) >= 2);
+}
