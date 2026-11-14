@@ -38,7 +38,6 @@ these go before anything that is not on this list.
 
 | Finding | Why it blocks |
 |---|---|
-| F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it |
 | F213e-c | a `break-inside: avoid` card under a letterhead after a zero-height sibling (a `counter-reset` div) hangs below the content box; Chrome moves it to page 2 |
 | F213e-b | a first `break-inside: avoid` card under a letterhead margin hangs below the content box and loses lines |
 | F30h | a flex row with `items-center` / `items-end` or padding around a split item loses up to 98 % of the row **silently** (re-check 2026-11-09) |
@@ -56,7 +55,7 @@ these go before anything that is not on this list.
 | F203 | negative vertical margins (`-mt-*`) are ignored |
 | F101 / F44 | a glyph missing from every bundled font prints `.notdef` without a warning |
 
-F183c was done on 2026-11-09 (an `inline-block` with text sits on the baseline of its last line box, the strut of the block stays under it; the stamp and the captioned QR box no longer paint over the next block; fixtures 03, 27, 37, 43, 44, 45 and 48 move toward Chrome, none grows; its plan §7.5); it was taken off the list. F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
+F183c was done on 2026-11-09 (an `inline-block` with text sits on the baseline of its last line box, the strut of the block stays under it; the stamp and the captioned QR box no longer paint over the next block; fixtures 03, 27, 37, 43, 44, 45 and 48 move toward Chrome, none grows; its plan §7.5); it was taken off the list. F107 was done on 2026-11-04 (a logo `<img>`, PNG or SVG, in a running header is painted in the margin box, fixture 47); it was taken off the list. F217 was done on 2026-11-03 and re-landed on top of F183c on 2026-11-14 (a fixed-size inline-block in a flex item's text keeps its size; fixture 46; its plan §7.8). F213e was done on 2026-11-03 (#93); its leftovers F213e-b and F213e-c took its place. F213f was on the first list and was taken off on 2026-11-03: no invoice-like flex row loses words (its plan §7); the remaining shape needs a multi-column item and went to low-medium.
 
 Re-checked on 2026-11-09 against main and Chrome m153 (scratch `pilotcheck/`): F46, F47 and F88 are fixed (by F30c-n, F30f, F96 and F213 along the way) and F38 is fixed for invoice shapes (F213e); all four left the list. The order above follows that re-check: silent text loss first, then warned loss, then what only looks off.
 
