@@ -87,3 +87,7 @@ F183c plan §7.5: `first_line_baseline` returns none for `hidden`, `scroll` and 
 ### B21 — `align-items: baseline` in flex and grid: Blitz gives Taffy no item baselines  (severity: low, size: unknown — Blitz / Taffy)
 
 Non-goal of F183c (plan §6). Items aligned by baseline are aligned as if their baseline were the top edge (`start`), so a badge beside a larger text in a `flex items-baseline` row sits higher than in Chrome. Synthetic until a fixture uses `items-baseline` with different font sizes; then it goes to the queue (ADR-0011).
+
+### B22 — an inline-block with `margin: -6px 0` gives 3 pages against 2; with `line-height: 0` AFTER is 3 pt low  (severity: low, size: unknown — Blitz / fulgur)
+
+F183c validator, probe `adv_a5_10_ib_negmargin_auto_Rpage2_d-6` (`f183cv/adv/`): an auto-height inline-block with a negative vertical margin at the page end makes a third page where Chrome has two, and a box with `line-height: 0` puts the block after it 3 pt lower than Chrome. A negative margin on an inline box shortens the line by the margin in Chrome; Parley places the margin box and Blitz keeps the margin in the layout (F183c, commit `514d51e0`), so the line height is probably taken from the border box. Not on a fixture; synthetic.
