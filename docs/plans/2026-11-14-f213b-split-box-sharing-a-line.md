@@ -504,3 +504,46 @@ diffs (`compare.py` before and after).
 - **Not run:** `vrt-validator`, `fulgur-vrt`, `pdf-reviewer` (the writer path is untouched); Chrome comparison of the P3 / P4 probes by pixels (numbers above are `pdftotext`
   positions); the M2 revert test; ADR-0012's `docs/upstream.md` pin of F217 is unchanged.
 
+### 7.11 Validator round 1 (PR #103, 2026-11-15): fixes on fork `d879d7a7`
+
+The `vrt-validator` found words that main prints and the branch lost, one printed twice, and a lost warning. Every repro is a test in
+`tall_shared_line.rs` (`v1` to `v5`, red on fork `64f48b93`, green now; they check the words of the HTML, which main's words are a subset
+of) and the lib has 4 new tests.
+
+1. **A tall box nested in a box, after a top margin of 300 px** (`u_a`, `n3`, `x3`, and `f11_0116` with 2 more causes below): two causes.
+   (a) the paragraph (2 lines, the first the tall one) started in place at y 420 on page 0 under a body offset of 225 pt, below the page
+   bottom (380), where main's plain splitter moves a paragraph whose first lines do not fit; the planner now moves a tall first line whose
+   box's first row (`tall_box_first_row`) does not fit the room to the next page, and the lines before a tall line that do not fit
+   likewise (the plan's A3, "starts in place", holds for a box that has room for its first row). (b) a fragmented box inside a fragmented
+   box was painted under the body-offset cancel of the outer one twice (`paragraph.rs`, `BODY_OFFSET_CANCELLED`): the inner box moved up by the
+   offset, which is why only a top margin of 100 px or more showed it (a single box and a `div` wrapper were fine).
+2. **A paragraph after an oversized leaf** (`v4`, `D_leaf_1080`, `m596`): the leaf (B29) leaves the cursor below the page bottom; the paragraph
+   started there. Same guard as 1(a). `f11_0116` (a box of two lines whose first has 4.7 px of room, the flush first child of its paragraph)
+   needed the same in `fragment_nested_inline_root` (a first line that does not fit moves the paragraph to the next page).
+3. **A short cell beside a tall box** (`f11_0964`): why: the table starts mid-page now (the box before it is split, main's oversized leaf
+   pushed it to a page top), its row spans pages, and Blitz centres the short cell's text 452 px down the row (the cell's top padding), on a later page
+   than the cell's one fragment (it was placed whole and printed nowhere; "a paragraph of 1 lines is placed whole"). Main loses it too when
+   the table starts mid-page (a 463 px spacer above it prints no `Q2064` either): pre-existing, hidden here. `line_split_candidate` takes the one line of
+   a table cell taller than a page whose top padding is more than a quarter page, so it moves to the page where it sits (not Chrome's y: the
+   cell's paragraph is one page late, still printed). The spacer variant prints it now too.
+4. **`H120` painted twice** (`d9`): a tall line that starts on its baseline page has slices `0..1` and `1..2`, no empty slice and no lead, so
+   `render::carrier_line_page` took `0..1` (the first line) for the box's line and painted the box again as a continuation. A carrier of several lines is
+   always read through the slice that holds the box's line now.
+5. **The missing warning** (`h1`): `fragment_tall_box` says "the frame of a box of N px that is taller than a page is drawn M px high, K px of it are not drawn" when
+   the recorded fragments are more than a quarter page short of the box (the oversized leaf of B29; the check is in the box of a tall line of a
+   paragraph of several lines; a one-line carrier keeps main's "content extends past the bottom edge").
+6. **`break-inside: avoid`** on a paragraph that holds a tall box loses 84 words with a warning, as on main (`a1`: 53 of 130 children). Recorded as F223, not fixed.
+
+Gates on `d879d7a7`: byte gate fixtures 01 to 48 and the corpus identical at RAYON 1 and 4 (51 differs); the word gate sets of 7.10: 0 documents with
+fewer words, 4 sets more than before (`f213dv/p/w_td_R30_*`: 13 documents print the short cell, +1 word each); the validator's sets regenerated from
+`gen.py`, `gen2.py` seeds 7 and 11 (1600), `gen3.py` seed 11 (800) against main: structured set (1716): no document with fewer words, lost words or
+repeated ones, 4 new warnings (the frame of a B29 box); `gen2`: 18 documents with more of the HTML's words lost than main (the same 18 as before the round),
+`gen3`: 2 (3 before); the ones read are B30 (`f7_0568`) or an `inline-flex` `column-reverse` (`f11_0409`), warned; no document prints a word the HTML does not
+have more often than the round before, except `f11_0060` (multicol, tokens such as `W1` cut at a column edge; main has 12 of them, the branch 20).
+`bench.py --check` ok (`b200-items` 1034 ms, `b200-text` 682 ms, scaling r 4.26); fulgur lib 2577 passed, its 43 integration binaries 579 passed;
+htmltopdf and the CLI 1087 passed, 0 failed, 15 ignored; fmt and clippy `--all-targets -D warnings` clean.
+
+Fixture 51, page 3: our closing line is 40 px below Chrome's because Chrome drops the `mt-8` of the paragraph that follows the sliced tall line; CSS 2.1 section 8.3.1
+and css-break-3 section 5.2 keep it (a margin is truncated only at a forced break or at the top of a page), so we follow the spec; the difference is not ours (the
+`compare.py` comment says the same).
+

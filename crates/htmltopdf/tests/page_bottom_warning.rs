@@ -119,6 +119,7 @@ fn page_warnings(extra_css: &str, body: &str) -> Vec<String> {
                 || m.contains("is placed whole")
                 || m.contains("painted on no page")
                 || m.contains("on a line taller than a page")
+                || m.contains("the frame of a box of")
         })
         .collect()
 }
@@ -345,6 +346,20 @@ fn warns_about_content_below_the_page_only() {
         w.iter()
             .any(|m| m.contains("past the bottom page edge on page 1")),
         "F213b, a line taller than a page: {w:?}"
+    );
+
+    // F213b validator round 1 (`h1`): a fixed-height box with one short child on a paragraph of several lines is one oversized
+    // leaf (B29); its frame is drawn only as high as its content, and the rest of it is not drawn. Main warned (the box hung
+    // 113 pt past the bottom edge); the net says so for the frame as well.
+    let w = page_warnings(
+        F213_PAGE,
+        "<p style=\"width:300px\">B000 B001 B002 B003 B004 B005 B006 B007 B008 B009 B010 B011 B012 B013 B014 B015 B016 B017 B018 B019 \
+         <span style=\"display:inline-block;width:100px;height:6000px;border:1px solid\"><span style=\"display:block\">BOXTOP</span></span> \
+         TAIL</p><p>AFTER000</p>",
+    );
+    assert!(
+        w.iter().any(|m| m.contains("the frame of a box of")),
+        "a box of 6000 px with a short child: {w:?}"
     );
 
     // F213b: a box that fits a page and shares a tall line is placed from the baseline page (its baseline is aligned with the

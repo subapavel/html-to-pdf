@@ -360,3 +360,201 @@ fn r_t5_text_lines_inside_the_box_are_printed_once_and_the_line_is_on_the_last_o
     assert_level(&words, "TAIL", "L80", 0.5);
     assert!(find(&words, "AFTER").y_min > find(&words, "L80").y_min);
 }
+
+// --- the vrt-validator's round 1 (PR 103): no word that main prints is lost, none is printed twice ----------------------------
+
+/// `render` with its own `@page` rule and body font (the repros of the validator use A5, a landscape page, small margins).
+fn render_page(page: &str, body: &str) -> Vec<u8> {
+    Renderer::builder()
+        .font_bytes(inter())
+        .unwrap()
+        .strict_fonts(true)
+        .build()
+        .render(
+            &format!(
+                "<!doctype html><html><head><style>@page{{{page}}}body{{font:14px/20px Inter;margin:0}}p{{margin:0}}\
+                 .b{{display:block}}.ib{{display:inline-block;border:1px solid #888}}</style></head><body>{body}</body></html>"
+            ),
+            &RenderOptions::default(),
+        )
+        .expect("render")
+}
+
+/// `W000 W001 ...` from `from` to `to` (exclusive).
+fn words_run(prefix: &str, from: u32, to: u32) -> String {
+    (from..to)
+        .map(|i| format!("{prefix}{i:03}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Every one of `tokens` is printed exactly once (a lost word or a repeated one fails).
+fn assert_printed_once(words: &[Word], tokens: impl IntoIterator<Item = String>) {
+    for token in tokens {
+        find(words, &token);
+    }
+}
+
+#[test]
+fn v1_a_tall_box_nested_in_a_box_after_a_top_margin_keeps_its_top() {
+    // `u_a` and `n3`: the first paragraph's 300 px margin is the body offset of page 0 (225 pt). The outer box (500 px wide) holds
+    // a box of 40 lines (800 px) alone on its line (A5, 15 mm margins: 680 px pages) and shares its line with `E000`. A fragmented
+    // box inside a fragmented box was moved up by the body offset twice (F000 to F011, which main prints, were lost).
+    let column: String = (0..40)
+        .map(|i| format!("<span class=b>F{i:03}</span>"))
+        .collect();
+    let flex: String = (0..40).map(|i| format!("<span>F{i:03}</span>")).collect();
+    for (what, inner) in [
+        ("blocks", format!("<span class=ib>{column}</span>")),
+        (
+            "inline-flex column",
+            format!("<span style=\"display:inline-flex;flex-direction:column\">{flex}</span>"),
+        ),
+    ] {
+        let pdf = render_page(
+            "size:A5;margin:15mm",
+            &format!(
+                "<p style=\"margin:300px 0 400px\">FIRST</p><p><span class=ib style=\"width:500px\">{inner}</span> E000</p><p>AFT000</p>"
+            ),
+        );
+        let words = printed_words(&pdf);
+        assert_printed_once(
+            &words,
+            (0..40)
+                .map(|i| format!("F{i:03}"))
+                .chain(["E000", "AFT000", "FIRST"].map(String::from)),
+        );
+        assert!(
+            words.iter().filter(|w| w.text == "F000").count() == 1,
+            "{what}"
+        );
+    }
+}
+
+#[test]
+fn v2_a_paragraph_that_follows_an_oversized_leaf_does_not_start_below_the_page_edge() {
+    // `v4`, `D_leaf_1080`, `m596`: a box with a fixed height and no content (600 px on a 453 px page) is one leaf that leaves the
+    // cursor below the page bottom (B29). The paragraph after it, whose box of text lines is taller than a page, started there
+    // and lost its first line (`S000`) and the first lines of the box; it starts the next page now. Main prints every word of
+    // these three (and loses the rest of the box).
+    let words600 = words_run("W", 0, 612);
+    let pdf = render_page(
+        "size:200mm 150mm;margin:15mm",
+        &format!(
+            "<p><span class=ib style=\"height:600px\"></span></p><p>S000 <span class=ib>{words600}</span></p>"
+        ),
+    );
+    let words = printed_words(&pdf);
+    assert_printed_once(
+        &words,
+        ["S000".to_string()]
+            .into_iter()
+            .chain((0..612).map(|i| format!("W{i:03}"))),
+    );
+
+    let words812 = words_run("W", 0, 812);
+    let pdf = render_page(
+        "size:A4;margin:15mm",
+        &format!(
+            "<p><span class=ib style=\"height:1080px;width:50px\">P000</span></p><p>S000 \
+             <span class=ib style=\"width:200px\">{words812}</span> E000<br>S001 S002</p><p>AFT000</p>"
+        ),
+    );
+    let words = printed_words(&pdf);
+    assert_printed_once(
+        &words,
+        ["P000", "S000", "S001", "S002", "E000", "AFT000"]
+            .map(String::from)
+            .into_iter()
+            .chain((0..812).map(|i| format!("W{i:03}"))),
+    );
+
+    // The same with the box as the content of the body itself.
+    let pdf = render_page(
+        "size:200mm 150mm;margin:15mm",
+        &format!(
+            "<p><span class=ib style=\"height:600px\"></span></p><span class=ib>{words600}</span><span class=ib></span>"
+        ),
+    );
+    let words = printed_words(&pdf);
+    assert_printed_once(&words, (0..612).map(|i| format!("W{i:03}")));
+}
+
+#[test]
+fn v3_a_box_whose_first_line_does_not_fit_moves_with_the_paragraph_that_holds_it() {
+    // `f11_0116`: a paragraph of 50 px lines at the bottom of page 1 (4.7 px of room) holds a box of two lines, the second a
+    // column that fills the page. Main moves the paragraph to page 2 and prints `W591 W592`; the box was split between its lines
+    // there, with the first line below the page edge.
+    let text: String = (6..60)
+        .map(|i| {
+            if i % 2 == 0 {
+                format!("<span class=b>T{i:03}</span>")
+            } else {
+                format!("T{i:03}")
+            }
+        })
+        .collect();
+    let col: String = (593..614)
+        .map(|i| {
+            if i % 2 == 1 {
+                format!("F{i}")
+            } else {
+                format!("<span>F{i}</span>")
+            }
+        })
+        .collect();
+    let pdf = render_page(
+        "size:A4;margin:5mm",
+        &format!(
+            "{text}<p style=\"line-height:50px\"><span><span class=ib style=\"width:60px\">W591 W592 \
+             <span style=\"display:inline-flex;flex-direction:column;width:150px\">{col}</span></span></span></p>"
+        ),
+    );
+    let words = printed_words(&pdf);
+    assert_printed_once(&words, ["W591", "W592", "F593", "F613"].map(String::from));
+}
+
+#[test]
+fn v4_a_short_cell_that_centres_its_text_in_a_row_that_spans_pages_prints_it() {
+    // `f11_0964`: a table whose second cell is a box of 90 words in a 100 px column (about 900 px) starts in the middle of
+    // a page (it follows a box of text lines that is split now). The first cell, a short word, is centred in the row: 452 px
+    // down, on a later page than the cell's first fragment, where it was placed whole and printed nowhere. Main loses it as
+    // well when the table starts mid-page (a spacer of 463 px above it); the oversized leaf before the table hid it here.
+    let q = words_run("V", 1887, 1977);
+    let table = format!(
+        "<table><td>Q2064</td><td><span class=ib style=\"width:100px\">{q}</span></td></table>"
+    );
+    for (what, before) in [
+        (
+            "after a spacer",
+            "<div style=\"height:463px\"></div>".to_string(),
+        ),
+        (
+            "after a split box",
+            format!(
+                "<span class=ib style=\"width:60px\">{}</span><span class=ib></span>",
+                words_run("W", 0, 654)
+            ),
+        ),
+    ] {
+        let pdf = render_page("size:A4 landscape;margin:15mm", &format!("{before}{table}"));
+        let words = printed_words(&pdf);
+        assert!(
+            words.iter().filter(|w| w.text == "Q2064").count() == 1,
+            "{what}: Q2064 is printed once"
+        );
+    }
+}
+
+#[test]
+fn v5_a_box_with_margins_on_both_sides_is_painted_once() {
+    // `d9`: `<p>S000<br><span inline-block height:1200px;margin:10px>H120</span></p>`. The tall line has its baseline on the page
+    // where it starts, so its slice has no empty slice and no lead, and `carrier_line_page` read `0..1` (the first line) as the
+    // box's line: the box was painted by its line and again as a continuation.
+    let pdf = render_page(
+        "size:A4;margin:15mm",
+        "<p>S000<br><span class=ib style=\"height:1200px;margin:10px\">H120</span></p><p>AFT000</p>",
+    );
+    let words = printed_words(&pdf);
+    assert_printed_once(&words, ["S000", "H120", "AFT000"].map(String::from));
+}

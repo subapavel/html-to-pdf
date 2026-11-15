@@ -348,7 +348,9 @@ THRESHOLDS = {
     #     now (content that was missing); the worst page fell 9.3 -> 4.9. What is left is the text drift every fixture has and two
     #     differences from Chrome: our page 2 holds one term less (55 against 56; Chrome prints a term at each page edge twice, ADR-0004) and
     #     closes the box's frame at the bottom of page 2 and again at the top of page 3, where Chrome slices it open (`box-decoration-break:
-    #     slice`, css-break-3 5.4; ours is the closed frame of the F30f split of an alone box). Worst page + 1 point.
+    #     slice`, css-break-3 5.4; ours is the closed frame of the F30f split of an alone box). The closing line sits 40 px lower on page 3
+    #     than Chrome's: Chrome drops the `mt-8` of the paragraph after the sliced tall line, where CSS 2.1 8.3.1 and css-break-3 5.2 keep it (a
+    #     margin is truncated only at a forced break or at the top of a page), so ours follows the spec. Worst page + 1 point.
     "51-terms-box-beside-label": 0.059,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
