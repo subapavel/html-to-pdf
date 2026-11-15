@@ -100,6 +100,20 @@ F183c re-validation, `rv/var2/four_staggered`: four inline-blocks on one line, e
 
 F213e-c step 7 (plan `2026-11-09-f213e-b-avoid-card-under-letterhead.md` section 8): `body { margin-top: 980px }`, then `<p>Line1<br>Line2</p>` (room for one 20 px line on page 1). Chrome m153 breaks the paragraph between its lines (first line on page 1, the rest on page 2: orphans and widows give way, css-break-3 section 4.4) when nothing precedes it; ours keeps both lines on page 1 and prints the second over the bottom margin (the F213e-b mechanism, for a paragraph that is not `break-inside: avoid`). After a zero-height sibling both engines move the paragraph whole (fixed in F213e-c). Needs a room of less than `orphans + widows` lines under an offset of 970 px or more on A4, so synthetic; not on a fixture.
 
-### B25 — an `inline-block` with a fixed height taller than a page and a short child is one oversized leaf: 193 px of its frame are not drawn and the next line sits at the top of the next page  (severity: low, size: medium — fulgur pagination, F213d-b residual)
+### B25 — after a zero-height sibling, a paragraph with `orphans: 1` and one line of room moves whole  (severity: low, size: small — fulgur pagination)
 
-Seen in the F213b step 1 probes (2026-11-14, plan `2026-11-14-f213b-split-box-sharing-a-line.md` section 7.2, P2): `<p>START <span style="display:inline-block;height:1200px;width:100px;border:1px solid"><span style="display:block">BOXTOP</span></span> TAIL</p><p>AFTER</p>`, also with the box alone on its line. Chrome m153 has the box on pages 1 and 2 and `AFTER` at 187.8 pt on page 2; ours prints every word on page 1 and `AFTER` at 43.6 pt on page 2, with the warning "content extends 102 pt past the bottom page edge". The gate of `fragment_block_subtree` enters a box only when a child overflows the strip (`would_split_block_subtree`), so a box whose children are short is emitted whole and overflows page 1; a plain `div` of the same height is cut by the root-level strip slicer and is right. Not a lost word (since F183c); the box frame and the position of what follows are wrong.
+F213e-c validator (PR #101), `rv2/cases/para-m990-n3-ow1.html` (also n = 2, 4, 6, and `para-m940-n4-ow3` with orphans and widows 3): Chrome and main put the first line on page 1 ([1, 3]); after F213e-c the paragraph moves whole ([0, 4]). Main already does this with a 2 px box before the paragraph: the move-whole site does not consult `orphans` / `widows`. No word is lost.
+
+### B26 — `break-before: avoid` / `break-after: avoid` next to a zero-height sibling: the avoid card moves whole where Chrome splits it  (severity: low, size: small — fulgur pagination)
+
+F213e-c validator, `rv2/cases/bb-z-card-bbavoid`, `bb-zbbafteravoid-card`, `z-card-pageavoid`: Chrome 40 / 6, ours 0 / 46 (main hung it 43 / 1 and lost 2 lines; main with a 2 px box: as ours). No word is lost.
+
+### B27 — `@page :first` with a larger top margin: a 45-line card under an offset takes 3 pages where Chrome takes 2  (severity: low, size: unknown — fulgur pagination)
+
+F213e-c validator, `rv2/cases4/first-o200-n45-z.html`: ours [0, 45, 1], Chrome [0, 46], main [43, 1] with lines lost. The first page's content height seems to be used for the later pages. No word is lost.
+
+### B28 — a `height: 0` box drops its overflowing in-flow text  (severity: low-medium — text lost, synthetic shape only, size: unknown — fulgur pagination / render)
+
+F213e-c validator, `rv2/cases2/ov-only.html`: `<div style="height:0"><p>OVERFLOWTEXT…</p></div>` prints nothing on main and after F213e-c; Chrome prints the text, and so do we with a 1 px box.
+
+### B29 — an `inline-block` with a fixed height taller than a page and a short child is one oversized leaf: 193 px of its frame are not drawn and the next line sits at the top of the next page  (severity: low, size: medium — fulgur pagination, F213d-b residual)

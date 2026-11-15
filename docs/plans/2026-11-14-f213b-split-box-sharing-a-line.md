@@ -399,7 +399,7 @@ byte-identical to before.
   (`would_split_block_subtree` sees no overflowing child), so it is one oversized leaf that overflows page 1 (warning
   "content extends 102 pt past the bottom page edge"; 193 px of the frame are not drawn) and AFTER is at the top of page
   2 (43.6 pt; Chrome 187.8 pt). The plan assumed words were lost (pre-F183c). Not fixed here (it needs the oversized
-  leaf sliced inside the carrier walk, outside section 3.2): recorded as backlog `B25` in `docs/backlog/stress-findings.md`.
+  leaf sliced inside the carrier walk, outside section 3.2): recorded as backlog `B29` in `docs/backlog/stress-findings.md`.
 - **Byte gate:** fixtures 01-48 and the 7 corpus documents (54), `RAYON_NUM_THREADS` 1 and 4: 0 documents differ from `main-b`.
 - **No word lost against `main-b`** (`words2.py`, multiset of `pdftotext` words): `rvw/sh` 455 identical, `rvw/sw` 48
   identical, `rv/var` 66 (65 identical, 1 with more words: `text_around`, +5), `rv/var2` 38 (34 identical, 4 with more:
