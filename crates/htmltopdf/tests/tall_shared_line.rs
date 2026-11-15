@@ -558,3 +558,89 @@ fn v5_a_box_with_margins_on_both_sides_is_painted_once() {
     let words = printed_words(&pdf);
     assert_printed_once(&words, ["S000", "H120", "AFT000"].map(String::from));
 }
+
+#[test]
+fn v6_a_box_that_fits_a_page_beside_a_tall_box_is_cut_by_the_page_edge_and_loses_no_word() {
+    // B30 (`rv/var2/two_lines_wrap`, `f7_0568`): the second box of the line (30 children) sits on the baseline of the first (120
+    // children): its top is above the page that holds the first box's last line box. The branch placed it from that page and
+    // lost `B00` to `B07` (Chrome slices it over the page before). Both boxes start at the top of the line and every word is
+    // printed once; a short box before the tall one, and one with `vertical-align: top`, are the same case.
+    let col = |prefix: &str, n: u32, extra: &str| {
+        let children: String = (0..n)
+            .map(|i| format!("<span class=b>{prefix}{i:03}</span>"))
+            .collect();
+        format!("<span class=ib style=\"width:100px;{extra}\">{children}</span>")
+    };
+    for (what, line) in [
+        (
+            "beside",
+            format!(
+                "Lead {} {} trailing<br>second",
+                col("A", 120, ""),
+                col("B", 30, "")
+            ),
+        ),
+        (
+            "before",
+            format!(
+                "Lead {} {} trailing<br>second",
+                col("B", 30, ""),
+                col("A", 120, "")
+            ),
+        ),
+        (
+            "top",
+            format!(
+                "Lead {} {} trailing<br>second",
+                col("A", 120, ""),
+                col("B", 30, "vertical-align:top;")
+            ),
+        ),
+    ] {
+        let pdf = render_page(
+            "size:A4;margin:15mm",
+            &format!("<div style=\"width:400px\">{line}</div><p>AFTER</p>"),
+        );
+        let words = printed_words(&pdf);
+        assert_printed_once(
+            &words,
+            (0..120)
+                .map(|i| format!("A{i:03}"))
+                .chain((0..30).map(|i| format!("B{i:03}")))
+                .chain(["Lead", "trailing", "second", "AFTER"].map(String::from)),
+        );
+        let _ = what;
+    }
+}
+
+#[test]
+fn v7_a_column_reverse_flex_box_taller_than_a_page_prints_every_item() {
+    // `column-reverse`: the first item is at the bottom of the box. The walk placed the items in document order below each
+    // other, so most of a tall box was lost (21 of 60 items in a line of text, 2 of 60 in a block, on main as well).
+    let items: String = (1..=60).map(|i| format!("<span>F{i:03}</span>")).collect();
+    for (what, body) in [
+        (
+            "in a paragraph of two lines",
+            format!(
+                "<p style=\"line-height:50px;width:300px\">Lead words <span style=\"display:inline-flex;flex-direction:column-reverse;width:100px\">{items}</span> trailing<br>second</p><p>AFTER</p>"
+            ),
+        ),
+        (
+            "alone on a line",
+            format!(
+                "<p style=\"line-height:50px\"><span style=\"display:inline-flex;flex-direction:column-reverse;width:100px\">{items}</span></p><p>AFTER</p>"
+            ),
+        ),
+        (
+            "as a block",
+            format!(
+                "<div style=\"display:flex;flex-direction:column-reverse;line-height:50px\">{items}</div><p>AFTER</p>"
+            ),
+        ),
+    ] {
+        let pdf = render(&body);
+        let words = printed_words(&pdf);
+        assert_printed_once(&words, (1..=60).map(|i| format!("F{i:03}")));
+        let _ = what;
+    }
+}

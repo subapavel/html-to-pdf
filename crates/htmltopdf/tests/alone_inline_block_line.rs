@@ -820,11 +820,7 @@ fn assert_two_boxes_print_every_word(a_lines: u32, b_lines: u32, b_spacer: bool,
     for n in &names {
         let _ = find(&words, n);
     }
-    assert_eq!(
-        page_count(&pdf),
-        pages,
-        "Chrome and main have {pages} pages"
-    );
+    assert_eq!(page_count(&pdf), pages, "{pages} pages");
 }
 
 #[test]
@@ -833,14 +829,17 @@ fn r_f183c_the_later_box_is_the_taller_one_and_prints_every_word() {
     // The walk fragments B after A, so B starts on page 2 while the line was painted on page 1: B00 to B40 were on no
     // page, where main prints them (B on page 2). The line is on the first page of any box and a box that starts later
     // is painted by its continuation.
-    assert_two_boxes_print_every_word(56, 59, false, 3);
+    // html-to-pdf F213b (validator round 2): the segment planner starts both boxes at the top of the line, side by side, so the
+    // document has 2 pages (the walk stacked B below A: 3, as main; Chrome's third page is its blank one after a sliced box).
+    assert_two_boxes_print_every_word(56, 59, false, 2);
 }
 
 #[test]
 fn r_f183c_the_later_box_is_a_pixel_taller_through_a_trailing_block() {
     // `ab_n56_tA0_tB1`: A and B of 56 lines, B ends in a 9 px block with no line: B hangs deeper, the line is taller than
     // A. Main prints all of B (it loses the head of A); the first fix printed A and lost the head of B.
-    assert_two_boxes_print_every_word(56, 56, true, 3);
+    // 2 pages since F213b round 2 (see above).
+    assert_two_boxes_print_every_word(56, 56, true, 2);
 }
 
 #[test]

@@ -547,3 +547,57 @@ Fixture 51, page 3: our closing line is 40 px below Chrome's because Chrome drop
 and css-break-3 section 5.2 keep it (a margin is truncated only at a forced break or at the top of a page), so we follow the spec; the difference is not ours (the
 `compare.py` comment says the same).
 
+### 7.12 Validator round 2 (PR #103, 2026-11-15): the per-token gate, fork `49e76b63`
+
+The coordinator's gate is per token: a word that main prints must not be lost, whatever the net count. The checker
+(`chk3.py`, scratchpad) renders main and the branch, counts the tokens `[A-Z][A-Za-z]*\d+` of `pdftotext -bbox`, and flags a
+document when a token that main prints (up to as many times as the HTML has it) is printed fewer times by the branch, or when
+the branch prints a token more often than the HTML has it and than main does. It was not weakened. Baseline on fork `d879d7a7`
+(documents with a lost token): `gen` (1716) 0, `gen2` (seeds 7 and 11, 1600) 128, `gen3` (seed 11, 800) 46.
+
+What changed (each has a test; lib tests 2579, `tall_shared_line.rs` `v6`, `v7`):
+
+- **B30 fixed, the boxes of a tall line.** Every atomic inline of a tall line is placed by its own extent in the line: top =
+  the baseline of the tallest box less the box's baseline offset. A box that is not taller than a page but starts above the
+  baseline page, reaches below it, or sits more than a page below the line's top is cut by the page edges with the same
+  `fragment_tall_box` path; a box wholly on an earlier page is painted there. A negative top margin does not put a box above
+  the page (the words are printed). A box whose first row does not fit at a page edge starts the next page.
+- **A one-line carrier with a tall box and another box takes the same path** (`one_line_with_a_tall_box_and_another`): the walk of
+  a one-line carrier stacked the boxes (F222, B23) and the later box lost its top. `rv/var2/four_staggered` and
+  `later_short_first_30` print every word, 3 pages (Chrome 4 with its blank one); three lib tests that pinned the stack changed,
+  and so did two page counts in `alone_inline_block_line.rs` (56 lines beside 59: 2 pages, was 3).
+- **`column-reverse`** (the validator's `inline-flex` cases): the walk put the items in document order below each other, so the
+  first item (at the bottom) came first and most of a tall box was lost, on main too (21 of 60 items in a line, 2 of 60 in a
+  block). `in_visual_order` walks them in the order they lie down the page: 60 of 60.
+- **A fragmented box inside a continuation** was moved up by the body offset again (`paint_inline_box_continuation`).
+- **A multi-column container whose first unit is taller than a page** starts the next page when something precedes it (it
+  overflowed its page by more mid-page and lost the last line): 10 of 14 documents with a multicol container after a tall
+  box.
+- Tried and dropped: keeping a clip box or a box inside a multicol container out of the planner made the count worse (gen2 45,
+  gen3 23); a shift of the clip band of a clip box (the content of a fragmented clip box on a line is still `body offset` too
+  high in the first fragment, the cause is not found).
+
+Result on fork `49e76b63` (documents with a lost token): `gen` 0, `gen2` 19 (337 tokens), `gen3` 13 (321 tokens, 146 of them in
+one document); the standard sets `rvw/sh`, `rvw/sw`, `rv/var`, `rv/var2` 0, and the F213d / F213e families (`f213dv/p` 5893,
+`f213ev/p` 2901, `f213e/p`, `f213e/sw`) 0. **The gate is not 0**: 32 documents of the 2400 fuzz documents still lose tokens that
+main prints. They are real losses, not checker artefacts (each was reduced with a delta-debugging minimiser, `minimize2.py`,
+and read). Classes seen in the reduced repros (a document can have more than one):
+
+| Class | Documents | Shape |
+|---|---|---|
+| inline content directly in the body or a paragraph, several boxes or nested boxes | 17 | `<span ib>…</span><span ib>…</span>` after a block, a box in a box beside a short box; the later box or its first lines are printed on a page the line does not reach |
+| a clip box (`overflow: hidden`) on a tall line | 6 | its content is painted `body offset` too high in the first fragment (first lines hidden) |
+| a multi-column container after a tall box | 5 | a leading `height: 1200px` leaf or a tall box in front of `columns: n` |
+| a flex / grid / table wrapper around the line | 3 | `display:flex` items, a table cell, with the carrier inside |
+
+Duplicates (`NEWDUP`: `gen2` 41, `gen3` 31 documents): 0 real. 70 documents have only tokens that are not in the HTML (`W6`, `W62`: a
+long word that the page edge clips, split by `pdftotext`, `nowrap` lines and relative offsets), and 2 have a copy of a token that is a
+prefix of a longer one (`gen2/f7_0113` `W236`, `gen3/f11_0497` `W162`: the tail of `W2367`... clipped at the right edge, counted
+as `W236`). The earlier `H120` double print (d9) is fixed and has a test.
+
+Also run on this head: byte gate (fixtures 01-48 and the corpus, RAYON 1 and 4): identical (fixture 51 differs); `words2.py` on the
+standard sets: 0 documents with a word of main's lost, 2 with the multiset one short because main printed a word twice
+(`rv/var/thead_tfoot_tall`, `rv/var2/td_two_pages`, `lostdistinct 0`); `bench.py --check` ok (`b200-items` 1071 ms, scaling r 4.48);
+fulgur lib 2579 and 43 integration binaries 579 passed (main's pins), htmltopdf and CLI 1089 passed, 0 failed, 15 ignored; fmt and
+clippy clean in both repositories.
+

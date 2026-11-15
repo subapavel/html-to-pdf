@@ -207,6 +207,17 @@ fn warns_about_content_below_the_page_only() {
                 f213b_column(130)
             ),
         ),
+        // F213b validator round 2 (B30): a box that fits a page beside a tall box is cut by the page edge like it (it was placed from
+        // the baseline page, and warned about when it reached above it).
+        (
+            "F213b: a box beside a tall one that starts on the page before",
+            F213_PAGE.into(),
+            format!(
+                "<div style=\"width:400px\">Lead {} {} trailing<br>second line</div><p>AFTER</p>",
+                f213b_column(130),
+                f213b_column(40)
+            ),
+        ),
         (
             "F213b: a box of 80 text lines sharing its line",
             F213_PAGE.into(),
@@ -360,23 +371,6 @@ fn warns_about_content_below_the_page_only() {
     assert!(
         w.iter().any(|m| m.contains("the frame of a box of")),
         "a box of 6000 px with a short child: {w:?}"
-    );
-
-    // F213b: a box that fits a page and shares a tall line is placed from the baseline page (its baseline is aligned with the
-    // tall box's), so the part of it above that page is not printed (Chrome fragments it over the page before): the
-    // pagination warning says so.
-    let w = page_warnings(
-        F213_PAGE,
-        &format!(
-            "<div style=\"width:400px\">Lead {} {} trailing<br>second line</div><p>AFTER</p>",
-            f213b_column(130),
-            f213b_column(40)
-        ),
-    );
-    assert!(
-        w.iter()
-            .any(|m| m.contains("on a line taller than a page starts")),
-        "F213b, a box beside a tall one reaches above its page: {w:?}"
     );
 
     // F213d Q10, a known residual loss: an inline-block alone on its line that is taller than a page (1200 px, short block
