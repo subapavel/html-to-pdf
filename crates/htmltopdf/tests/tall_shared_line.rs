@@ -644,3 +644,127 @@ fn v7_a_column_reverse_flex_box_taller_than_a_page_prints_every_item() {
         let _ = what;
     }
 }
+
+// --- the per-token gate, round 3 (PR 103): fuzz documents on which the branch printed fewer words than main ------------------
+
+/// `<span class="b">P001</span>P002<span class="b">P003</span>...`: blocks and text between them, `from..=to`.
+fn alternating(prefix: &str, from: u32, to: u32) -> String {
+    (from..=to)
+        .map(|i| {
+            if (i - from) % 2 == 0 {
+                format!("<span class=\"b\">{prefix}{i:03}</span>")
+            } else {
+                format!("{prefix}{i:03}")
+            }
+        })
+        .collect()
+}
+
+/// `<span>P001</span>P002<span>P003</span>...`: the same for the items of a flex box.
+fn alternating_items(prefix: &str, from: u32, to: u32) -> String {
+    (from..=to)
+        .map(|i| {
+            if (i - from) % 2 == 0 {
+                format!("<span>{prefix}{i:03}</span>")
+            } else {
+                format!("{prefix}{i:03}")
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn r3_1_a_tall_box_that_shares_its_line_with_an_image_prints_every_word() {
+    // The one line of the paragraph holds an image and a box taller than a page. The image is no box the planner knew, so the box
+    // was entered below the page bottom and its 47 words were not printed (main prints them).
+    let flex: String = (23..=72).map(|i| format!("<span>F{i:03}</span>")).collect();
+    let blocks: String = (153..=195)
+        .map(|i| format!("<span class=\"b\">N{i:03}</span>"))
+        .collect();
+    let body = format!(
+        "<div style=\"break-inside:avoid\"><p>{} <span class=\"ib\" style=\"width:100px\">W021 W022 \
+         <span style=\"display:inline-flex;flex-direction:column-reverse\">{flex}</span></span></p>\
+         <img src=\"img.png\" width=\"30\" height=\"40\"><span class=\"ib\" style=\"width:150px\">W148 W149 \
+         <span class=\"ib\" style=\"width:60px;margin:10px;height:100px\"></span> W151 W152{blocks}</span></div>",
+        words_run("W", 1, 21)
+    );
+    let words = printed_words(&render_page("size:A4;margin:15mm", &body));
+    assert_printed_once(
+        &words,
+        ["W148", "W149", "W151", "W152"]
+            .map(String::from)
+            .into_iter()
+            .chain((153..=195).map(|i| format!("N{i:03}"))),
+    );
+}
+
+#[test]
+fn r3_2_a_line_taller_than_a_page_because_its_boxes_hang_from_one_baseline_is_cut() {
+    // Two boxes of 580 and 442 px on one baseline make a line of 1016 px, taller than the page (1009 px) although neither box is.
+    // The line started in the middle of a page and the last words of the taller box hung past its bottom.
+    let flex = format!("<span></span>F511{}", alternating_items("F", 512, 539));
+    let body = format!(
+        "<div style=\"padding:16px\"><br><span class=\"ib\">{}</span></div>\
+         <div style=\"padding:20px\"><p><span style=\"display:inline-flex;flex-direction:column;width:500px\">{flex}</span>\
+         <span class=\"ib\">{}</span><span class=\"ib\" style=\"width:60px\"></span><span class=\"ib\" style=\"width:60px\"></span></p></div>",
+        alternating("T", 9, 60),
+        alternating("T", 540, 561)
+    );
+    let words = printed_words(&render_page("size:A4;margin:15mm", &body));
+    assert_printed_once(&words, (511..=539).map(|i| format!("F{i:03}")));
+    assert_printed_once(&words, (540..=561).map(|i| format!("T{i:03}")));
+}
+
+#[test]
+fn r3_3_a_grid_after_a_margin_that_runs_past_the_page_bottom_starts_the_next_page() {
+    // The margin under a box that spans two pages runs past the bottom of the second one; the grid after it, whose first row is
+    // taller than a page, was entered below the page edge and its first word was lost.
+    let body = format!(
+        "<div style=\"display:flex\"><p style=\"margin:300px 0 400px\"><span class=\"ib\">{}</span><span class=\"ib\"></span></p></div>\
+         <div style=\"display:grid;grid-template-columns:100px 1fr\"><div></div><div>T400{}</div></div>",
+        alternating("T", 2, 61),
+        alternating("T", 401, 444)
+    );
+    let words = printed_words(&render_page("size:A4;margin:30mm", &body));
+    assert_printed_once(&words, (400..=444).map(|i| format!("T{i:03}")));
+}
+
+#[test]
+fn r3_4_columns_after_a_unit_taller_than_the_page_are_not_made_taller_than_the_page() {
+    // The 1200 px leaf overflows its column; the 302 px and the 462 px boxes after it were balanced into one column of 764 px on a
+    // page of 680 px and the end of the second was lost.
+    let body = format!(
+        "<div style=\"columns:3\"><span class=\"ib\" style=\"height:1200px\"></span>\
+         <p><span class=\"ib\" style=\"width:100px\">{}</span></p>\
+         <p><span class=\"ib\" style=\"width:100px\">{}</span></p></div>",
+        alternating("T", 9, 23),
+        alternating("R", 870, 891)
+    );
+    let words = printed_words(&render_page("size:A5;margin:15mm", &body));
+    assert_printed_once(&words, (870..=891).map(|i| format!("R{i:03}")));
+    assert_printed_once(&words, (9..=23).map(|i| format!("T{i:03}")));
+}
+
+#[test]
+fn r3_5_a_tall_box_inside_a_tall_box_that_clips_is_printed_where_it_starts() {
+    // A box that clips its overflow and is taller than a page is not cut between pages; the box around it was split as if it were,
+    // and the word in the clip box was painted on no page.
+    let body = "<div style=\"width:400px\"><span class=\"ib\" style=\"width:300px\">\
+                <span class=\"ib\" style=\"overflow:hidden;height:1200px\">H1127</span></span>\
+                <span class=\"ib\" style=\"width:300px\"></span></div>";
+    let words = printed_words(&render_page("size:A4;margin:15mm", body));
+    assert_printed_once(&words, ["H1127".to_string()]);
+}
+
+#[test]
+fn r3_6_a_table_cell_that_centres_its_text_below_the_page_it_starts_on_prints_it() {
+    // The row starts near the bottom of a page (it follows a box that is split) and spans two pages; the first cell centres its
+    // word 591 px down, which is on the second page. The cell was placed whole where the row starts, below the page edge.
+    let body = format!(
+        "<span class=\"ib\" style=\"width:60px\">{}</span> {}<table><td>Q313</td><td><span class=\"ib\" style=\"height:1200px\"></span></td></table>",
+        words_run("W", 0, 90),
+        words_run("V", 0, 80)
+    );
+    let words = printed_words(&render_page("size:A4;margin:15mm", &body));
+    assert_printed_once(&words, ["Q313".to_string()]);
+}
