@@ -269,7 +269,7 @@ Size: medium-large, about 8 engineer days.
 
 ## 7. Evidence
 
-Filled in by the implementing agent on 2026-11-14 (steps 0 and 1). Scratch files: the session scratchpad `f213b/`
+Filled in by the implementing agent on 2026-11-14 (steps 0 to 3; 7.5 is step 3). Scratch files: the session scratchpad `f213b/`
 (`probes/` for the probes, `main-b` and `m1-99a` for the binaries, `words2.py` and `bytegate.py` for the gates).
 
 ### 7.1 Step 0: preconditions and the M1 decision
@@ -377,3 +377,38 @@ carry `#[ignore]` with the step that turns them green. Reasons for failing on ma
 | `r_t2_…` | P3 | `T053` printed 0 times |
 | `r_t3_…` | P3 3rd of 4 | `T053` printed 0 times |
 | `r_t5_…` | P4 | `L54` printed 0 times |
+
+### 7.5 Step 3: one-line carriers
+
+Fork commit `1defad04` (message "WIP", made by the session hook; on `c4ecd092`, itself on `4be3de79`; appended, no revert, no force). In `record_carrier_slices_after`
+the line of a one-line carrier whose line has text (or an `<img>`) is painted on the page of the baseline of the tallest box
+on it (`baseline_line_placement`: Parley's baseline of the line and top of the box give the box's own baseline,
+`baseline_on_page` walks the box's `layout_children` and places the point in the deepest node that holds it, through its
+line slices when it was split, else its fragments; a point below the last child is the bottom of the last fragment), with
+`lead` = the carrier's content origin on that page less the line's top. A line that holds only boxes and white space stays
+where F183c put it (no text to print), and so does a line whose baseline is on the first page of its boxes: both are
+byte-identical to before.
+
+- **Red tests now green:** `r_t1_one_line_carrier_text_sits_on_the_baseline_page_of_the_box` (P1, page top and after a
+  paragraph: START and TAIL on page 3 at 478.6 pt, T129's y exactly; AFTER 493.6 pt), `r_t1_the_baseline_is_where_the_last_…`
+  (P2b: START, TAIL, BOXLOW level on page 2), `r_t6_an_inline_flex_box_…` (P5b: START, TAIL, FLEXITEM level on page 2).
+  Rendered page 3 of P1 and page 2 of P5b next to Chrome's: START and TAIL level with the last line, frame closed.
+  P6 on the new binary: a `vertical-align: top` badge goes with START to the baseline page (Chrome: page 1; the non-goal).
+- **t4 became a guard** (`g_t4_…`). Main prints START, BOXTOP and TAIL on page 1 already (F183c); what is wrong there is
+  not the baseline but the box: a fixed 1200 px `inline-block` whose only child is short is never entered by the walk
+  (`would_split_block_subtree` sees no overflowing child), so it is one oversized leaf that overflows page 1 (warning
+  "content extends 102 pt past the bottom page edge"; 193 px of the frame are not drawn) and AFTER is at the top of page
+  2 (43.6 pt; Chrome 187.8 pt). The plan assumed words were lost (pre-F183c). Not fixed here (it needs the oversized
+  leaf sliced inside the carrier walk, outside section 3.2): recorded as backlog `B25` in `docs/backlog/stress-findings.md`.
+- **Byte gate:** fixtures 01-48 and the 7 corpus documents (54), `RAYON_NUM_THREADS` 1 and 4: 0 documents differ from `main-b`.
+- **No word lost against `main-b`** (`words2.py`, multiset of `pdftotext` words): `rvw/sh` 455 identical, `rvw/sw` 48
+  identical, `rv/var` 66 (65 identical, 1 with more words: `text_around`, +5), `rv/var2` 38 (34 identical, 4 with more:
+  `text_between_short` +2, `text_lead_trail` +6, `text_only_after` +3, `text_only_before` +2), F213d family 5893
+  identical, F213e family `f213ev/p` 2901 (2897 identical, 4 with more: `fam3/a4_ib_text_40_200` +3, `a4_ib_text_8_200` +3,
+  `a4_text_ib_40_200` +1, `a4_text_ib_8_200` +1), `f213e/p` 74 and `f213e/sw` 256 identical. **0 documents with fewer
+  words** (so no FEWERWORDS case beyond the known 11 of the F213d family, which are identical to main). `rvw/sh` has no
+  change because its shapes need F217's flex-item sizing (section 4, combined build, step 8).
+- **Lib tests:** `cargo test -p fulgur --lib` 2569 passed (with main's Blitz / Parley / Taffy pins), 5 new here (the carrier
+  line is on the baseline page with a lead; a line of boxes and white space stays; `baseline_on_page` through a pushed child,
+  below the last child, and through a split inline root's slices), `render_smoke` 343 passed (one new). Fulgur clippy
+  (`--all-targets -D warnings`) and fmt clean.
