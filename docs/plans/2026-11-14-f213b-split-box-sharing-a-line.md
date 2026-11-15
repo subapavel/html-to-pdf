@@ -269,7 +269,7 @@ Size: medium-large, about 8 engineer days.
 
 ## 7. Evidence
 
-Filled in by the implementing agent on 2026-11-14 (steps 0 to 3; 7.5 is step 3). Scratch files: the session scratchpad `f213b/`
+Filled in by the implementing agent on 2026-11-14 and 2026-11-15 (steps 0 to 3 on the 14th, 7.5 is step 3; steps 4 to 8 on the 15th, 7.6 to 7.10). Scratch files: the session scratchpad `f213b/`
 (`probes/` for the probes, `main-b` and `m1-99a` for the binaries, `words2.py` and `bytegate.py` for the gates).
 
 ### 7.1 Step 0: preconditions and the M1 decision
@@ -412,3 +412,95 @@ byte-identical to before.
   line is on the baseline page with a lead; a line of boxes and white space stays; `baseline_on_page` through a pushed child,
   below the last child, and through a split inline root's slices), `render_smoke` 343 passed (one new). Fulgur clippy
   (`--all-targets -D warnings`) and fmt clean.
+
+### 7.6 Step 4: multi-line carriers
+
+Fork commit `d3376d76` (on `1defad04`, appended). The function names differ from section 3.2, which was written before the code:
+
+- `fragment_inline_root_with_tall_lines` is the segment planner and `fragment_tall_box` fragments one box of a tall line; there is no
+  `fragment_tall_line` / `TallLineEnd` (the end of the line is a local in the planner) and no separate pure planner: the lines before
+  and after a tall line go through `plan_line_breaks` unchanged. `tall_lines(doc, carrier, fresh)` lists the lines that hold an atomic
+  inline container taller than a fresh page (+ 1 px). `fragment_nested_inline_root` takes a `McEnv` and calls the planner first (its
+  five callers: the multicol span, the body, the body-level paragraph with insets, the block walk, the abspos flow). The body-level
+  paragraph without insets does not go through it (`fragment_inline_root` plans it from the line heights): a `tall_line_here`
+  condition in front of that branch sends a paragraph with a tall line to `fragment_nested_inline_root` instead.
+- A tall line that follows other lines of its paragraph moves to a fresh page (t3); the first line of a paragraph starts in place (t2).
+  The slices are one per page: an empty slice (`k..k`) on the pages the line crosses before its baseline page, the line (and the lines
+  after it when it ends on the same page) on the baseline page with its lead, an empty slice on the pages after it up to the page the line
+  ends on, and the lines after the tall line on that page (when the baseline is on an earlier page, their slice has a negative lead: they
+  start below the tail of the line, not at the top of the page). `record_split_inline_root_descendants` takes the boxes to skip.
+- `render::carrier_line_page` finds the page of a box's line through the slice that holds the line (only for a carrier whose slices have
+  an empty one or a lead, so every other document takes the old arm).
+- **Red tests now green:** `r_t2_…` (P3, the line first: `Lead` / `trailing` level with T129, AFTER below the second line) and `r_t3_…`
+  (the tall line 3rd of 4: T000 at the top of page 2, `Lead` on page 4 level with T129, X4 below). Numbers against Chrome (probes P3 in
+  `probes/h`, ours / Chrome, pt): `Lead` 478.6 / 464.6, AFTER 509.3 / 495.3, the third-of-four X4 509.3 / 495.3, AFTER 524.3 / 510.3: the
+  same 14 pt offset everywhere (Chrome slices the box and truncates a margin that we keep, section 7.2), and the same distances between
+  the lines. Rendered pages 1 to 3 and 1 to 4 of P3 and the card (P8) look right: the line level with the box's last term, the card's
+  frame sliced over the three pages (3 pages, Chrome 4 with an empty first page).
+- B29 (the oversized leaf) did not get in the way: the tall boxes of all tests have block children that overflow, so the walk enters
+  them.
+
+### 7.7 Step 5: the barrier
+
+Same commit. `box_barrier` (and `split_barrier`, `split_barrier_with`, `line_split_candidate`, which pass the new `fresh` down; every
+caller has the page height) no longer makes an `inline-block` / `inline-table` taller than `fresh + 1` that shares its line a
+`SharesItsLine` barrier; `inline-flex` / `inline-grid` keep theirs. A box that is an inline root (text lines) is then split between
+its lines by `block_walk_line_split`, both in the walk of a one-line carrier (P4 after `S` and at the top) and in `fragment_tall_box`.
+`r_t5_…` is green (P4: L01 to L50 on page 1, L51 to L80 on page 2, START and TAIL at 478.6 pt with L80, AFTER 494.3 pt; Chrome 44.6 /
+472.1 / 487.8 pt, L51 twice). M2 was not run (moot, section 7.1).
+
+Tests the barrier changed, all of them about a box that shares its line and is taller than a page (they asserted main's loss, "the lines
+below the page are lost"): the three fulgur lib tests of F30f-b (`an_inline_block_sharing_its_line_keeps_its_paragraph_whole`, the
+inline-table one and `unprinted_inline_lines` now use a box that fits a page; one new test pins the 3-fragment split of the 600 px box),
+and in this crate `wrapper_line_split.rs` (A5: 212 words on one page before, 4000 words once now), `table_wrapper_split.rs` (B8: the
+text of an `inline-table` sits on the page of its FIRST row: CSS 2.1 section 10.8.1, "the baseline of an `inline-table` is the baseline of the first row of the table") and
+`unsplit_paragraph_warning.rs` (no "placed whole" warning for them).
+
+### 7.8 Step 6: warnings
+
+`page_bottom_warning.rs`: four shapes move to "must not warn" (a column of 130 children sharing its line, the same in a paragraph of two
+lines, the tall line after two other lines, a box of 80 text lines). The F213b / F213d-b "must warn" entry stays, with its comment
+rewritten: a fixed 1200 px box with one short child is not entered by the walk (B29), so its overflow is real and still warned. A new
+warning says when a box that fits a page sits on a tall line and starts above the page that holds the baseline (B30: `rv/var2/two_lines_wrap`,
+the second box of each line, 14 words lost, warned: "a box of 611px on a line taller than a page starts 201px above the page that holds the line's
+baseline"); a test for it is in `page_bottom_warning.rs`. No tall line triggers the "no matching line ranges" warning or the
+"painted on no page" ledger in any test or probe (P1 to P6, P8, fixture 51). `LineBarrier::SharesItsLine`'s text is kept (it still names the box
+that fits a page).
+
+### 7.9 Step 7: fixture 51
+
+`fixtures/invoices/51-terms-box-beside-label/` (the numbers 49 and 50 are taken by F213e-b and F30h): 80 terms (the plan said about 70; 80 on 18 px
+lines make 1440 px) in a 340 px box, the paragraph 640 px wide, `Souhlasím:` / `Podpis odběratele` on its third line. Chrome m153 reference
+committed with `scripts/reference/render.mjs`: 3 pages, `Obchodní` at 328.1 pt on page 1, term 1 at 47.8 pt on page 2 (the tall line starts a
+page), page 3: `Souhlasím:` and `Podpis` at 354.3 pt, `80.` at 356.8 pt, `Děkujeme` 373.8 pt. Pixel diff (`scripts/compare.py`), before (main-b,
+fork `4be3de79`) / after: 1.9 / 9.3 / 3.3 % (318 pt of the box past the bottom edge of page 2, warned) to 1.8 / 4.5 / 4.9 % (page 3 grew
+3.3 to 4.9 because terms 56 to 80 and the line are printed there now; the worst page fell 9.3 to 4.9); threshold 0.059, in `compare.py` with the
+cause. Looked at (`out/compare/51-terms-box-beside-label-p2.png`, `-p3.png`): page 1 the invoice and the two intro lines, page 2 terms 1 to 55, page 3
+terms 56 to 80 with `Souhlasím:` and `Podpis` level with `80.`, then the closing line and the footer. NOT as the plan said: the frame is closed at the
+bottom of page 2 and again at the top of page 3 (Chrome slices it open; ADR-0004 consequence, F96), and our page 2 holds term 55 as its last where Chrome
+has 56 and repeats it. Test `terms_box_beside_label_is_cut_and_its_line_is_on_the_last_page` (`fixtures.rs`). The other 47 fixtures have identical
+diffs (`compare.py` before and after).
+
+### 7.10 Step 8: gates
+
+- **Byte gate** (`bytegate.py`): fixtures 01 to 48 and the 7 corpus documents, `RAYON_NUM_THREADS` 1 and 4, against `main-b`: 0 documents differ
+  (fixture 51 differs, it is new). The tree has no fixtures 49 and 50 (reserved by other findings).
+- **Word gate** (`words2.py`, multiset of `pdftotext` words) against `main-b`: `rvw/sh` 455 (443 identical, 12 differ), `rvw/sw` 48 (identical),
+  `rv/var` 66 (62 / 4), `rv/var2` 38 (32 / 6), `f213dv/p` 5893 (identical), `f213ev/p` 2901 (2897 / 4), `f213e/p` 74 and `f213e/sw` 256 (identical):
+  **0 documents with fewer words**, 25 of the 26 that differ print more (`flex110__tallcontent` +80, `two_lines_wrap` +233, ...; each checked
+  against the words of its HTML: none prints a word twice). Still short: `flexalign__tallcontent` (84 of 142, F217's sizing), `two_lines_wrap*`
+  (14 words, B30), `nestedflex` / `tdflex` (1 to 2 words, the tokens `IN` `SIDE` and `TD2`).
+- **Tests** (real lock, fork `64f48b93`, no path patch): `cargo test --release` over the 86 integration test files, the lib and the CLI crate:
+  1082 passed, 0 failed, 15 ignored (18 before; t2, t3, t5 are on). fulgur (main's Blitz / Parley / Taffy pins): `--lib` 2575 passed, the 43
+  integration test binaries 579 passed (`render_smoke` 345). `cargo fmt --check` and `cargo clippy --all-targets -D warnings` clean in both repositories.
+- **`bench.py --check`**: ok (fixtures 14 to 26 ms, `b200-text` 737 ms, `b200-mixed` 710 ms, scaling r 3.88; `b200-items` 1274 ms against the
+  1250 ms of the accepted table exception, `NOTE pages 210 outside 195-205`, within its 1552 ms budget; not compared with main on this machine).
+- **Combined local build** (fork `64f48b93` + `99a8401e` cherry-picked clean in a scratch clone, Blitz `f9b6bc04`, path patches in `--config`, nothing
+  committed): words printed by main / F213b alone / combined (Chrome, F217 section 7.9): `flex110__tallcontent` 90 / 170 / 170 (171), `flexwrap` 63 / 143 / 143 (143),
+  `minw0` 62 / 142 / 142 (143), `flexalign__tallcontent` 65 / 84 / 139 (131), `inlflexc__tallcontent` 135 / 135 / 143 (144), `flexalign__tallh` 13 / 13 / 10 (7, the
+  listed exception). Chrome prints a word twice at each page edge, we once, so 1 below it is the same text. Over `rvw/sh` and `rvw/sw` the combined build has 2 documents
+  with fewer words than main: `flexalign__tallh` (the exception) and `flex110__nowrap` (a tokenization artefact: `hereLead` and `longSIDE` are glued, no word is lost).
+  So F217 can re-apply `99a8401e` on this head and re-measure.
+- **Not run:** `vrt-validator`, `fulgur-vrt`, `pdf-reviewer` (the writer path is untouched); Chrome comparison of the P3 / P4 probes by pixels (numbers above are `pdftotext`
+  positions); the M2 revert test; ADR-0012's `docs/upstream.md` pin of F217 is unchanged.
+

@@ -362,16 +362,28 @@ fn an_inline_block_under_a_body_margin_stays_in_the_page_area() {
 // ── A5: an inline-block that shares its line (guard) ────────────────────────────────────────────────────────────────
 
 #[test]
-fn an_inline_block_sharing_its_line_is_left_as_it_was() {
-    // The box is not alone on its line: the carrier line holds text too. Chrome slices (20 pages); F30f-b. Left as
-    // main printed it: the lines that fit page 1 and nothing after (the warning names the case, see
-    // `unsplit_paragraph_warning.rs`).
+fn an_inline_block_sharing_its_line_taller_than_a_page_keeps_every_word() {
+    // The box is not alone on its line: the carrier line holds text too. Chrome slices (20 pages); F30f-b left it whole as
+    // main printed it (212 words on page 1 and nothing after). html-to-pdf F213b: a box taller than a page that shares its
+    // line is fragmented with its line, every word is printed once, and the text of the line sits on the page of the last one.
     let pdf = render(&format!(
         "<p>Úvod <span style=\"display:inline-block;width:60%\">{}</span> konec</p>",
         w()
     ));
-    assert_eq!(page_count(&pdf), 1);
-    assert_eq!(words_per_page(&pdf), vec![212], "main: 212 words");
+    assert_every_word_once("A5", &pdf, 4000);
+    assert!(page_count(&pdf) >= 10, "{} pages", page_count(&pdf));
+    let found = printed_words(&pdf);
+    let last = found
+        .iter()
+        .find(|x| x.text == "word03999")
+        .expect("the last word");
+    for text in ["Úvod", "konec"] {
+        let x = found.iter().find(|x| x.text == text).expect(text);
+        assert_eq!(
+            x.page, last.page,
+            "`{text}` is on the page of the last word"
+        );
+    }
 }
 
 // ── A6, A7, A8: clipping wrappers ────────────────────────────────────────────────────────────────────────────────────

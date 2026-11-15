@@ -38,7 +38,7 @@ these go before anything that is not on this list.
 
 | Finding | Why it blocks |
 |---|---|
-| F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it — **On hold (2026-11-14): blocked by F213b, which lands first (plan `2026-11-14-f213b-split-box-sharing-a-line.md`); PR #95 §7.9.** |
+| F217 | a fixed-size QR box (`inline-block w-28 h-28`) in a flex payment row does not count in the row height; the next block is painted over it — **On hold (2026-11-14), unblocked by F213b (2026-11-15, plan `2026-11-14-f213b-split-box-sharing-a-line.md`): re-apply `99a8401e` on F213b's fork head (ADR-0012) and re-measure the six `rvw/sh` documents of PR #95 §7.9.** |
 | F213e-b | a first `break-inside: avoid` card under a letterhead margin hangs below the content box and loses lines |
 | F30h | a flex row with `items-center` / `items-end` or padding around a split item loses up to 98 % of the row **silently** (re-check 2026-11-09) |
 | F35 | text of cells next to a split cell (`vertical-align: middle / bottom`) is lost |

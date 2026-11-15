@@ -375,22 +375,30 @@ fn an_inline_table_below_a_heading_keeps_every_line() {
 // B8 -------------------------------------------------------------------------------------------------------------
 
 #[test]
-fn an_inline_table_that_shares_its_line_is_unchanged() {
-    // Not split (F30f-b): the lines below the page are lost, as on main, and the warning says why
-    // (`unsplit_paragraph_warning.rs`). Chrome slices it.
+fn an_inline_table_that_shares_its_line_and_is_taller_than_a_page_keeps_every_line() {
+    // F30f-b left it whole and the lines below the page were lost (Chrome slices it). html-to-pdf F213b: a box taller than a
+    // page that shares its line is fragmented with its line, so every line is printed once, and the text of the line sits with
+    // the last of them (`tall_shared_line.rs`).
     let pdf = render(&format!(
         "<p>Úvod <span style=\"display:inline-table;width:60%\">{}</span> konec</p>",
         lines(120)
     ));
-    assert_eq!(page_count(&pdf), 1);
-    let found: Vec<String> = printed_words(&pdf)
-        .into_iter()
-        .filter(|w| w.text.starts_with("Line"))
-        .map(|w| w.text)
-        .collect();
-    assert!(found.len() < 120, "{} lines", found.len());
-    let want: Vec<String> = (1..=found.len()).map(|i| format!("Line{i:04}")).collect();
-    assert_eq!(found, want, "a prefix of the lines, each once");
+    let pages = assert_every_line_once("it sharing its line", &pdf, 120);
+    assert!(pages >= 3, "{pages} pages");
+    // The baseline of an `inline-table` is that of its first row (CSS 2.1 section 10.8.1: "the baseline of an `inline-table` is the
+    // baseline of the first row of the table"; the last line box is the `inline-block`'s), so the text of the line sits on the page of the first line.
+    let words = printed_words(&pdf);
+    let first_line = words
+        .iter()
+        .find(|w| w.text == "Line0001")
+        .expect("the first line");
+    for text in ["Úvod", "konec"] {
+        let w = words.iter().find(|w| w.text == text).expect(text);
+        assert_eq!(
+            w.page, first_line.page,
+            "`{text}` is on the page of the table's first row"
+        );
+    }
 }
 
 // B9 -------------------------------------------------------------------------------------------------------------

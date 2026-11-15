@@ -340,6 +340,16 @@ THRESHOLDS = {
     #     Worst page + 1 point; goes down with F183c.
     #     F183c: 4.3 -> 3.6 % (the stamp and the QR box sit on the baseline of their last line, nothing is in the bottom margin).
     "48-paid-stamp-header": 0.047,
+    # 51: new in F213b (a three-page Czech invoice: the "Obchodní podmínky" paragraph has two lines of text, then `Souhlasím:`, an
+    #     `inline-block` of 80 numbered terms (1440 px, taller than a page, 220 px of it on page 3 under the bottom frame) and `Podpis
+    #     odběratele ______` on its third line, then a closing line and a footer; 3 pages like Chrome's). On main's binary (fork 4be3de79)
+    #     the box was one leaf that hung 318 pt past the bottom edge of page 2 and its second half and the words of the line were printed
+    #     nowhere: 1.9 / 9.3 / 3.3 %. Now 1.8 / 4.5 / 4.9 %: page 3 GREW 3.3 -> 4.9 because the terms 56 to 80 and the line are printed there
+    #     now (content that was missing); the worst page fell 9.3 -> 4.9. What is left is the text drift every fixture has and two
+    #     differences from Chrome: our page 2 holds one term less (55 against 56; Chrome prints a term at each page edge twice, ADR-0004) and
+    #     closes the box's frame at the bottom of page 2 and again at the top of page 3, where Chrome slices it open (`box-decoration-break:
+    #     slice`, css-break-3 5.4; ours is the closed frame of the F30f split of an alone box). Worst page + 1 point.
+    "51-terms-box-beside-label": 0.059,
 }
 # Fixtures whose page count is known to differ from Chrome (open finding). Remove the entry in the
 # PR that fixes it; a mismatch anywhere else fails the check.

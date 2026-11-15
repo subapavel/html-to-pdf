@@ -17,8 +17,8 @@
 //! has something above it on its page to the next page; a tall line that is the first of its paragraph starts in place
 //! here (ADR-0004 A3). Chrome puts a `vertical-align: top` badge on the box's first page (P6).
 //!
-//! The tests named `r_*` were red before the step of the plan that turns them green (the ones still red are `#[ignore]`d with that step);
-//! the `g_*` tests are guards that hold before and after.
+//! The tests named `r_*` were red before the step of the plan that turns them green; the `g_*` tests are guards that hold
+//! before and after.
 
 use htmltopdf::{RenderOptions, Renderer};
 
@@ -290,7 +290,6 @@ fn g_t6_an_inline_flex_column_keeps_its_line_on_the_first_page() {
 }
 
 #[test]
-#[ignore = "red until F213b step 4 (plan docs/plans/2026-11-14-f213b-split-box-sharing-a-line.md)"]
 fn r_t2_a_multi_line_paragraph_prints_the_text_of_the_tall_line_level_with_the_box_end() {
     // P3: `<div style="width:300px">Lead words before BOX trailing words after the box in text.</div><p>AFTER</p>`. Chrome:
     // the box is sliced over pages 1 to 3, `Lead` and `trailing` are at 464.6 pt on page 3 level with T129 (the line
@@ -317,7 +316,6 @@ fn r_t2_a_multi_line_paragraph_prints_the_text_of_the_tall_line_level_with_the_b
 }
 
 #[test]
-#[ignore = "red until F213b step 4 (plan docs/plans/2026-11-14-f213b-split-box-sharing-a-line.md)"]
 fn r_t3_a_tall_line_that_follows_other_lines_starts_a_fresh_page() {
     // P3: the tall line is the 3rd of 4 (`X1<br>X2<br>Lead words before BOX trailing words<br>X4`). Chrome: X1 and X2 on
     // page 1, T000 at the top of page 2 (the tall line does not start under X2), `Lead` and `trailing` on page 4 at
@@ -345,7 +343,6 @@ fn r_t3_a_tall_line_that_follows_other_lines_starts_a_fresh_page() {
 }
 
 #[test]
-#[ignore = "red until F213b step 5 (plan docs/plans/2026-11-14-f213b-split-box-sharing-a-line.md)"]
 fn r_t5_text_lines_inside_the_box_are_printed_once_and_the_line_is_on_the_last_one() {
     // P4: `<p>START <box of 80 text lines L01..L80> TAIL</p><p>AFTER</p>`. Chrome: 3 pages (a blank one follows), L01
     // at the top of page 1, L51 on both pages 1 and 2, L80 at 472.1 pt on page 2, START and TAIL level with it and
