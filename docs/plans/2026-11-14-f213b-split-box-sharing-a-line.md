@@ -736,3 +736,21 @@ sets 0, `words2.py` 0 lost distinct. New fresh seed `gen2` 31 (800 documents, ru
 from the PDF, `f31_0447` 13 tokens and `f31_0611` 1 token past the right edge: the class-2 shape and a negative margin). The gate is still
 not 0: 8 documents of 5716 (round 3: 8), plus 3 on seed 31.
 
+
+### 7.15 Merge decision (2026-11-15): the round-4 residual merges under ADR-0013 (owner's decision)
+
+After round 4 (fork `54689723`), 11 of 7316 fuzz documents (0.15 %) lose tokens that main prints: `gen` 0/1716, `gen2` seeds 7
+and 11 3/1600, `gen3` seed 11 2/800, `gen2` seed 23 2/800, `gen3` seed 23 1/800, and the untuned seed 31 3/800. The curated sets
+and fixtures are 0. The residual:
+
+- one checker artefact (`f7_0375`, §7.14);
+- tokens pushed past the right sheet edge by a box wider than its multicol column (`f7_0432`, `f7_0555`, `f11_0047`,
+  `f11_0452`, `f31_0447`, `f31_0611`); Chrome prints none of them in the reduced repros;
+- lines traded at the page edge by content taller than the page under a negative margin (`f23_0011`, `f23_0035`, the full
+  `f23_0656`);
+- `f31_0284`: main prints `T2129` / `T2130` at y −0.7 pt on page 3 of a 5-page render that loses everything after them
+  ("7086 pt past the bottom page edge"); the branch prints that document in 22 pages and warns for the one-line paragraph it
+  places 8 px past the content box.
+
+Every narrow fallback tried in rounds 3 and 4 lost words elsewhere (§7.14). The owner chose to merge with this residual
+(ADR-0013); it is backlog B31.
