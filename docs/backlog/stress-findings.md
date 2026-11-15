@@ -117,3 +117,4 @@ F213e-c validator, `rv2/cases4/first-o200-n45-z.html`: ours [0, 45, 1], Chrome [
 F213e-c validator, `rv2/cases2/ov-only.html`: `<div style="height:0"><p>OVERFLOWTEXT…</p></div>` prints nothing on main and after F213e-c; Chrome prints the text, and so do we with a 1 px box.
 
 ### B29 — an `inline-block` with a fixed height taller than a page and a short child is one oversized leaf: 193 px of its frame are not drawn and the next line sits at the top of the next page  (severity: low, size: medium — fulgur pagination, F213d-b residual)
+
