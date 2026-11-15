@@ -66,30 +66,21 @@ fn the_unsplit_paragraph_warning_names_its_barrier() {
     let r = Renderer::builder().font_bytes(inter()).unwrap().build();
     let w = words(4000);
 
-    // An inline-block that shares its line with text is not split (Chrome slices it, F30f-b): the lines below the page
-    // are lost, and the warning says why.
+    // An inline-block that shares its line with text and is taller than a page is split with its line (html-to-pdf F213b; it was
+    // kept whole, F30f-b, and the lines below the page were lost): nothing is unprinted, so no warning. One that fits a page is
+    // moved whole by F213 and loses nothing either; the barrier it keeps is pinned by a lib test (`unprinted_inline_lines`).
     let shared = unsplit_warnings(
         &r,
         &format!("<p>Úvod <span style=\"display:inline-block;width:60%\">{w}</span> konec</p>"),
     );
-    assert_eq!(shared.len(), 1, "{shared:?}");
-    assert!(
-        shared[0].contains("an inline-block or inline-table that shares its line"),
-        "{}",
-        shared[0]
-    );
+    assert!(shared.is_empty(), "{shared:?}");
 
-    // The same for an `inline-table` (F30e): the lines below the page are lost, and the warning names it.
+    // The same for an `inline-table` (F30e).
     let shared_table = unsplit_warnings(
         &r,
         &format!("<p>Úvod <span style=\"display:inline-table;width:60%\">{w}</span> konec</p>"),
     );
-    assert_eq!(shared_table.len(), 1, "{shared_table:?}");
-    assert!(
-        shared_table[0].contains("an inline-block or inline-table that shares its line"),
-        "{}",
-        shared_table[0]
-    );
+    assert!(shared_table.is_empty(), "{shared_table:?}");
 
     // A clip box shorter than its paragraph hides the lines below it: nothing is unprinted that Chrome prints, no
     // warning.

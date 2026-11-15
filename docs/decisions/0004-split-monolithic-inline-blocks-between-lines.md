@@ -54,6 +54,21 @@ the carrier fits a fresh page as its wrappers hold it (its height at most the pa
 for one whose content overflows it visibly (the overflow would stay behind). The box taller than a page with a short child
 (a fixed 1200 px box with one line) is not split either way and is lost, with a warning (F213d-b).
 
+**Amended 2026-11-15 by F213b: a box taller than a page that shares its line is split, and the line is painted where its baseline is.**
+css-break-3 §4.1 lets a UA that splits a line box too tall for a fragmentainer fragment the inline-level boxes on it, or
+treat them as monolithic. An atomic inline that shares its line and is taller than a fresh page is fragmented like a box
+alone on its line: between its block children, and for an `inline-block` / `inline-table` between its line boxes (orphans and
+widows as above, each line once). The rest of the line is painted once, on the page that holds the line's baseline: the box's
+last in-flow line box for an `inline-block` (CSS 2.1 §10.8.1) and its first baseline for an `inline-flex` / `inline-grid`
+(css-inline-3 `baseline-source`). The lines of the paragraph after it follow on the page the line ends on. Chrome m153 puts the
+text on the same page (plan `2026-11-14-f213b-split-box-sharing-a-line.md` §7.2, P1 to P5). A tall line that follows other lines
+of its paragraph starts a new page, as in Chrome; a tall line that is the first of its paragraph starts where it is (as A3
+above), where Chrome moves it to the next page. The sentence "an `inline-block` that shares its line … are not split (F30f-b)"
+now covers only boxes that fit a fresh page, which F213 moves whole; the `inline-flex` / `inline-grid` barrier is as before. A
+box that fits a page but sits on a tall line is placed from the baseline page, and the part of it above that page is not printed
+(the fragmenter warns). F213d-b's box (taller than a page, one short child) prints its words (F183c) but is still one oversized
+leaf that overflows its page (stress backlog B29). Replaced elements taller than a page (F198l, F29b) are not covered.
+
 ## Consequences
 
 - Every word is printed once, at the fragmenter's position. Chrome prints a line twice (cut in half) at each page
@@ -64,6 +79,8 @@ for one whose content overflows it visibly (the overflow would stay behind). The
 - It is the same mechanism as for clipping wrappers, so there is one place that decides line ranges.
 - (F30e) An `inline-table` alone on its line has Chrome's page count where it starts a page (3), and one page fewer
   than Chrome where something precedes it on its page (3 against 4 for a bordered frame or an `<h1>` before it).
-- The frame of a split box (border, radius) is closed on every page it touches (F96), where Chrome slices it.
+- The frame of a split box (border, radius) is closed on every page it touches (F96), where Chrome slices it. (Fixture 51, F213b: an
+  `inline-block` that shares its line, 80 terms over pages 2 and 3, closes its frame at the bottom of page 2 and again at the top of
+  page 3.)
 - If a product ever needs Chrome's exact slicing (a monolithic box cut at the page edge, a line printed on both pages),
   it is a new decision with its own renderer work; nothing here prevents it.

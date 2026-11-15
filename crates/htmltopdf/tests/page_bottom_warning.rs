@@ -74,6 +74,22 @@ fn f213d_room(r: u32) -> String {
     format!("<div style=\"height:{}px\"></div>", 1009 - r)
 }
 
+/// html-to-pdf F213b: an inline-block of `n` block children (20 px each), and one of `n` text lines.
+fn f213b_column(n: u32) -> String {
+    let children: String = (0..n)
+        .map(|i| format!("<span style=\"display:block\">T{i:03}</span>"))
+        .collect();
+    format!("<span style=\"display:inline-block;width:100px;border:1px solid\">{children}</span>")
+}
+
+fn f213b_text_box(n: u32) -> String {
+    let lines = (1..=n)
+        .map(|i| format!("L{i:02}"))
+        .collect::<Vec<_>>()
+        .join("<br>");
+    format!("<span style=\"display:inline-block;width:100px;border:1px solid\">{lines}</span>")
+}
+
 fn f213d_box(h: u32, inner: &str) -> String {
     format!(
         "<p><span style=\"display:inline-block;width:150px;height:{h}px;border:1px solid #000\">{inner}</span></p><p>AFTER</p>"
@@ -102,6 +118,8 @@ fn page_warnings(extra_css: &str, body: &str) -> Vec<String> {
             m.contains("past the bottom page edge")
                 || m.contains("is placed whole")
                 || m.contains("painted on no page")
+                || m.contains("on a line taller than a page")
+                || m.contains("the frame of a box of")
         })
         .collect()
 }
@@ -164,6 +182,46 @@ fn warns_about_content_below_the_page_only() {
             "F213 P1: text, a tall inline-block with a block child, text",
             F213_PAGE.into(),
             format!("{F213_ROOM}<p>START {F213_BOX} TAIL</p><p>AFTER</p>"),
+        ),
+        // html-to-pdf F213b: a box taller than a page that shares its line is fragmented and its line is painted on the page
+        // of its baseline, so nothing is below an edge any more: one line (a column of 130 children), a paragraph of two
+        // lines whose first holds the box, the tall line after other lines, and a box made of text lines.
+        (
+            "F213b: a column of 130 children sharing its line",
+            F213_PAGE.into(),
+            format!("<p>START {} TAIL</p><p>AFTER</p>", f213b_column(130)),
+        ),
+        (
+            "F213b: the same in a paragraph of two lines",
+            F213_PAGE.into(),
+            format!(
+                "<div style=\"width:300px\">Lead words {} trailing words<br>second line</div><p>AFTER</p>",
+                f213b_column(130)
+            ),
+        ),
+        (
+            "F213b: the tall line after two other lines",
+            F213_PAGE.into(),
+            format!(
+                "<div style=\"width:300px\">X1<br>X2<br>Lead {} trailing<br>X4</div><p>AFTER</p>",
+                f213b_column(130)
+            ),
+        ),
+        // F213b validator round 2 (B30): a box that fits a page beside a tall box is cut by the page edge like it (it was placed from
+        // the baseline page, and warned about when it reached above it).
+        (
+            "F213b: a box beside a tall one that starts on the page before",
+            F213_PAGE.into(),
+            format!(
+                "<div style=\"width:400px\">Lead {} {} trailing<br>second line</div><p>AFTER</p>",
+                f213b_column(130),
+                f213b_column(40)
+            ),
+        ),
+        (
+            "F213b: a box of 80 text lines sharing its line",
+            F213_PAGE.into(),
+            format!("<p>START {} TAIL</p><p>AFTER</p>", f213b_text_box(80)),
         ),
         (
             "F213 P5: the same in a <section>",
@@ -284,9 +342,10 @@ fn warns_about_content_below_the_page_only() {
         "inline-flex around 4000 words: {w:?}"
     );
 
-    // F213b, a known residual loss: a line taller than a page (the inline-block is 1200 px) is not split, so its baseline
-    // words are painted below the edge of page 1. Chrome slices the box over pages 2 and 3 and prints the words on page 2.
-    // Slicing a line shared with text is an ADR-0004 decision that is still open; the net says so until it is made.
+    // F213b, what is left of it (backlog B29): a box taller than a page only through its `height` (1200 px, one short child)
+    // is never entered by the walk, so it is one oversized leaf that overflows page 1; the line's baseline is on page 1
+    // (the box's last line box), and the net says so. The boxes that the walk enters (children that overflow, text lines)
+    // are fragmented and their line is painted on the page of its baseline; they are in the silent list above.
     let w = page_warnings(
         F213_PAGE,
         &format!(
@@ -298,6 +357,20 @@ fn warns_about_content_below_the_page_only() {
         w.iter()
             .any(|m| m.contains("past the bottom page edge on page 1")),
         "F213b, a line taller than a page: {w:?}"
+    );
+
+    // F213b validator round 1 (`h1`): a fixed-height box with one short child on a paragraph of several lines is one oversized
+    // leaf (B29); its frame is drawn only as high as its content, and the rest of it is not drawn. Main warned (the box hung
+    // 113 pt past the bottom edge); the net says so for the frame as well.
+    let w = page_warnings(
+        F213_PAGE,
+        "<p style=\"width:300px\">B000 B001 B002 B003 B004 B005 B006 B007 B008 B009 B010 B011 B012 B013 B014 B015 B016 B017 B018 B019 \
+         <span style=\"display:inline-block;width:100px;height:6000px;border:1px solid\"><span style=\"display:block\">BOXTOP</span></span> \
+         TAIL</p><p>AFTER000</p>",
+    );
+    assert!(
+        w.iter().any(|m| m.contains("the frame of a box of")),
+        "a box of 6000 px with a short child: {w:?}"
     );
 
     // F213d Q10, a known residual loss: an inline-block alone on its line that is taller than a page (1200 px, short block

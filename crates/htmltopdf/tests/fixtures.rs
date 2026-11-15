@@ -988,6 +988,99 @@ fn terms_page_widow_invoice_leaves_two_clauses_for_the_next_page() {
     }
 }
 
+/// html-to-pdf F213b: fixture 51's third line of the "Obchodní podmínky" paragraph holds `Souhlasím:`, an `inline-block` of 80
+/// numbered terms (1440 px, taller than a page) and `Podpis odběratele`. The box is cut over pages 2 and 3 (the tall line starts a
+/// page of its own, like Chrome's) and the words of the line are painted once, on the page of the baseline of the box's last term
+/// (CSS 2.1 section 10.8.1), level with `80.`. Chrome m153 (`reference/chrome.pdf`): 3 pages, `Souhlasím:` and `Podpis` at 354.3 pt
+/// level with the last term (356.8 pt for the digits), `Děkujeme` below at 373.8 pt. Chrome prints the term at each page edge twice;
+/// every number is printed once here (ADR-0004). On main's binary the box was one leaf on page 2 (318 pt of it past the bottom
+/// edge, terms 56 to 80 and the words of the line printed nowhere).
+#[test]
+fn terms_box_beside_label_is_cut_and_its_line_is_on_the_last_page() {
+    let name = "51-terms-box-beside-label";
+    let html = std::fs::read_to_string(
+        root()
+            .join("fixtures/invoices")
+            .join(name)
+            .join("index.html"),
+    )
+    .unwrap();
+    let pdf = renderer()
+        .render(
+            &html,
+            &RenderOptions {
+                lang: Some("cs".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{name}: {e}"));
+    let path = std::env::temp_dir().join(format!("htmltopdf-test-{}-51.pdf", std::process::id()));
+    std::fs::write(&path, &pdf).unwrap();
+    let out = std::process::Command::new("pdftotext")
+        .arg("-bbox")
+        .arg(&path)
+        .arg("-")
+        .output()
+        .expect("pdftotext (poppler-utils) is required for this test and was not found in PATH");
+    let _ = std::fs::remove_file(&path);
+    let xml = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(xml.matches("<page ").count(), 3, "three pages like Chrome");
+    let mut page = 0;
+    let mut found: Vec<(usize, f32, String)> = Vec::new();
+    for line in xml.lines() {
+        if line.contains("<page ") {
+            page += 1;
+        } else if let Some(rest) = line.trim().strip_prefix("<word ")
+            && let Some((attrs, word)) = rest.split_once('>')
+            && let Some(word) = word.strip_suffix("</word>")
+        {
+            let start = attrs.find("yMin=\"").unwrap() + "yMin=\"".len();
+            let y = attrs[start..start + attrs[start..].find('"').unwrap()]
+                .parse()
+                .unwrap();
+            found.push((page, y, word.to_string()));
+        }
+    }
+    // The dates of page 1 ("9. 11. 2026") have numbers like the terms': a term number is looked for from page 2 on.
+    let once_from = |word: &str, from: usize| -> (usize, f32) {
+        let hits: Vec<_> = found
+            .iter()
+            .filter(|w| w.2 == word && w.0 >= from)
+            .collect();
+        assert_eq!(
+            hits.len(),
+            1,
+            "`{word}` is printed once, found {}",
+            hits.len()
+        );
+        (hits[0].0, hits[0].1)
+    };
+    let once = |word: &str| once_from(word, 1);
+    for n in 1..=80 {
+        once_from(&format!("{n}."), 2);
+    }
+    assert_eq!(once("Obchodní").0, 1, "the two intro lines stay on page 1");
+    assert_eq!(
+        once_from("1.", 2).0,
+        2,
+        "the tall line starts a page of its own"
+    );
+    let (last_page, last_y) = once_from("80.", 2);
+    assert_eq!(last_page, 3);
+    for word in ["Souhlasím:", "Podpis"] {
+        let (p, y) = once(word);
+        assert_eq!(p, 3, "`{word}` is on the page of the box's last line");
+        assert!(
+            (y - last_y).abs() <= 3.0,
+            "`{word}` at {y:.1} pt is not level with the last term at {last_y:.1} pt"
+        );
+    }
+    assert!(
+        once("Děkujeme").1 > last_y,
+        "the closing line follows the line"
+    );
+}
+
 /// F66i: fixture 35 has generated content in inline elements nested in other inline elements: " Kč" after each amount
 /// (`td > span.price > span.amount`), a status dot (`span.badge > span.dot::before`, a 6 px inline-block), `*` after a date in
 /// `<strong>`, Czech quotes around a note in a plain `<span>`, " →" after a link text in `<a>`. On main's binary none of them
