@@ -768,3 +768,30 @@ fn r3_6_a_table_cell_that_centres_its_text_below_the_page_it_starts_on_prints_it
     let words = printed_words(&render_page("size:A4;margin:15mm", &body));
     assert_printed_once(&words, ["Q313".to_string()]);
 }
+
+// --- round 4: the residual classes of the fuzz sets -------------------------------------------------------------------------
+
+#[test]
+fn r4_1_a_box_with_a_negative_top_margin_that_starts_a_page_is_printed_from_its_top() {
+    // The last paragraph of the list is one line holding a box that reaches 30 px above it; it does not fit under the list and
+    // starts a page, which put the box above the page: its first line was not printed. The paragraph starts lower by what the page
+    // has room for (the tall-line planner clamps such a box to the page top).
+    let rows: String = (536..566)
+        .step_by(2)
+        .map(|i| {
+            format!(
+                "<span style=\"display:table-row\">R{i:03}</span>R{:03}",
+                i + 1
+            )
+        })
+        .collect();
+    let body = format!(
+        "<ul><li><span class=\"ib\" style=\"margin:10px\">{}</span>L226 L227 W533 W534 \
+         <span style=\"display:inline-table\">{rows}</span> W566 K570</li>\
+         <span class=\"ib\" style=\"margin-top:-30px\">{}</span></ul>",
+        alternating("T", 1, 202),
+        alternating("T", 574, 578)
+    );
+    let words = printed_words(&render_page("size:A5;margin:0", &body));
+    assert_printed_once(&words, (574..=578).map(|i| format!("T{i:03}")));
+}

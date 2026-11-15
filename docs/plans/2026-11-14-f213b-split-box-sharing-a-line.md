@@ -692,3 +692,47 @@ Also on this head: byte gate (fixtures 01-48 and the corpus, RAYON 1 and 4) iden
 43 integration binaries 581 passed (main's pins); fmt and clippy clean in both repositories. The htmltopdf and CLI numbers and
 `bench.py --check` are in the PR description.
 
+#### Class 1 (`gen2/f7_0375`): accepted as a checker artefact, coordinates
+
+Reduced repro (`display:flex` with a 100 px item and a `flex:1; min-width:0` item that holds a 500 px box of 390 words, A5, 15 mm;
+page 419.53 pt wide). `pdftotext -bbox` on a MediaBox widened by 120 pt to the right: main draws every word twice, 7.5 pt apart
+(the box with and without its 10 px margin), e.g. `W1035` at xMin 412.98 and 420.48 (xMax 446.93 and 454.43), `W1045` at 414.5 and
+422.0, `W1116` at 415.9 and 423.4. The branch draws each word once, at the position of main's second copy (`W1035` at 420.48, 390 words
+in all against 780), which is 1 pt past the right page edge; `pdftotext` on the real page drops it. 8 tokens of the reduced repro (14 of
+the full document) differ for that reason alone; the other 382 words are printed in both at the same positions.
+
+### 7.14 Validator round 4 (PR #103, 2026-11-15): classes 3 and 2, fork `54689723`
+
+**Class 3 (a negative top margin at the top of a column or page).** A paragraph that starts a page, or a column that starts with such a
+line, is started lower by the overhang of the box on its first line (`line_pull`: the box's top above the line's top), so the box is not
+above the page; the same as the tall-line planner does for the boxes it places. **The clamp costs a line at the bottom wherever the page
+is full**: the first version moved columns and paragraphs by the whole overhang and lost words in 30 documents of the fuzz sets (lines pushed off
+the bottom that were on the page). The shift is therefore limited to the room the page has below the content (`min(overhang, room)`), which
+costs nothing and fixes the reduced `gen2/f23_0656` (test `r4_1`) but not the three documents: in `f23_0011` and `f23_0035` the content is
+taller than the page (a column of 800 and 872 px on 794 px), so any shift only trades the first line for the last, and in the full
+`f23_0656` the box is in a list item whose paragraph is placed by another path. Main prints the first line there because its container
+starts 20 px lower on the same page (below the text before it); the container of the branch starts a page of its own by the round-2 rule.
+Keeping the container in place when its first line has such a box was tried and lost words in `f23_0011` and `f23_0035`
+(`F421`, `W358`-`W361`). Left open: 3 documents.
+
+**Class 2 (multicol columns that hold a box wider than their column).** The coordinator's narrow fallback was built and measured:
+`column_overflow` finds a descendant whose border box is wider than the columns of the container from the layout, and for such a container
+the round-2 rule (a first unit taller than a page starts a page) and the cap of the balance budget were not applied (main's path). It fixes
+`gen2/f7_0432` and `gen2/f7_0555` and keeps `f11_0577` fixed, and it regresses 10 documents that the trigger also selects, because boxes
+wider than their columns are common in the fuzz sets and the round-2 rule is what keeps their last lines on a page (`gen2/f11_0309`,
+`f11_0477`, `f11_0650`, `f7_0649`, `gen3/f11_0195`, `f11_0714`, `gen2/f23_0148`, `f23_0585`, `gen3/f23_0110`, `f23_0736`; on the 15 documents of the check: both off 13 lost, the rule
+alone off 12, the cap alone off 3, neither 2). Nothing in the layout tells `f7_0432` from them. The code was removed, not shipped.
+`gen3/f11_0047` and `gen3/f11_0452` are not touched by the fallback: their loss is not in the container but in where the paragraph before
+it leaves the page (the tall line on its baseline page ends 41 px down, main's container starts at the page top).
+Positions of the lost words (reduced repros; pdftotext, MediaBox widened): `f11_0452` `W687`, `W688`: main page 3 x 378 and 410, y 87
+(column 1); branch page 3 x 595 and 627 (A4: 595 pt wide, wholly past the right edge), y 87; Chrome does not print them (it clips
+them). `f11_0047` `W616`-`W619`: main page 4 x 299-390, y 16; branch page 3 x 433-524, y 16 (page 419.5 wide: past the edge from x 419.5); Chrome does
+not print them. On the full documents Chrome prints 8 of 33 (`f11_0047`) and 12 of 29 (`f11_0452`) of the lost tokens, with its own
+pagination, and none of the 50 of `f7_0432`.
+
+Result on fork `54689723` (documents with a token that main prints and the branch does not): `gen` 0, `gen2` seeds 7 and 11 3 (`f7_0375`,
+`f7_0432`, `f7_0555`), `gen3` seed 11 2 (`f11_0047`, `f11_0452`), seed 23 `gen2` 2 (`f23_0011`, `f23_0656`), `gen3` 1 (`f23_0035`), standard
+sets 0, `words2.py` 0 lost distinct. New fresh seed `gen2` 31 (800 documents, run once, not tuned): 3 documents (`f31_0284` 2 tokens absent
+from the PDF, `f31_0447` 13 tokens and `f31_0611` 1 token past the right edge: the class-2 shape and a negative margin). The gate is still
+not 0: 8 documents of 5716 (round 3: 8), plus 3 on seed 31.
+
